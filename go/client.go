@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net"
 	"os"
 	"path/filepath"
@@ -16,6 +17,11 @@ type Client struct {
 	Endpoint string
 	Admin    string
 }
+
+// ErrNoService, wrapped, is the one error that is not an answer: nothing
+// listened at the endpoint. Everything else a Client returns is what the
+// service said.
+var ErrNoService = errors.New("rights: no service")
 
 func DefaultEndpoint() string { return listen.Endpoint("rights") }
 
@@ -31,7 +37,7 @@ func (c *Client) open(req Request) (Response, net.Conn, error) {
 	req.Admin = c.Admin
 	nc, err := listen.Dial(c.Endpoint)
 	if err != nil {
-		return Response{}, nil, errors.New("rights: no service at " + c.Endpoint + " (" + err.Error() + ")")
+		return Response{}, nil, fmt.Errorf("%w at %s: %v", ErrNoService, c.Endpoint, err)
 	}
 	raw, err := json.Marshal(req)
 	if err != nil {
