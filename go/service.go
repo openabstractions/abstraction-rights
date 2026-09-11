@@ -123,12 +123,12 @@ func (s *Service) serve(c listen.Conn) {
 	kill.Stop()
 	defer k.Close()
 	if err != nil {
-		reply(k, Response{Error: "rights: refused, " + err.Error()})
+		reply(k, Response{Code: CodeCallerRefused, Error: "rights: refused, " + err.Error()})
 		return
 	}
 	var req Request
 	if err := json.Unmarshal(k.Frame, &req); err != nil {
-		reply(k, Response{Error: "not a request: " + err.Error()})
+		reply(k, Response{Code: CodeInvalidRequest, Error: "not a request: " + err.Error()})
 		return
 	}
 	switch req.Op {
@@ -155,26 +155,26 @@ func (s *Service) answer(req Request, by listen.Seen) Response {
 	case OpAsk:
 		token, expires, err := s.policy.Ask(req.Secret, req.Right)
 		if err != nil {
-			return Response{Error: err.Error()}
+			return failure(err)
 		}
 		return Response{Token: token, Expires: expires, Right: req.Right}
 	case OpCheck:
 		app, right, err := s.policy.Check(req.Token)
 		if err != nil {
-			return Response{Error: err.Error()}
+			return failure(err)
 		}
 		return Response{App: &app, Right: right}
 	case OpApps, OpGrant, OpRevoke, OpForget, OpHolds:
 		if subtle.ConstantTimeCompare([]byte(hashOf(req.Admin)), []byte(s.admin)) != 1 {
-			return Response{Error: "rights: not the policy tool"}
+			return Response{Code: CodeNotAdministrator, Error: "rights: not the policy tool"}
 		}
 		return s.administer(req, by)
 	}
-	return Response{Error: "rights: unknown op " + req.Op}
+	return Response{Code: CodeUnknownOperation, Error: "rights: unknown op " + req.Op}
 }
 
 func (s *Service) administer(req Request, by listen.Seen) Response {
-	fail := func(err error) Response { return Response{Error: err.Error()} }
+	fail := func(err error) Response { return failure(err) }
 	switch req.Op {
 	case OpApps:
 		return Response{Apps: s.policy.Apps()}
@@ -209,12 +209,12 @@ func (s *Service) administer(req Request, by listen.Seen) Response {
 func (s *Service) register(k *listen.Call, req Request) {
 	for _, r := range req.Rights {
 		if !slices.Contains(Known, r) {
-			reply(k, Response{Error: ErrUnknownRight.Error() + ": " + r})
+			reply(k, Response{Code: CodeUnknownRight, Error: ErrUnknownRight.Error() + ": " + r})
 			return
 		}
 	}
 	if strings.TrimSpace(req.Name) == "" {
-		reply(k, Response{Error: "rights: an application needs a name"})
+		reply(k, Response{Code: CodeInvalidRequest, Error: "rights: an application needs a name"})
 		return
 	}
 	slog.Info("asking", "app", req.Name, "rights", req.Rights, "seen", k.Caller)
@@ -231,25 +231,25 @@ func (s *Service) register(k *listen.Call, req Request) {
 	a, err := s.asks.Await(ctx, question(req, k.Caller))
 	switch {
 	case errors.Is(err, context.DeadlineExceeded):
-		reply(k, Response{Error: "rights: nobody answered yet; the question is waiting in 'asks pending', run again once it is answered"})
+		reply(k, Response{Code: CodePending, Error: "rights: nobody answered yet; the question is waiting in 'asks pending', run again once it is answered"})
 		return
 	case err != nil:
-		reply(k, Response{Error: err.Error()})
+		reply(k, failure(err))
 		return
 	case !a.Yes && a.Kept:
-		reply(k, Response{Error: "rights: refused, and the person asked not to be asked again"})
+		reply(k, Response{Code: CodeDeniedPermanently, Error: "rights: refused, and the person asked not to be asked again"})
 		return
 	case !a.Yes:
-		reply(k, Response{Error: "rights: refused"})
+		reply(k, Response{Code: CodeDenied, Error: "rights: refused"})
 		return
 	}
 	if err := k.Recheck(); err != nil {
-		reply(k, Response{Error: "rights: refused, " + err.Error()})
+		reply(k, Response{Code: CodeCallerRefused, Error: "rights: refused, " + err.Error()})
 		return
 	}
 	_, secret, err := s.policy.Add(req.Name, req.Rights, k.Caller)
 	if err != nil {
-		reply(k, Response{Error: err.Error()})
+		reply(k, failure(err))
 		return
 	}
 	slog.Info("registered", "app", req.Name)
@@ -264,16 +264,16 @@ func question(req Request, seen listen.Seen) asks.Ask {
 func (s *Service) hold(k *listen.Call, req Request) {
 	app, right, err := s.policy.Check(req.Token)
 	if err != nil {
-		reply(k, Response{Error: err.Error()})
+		reply(k, failure(err))
 		return
 	}
 	if right != RightAwake {
-		reply(k, Response{Error: "rights: " + right + " is not a right that can be held"})
+		reply(k, Response{Code: CodeUnsupportedHold, Error: "rights: " + right + " is not a right that can be held"})
 		return
 	}
 	release, err := s.awake(app.Name, req.Why)
 	if err != nil {
-		reply(k, Response{Error: "rights: the platform refused: " + err.Error()})
+		reply(k, Response{Code: CodePlatformRefused, Error: "rights: the platform refused: " + err.Error()})
 		return
 	}
 	h := &holder{Hold: Hold{App: app.ID, Name: app.Name, Right: right, Why: req.Why, Since: time.Now().UTC(), Seen: k.Caller}, c: k, release: release}

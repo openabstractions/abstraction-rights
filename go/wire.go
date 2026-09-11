@@ -36,6 +36,7 @@ type Request struct {
 }
 
 type Response struct {
+	Code    string    `json:"code,omitempty"`
 	Error   string    `json:"error,omitempty"`
 	Secret  string    `json:"secret,omitempty"`
 	Token   string    `json:"token,omitempty"`

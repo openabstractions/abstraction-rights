@@ -37,10 +37,10 @@ func main() {
 	token, _, err := c.Ask(string(secret), rights.RightAwake)
 	switch {
 	case errors.Is(err, nil):
-	case err.Error() == rights.ErrBadSecret.Error():
+	case refusalIs(err, rights.ErrBadSecret):
 		os.Remove(secretFile)
 		fail("the service no longer knows this program; run it again to register afresh")
-	case err.Error() == rights.ErrNotGranted.Error():
+	case refusalIs(err, rights.ErrNotGranted):
 		fail("%s is registered but may not hold the machine awake\n  a person can change that:  rights grant %s awake", name, name)
 	default:
 		fail("%v", err)
@@ -76,4 +76,14 @@ func register(c *rights.Client) string {
 func fail(format string, a ...any) {
 	fmt.Fprintf(os.Stderr, format+"\n", a...)
 	os.Exit(1)
+}
+
+// Legacy services sent only text. Do not use that fallback when a service has
+// explicitly supplied a different (possibly newer) refusal code.
+func refusalIs(err, target error) bool {
+	if errors.Is(err, target) {
+		return true
+	}
+	var remote *rights.RemoteError
+	return errors.As(err, &remote) && remote.Code == "" && remote.Message == target.Error()
 }

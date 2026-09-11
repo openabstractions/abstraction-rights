@@ -59,9 +59,9 @@ func (c *Client) open(req Request) (Response, net.Conn, error) {
 		nc.Close()
 		return Response{}, nil, err
 	}
-	if resp.Error != "" {
+	if err := resp.Err(); err != nil {
 		nc.Close()
-		return Response{}, nil, errors.New(resp.Error)
+		return Response{}, nil, err
 	}
 	return resp, nc, nil
 }
