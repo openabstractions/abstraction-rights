@@ -2,6 +2,7 @@ package rights
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -23,6 +24,15 @@ type harness struct {
 }
 
 func endpoint(t *testing.T, dir, name string) string {
+	t.Helper()
+	if runtime.GOOS == "darwin" {
+		short, err := os.MkdirTemp("/tmp", "rights-")
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { os.RemoveAll(short) })
+		dir = short
+	}
 	if runtime.GOOS != "windows" {
 		return filepath.Join(dir, name)
 	}
@@ -31,6 +41,11 @@ func endpoint(t *testing.T, dir, name string) string {
 
 func start(t *testing.T) harness {
 	t.Helper()
+	if runtime.GOOS == "darwin" {
+		if err := identity.CanEver(listen.Program); err != nil {
+			t.Skipf("UNPROVEN: successful Program-bound service case on current macOS socket transport; requires native transport proof: %v", err)
+		}
+	}
 	dir := t.TempDir()
 	asksDir := filepath.Join(dir, "asks")
 	asksAt := endpoint(t, asksDir, "asks")
@@ -244,4 +259,31 @@ func TestPlatformAwake(t *testing.T) {
 		t.Skipf("this machine cannot hold itself awake from here: %v", err)
 	}
 	release()
+}
+
+// Refusal is tested separately from success cases, before any policy state or
+// listener can be created. The requested Program proof is never weakened.
+func TestProgramProofRefusalPrecedesProvider(t *testing.T) {
+	if runtime.GOOS != "darwin" {
+		t.Skip("current macOS socket transport refusal case")
+	}
+	if err := identity.CanEver(listen.Program); err == nil {
+		t.Skip("transport now supplies Program proof; success cases run")
+	}
+	state := filepath.Join(t.TempDir(), "not-created")
+	at := endpoint(t, state, "refused")
+	service, err := Start(at, state, "unused")
+	if service != nil {
+		service.Close()
+		t.Fatal("service started without Program proof")
+	}
+	if !errors.Is(err, identity.ErrNotProven) {
+		t.Fatalf("expected proof refusal, got %v", err)
+	}
+	if _, err := os.Stat(state); !os.IsNotExist(err) {
+		t.Fatalf("provider state created before proof refusal: %v", err)
+	}
+	if _, err := os.Stat(at); !os.IsNotExist(err) {
+		t.Fatalf("listener created before proof refusal: %v", err)
+	}
 }
