@@ -1,0 +1,12 @@
+{
+  "name": "@openabstractions/rights",
+  "version": "0.0.0",
+  "type": "module",
+  "exports": "./js/abstraction/rights/api/rec.mjs",
+  "files": [
+    "js"
+  ],
+  "engines": {
+    "node": ">=18"
+  }
+}

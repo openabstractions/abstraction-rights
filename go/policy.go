@@ -36,7 +36,8 @@ type grant struct {
 }
 
 type policy struct {
-	Apps []*record `json:"apps"`
+	Apps    []*record `json:"apps"`
+	Profile string    `json:"profile,omitempty"`
 }
 
 type Policy struct {
@@ -57,7 +58,11 @@ func (p *Policy) read() (policy, error) {
 	if err != nil || raw == nil {
 		return f, err
 	}
-	return f, json.Unmarshal(raw, &f)
+	err = json.Unmarshal(raw, &f)
+	if err == nil && f.Profile != "" {
+		err = errors.New("rights: decision profile requires LoadDecisionPolicy")
+	}
+	return f, err
 }
 
 func (p *Policy) change(edit func(*policy) error) error {
@@ -66,6 +71,9 @@ func (p *Policy) change(edit func(*policy) error) error {
 		if cur != nil {
 			if err := json.Unmarshal(cur, &f); err != nil {
 				return nil, err
+			}
+			if f.Profile != "" {
+				return nil, errors.New("rights: decision profile requires LoadDecisionPolicy")
 			}
 		}
 		if err := edit(&f); err != nil {

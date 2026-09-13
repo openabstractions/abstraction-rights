@@ -1,0 +1,127 @@
+namespace * abstraction.rights.api
+
+// Shared rights concepts; native binding supplements are explicit below.
+encoding json {
+ escape="minimal"
+ indent="2"
+ map_keys="utf8-bytes"
+ numbers="integer-decimal"
+ opaque="verbatim"
+ terminator="newline"
+ duplicate_keys="refuse"
+ depth_limit="64"
+}
+refusal {
+ 1: malformed(stage="grammar")
+ 2: bad_string(stage="grammar")
+ 3: number_spelling(stage="grammar")
+ 4: wrong_type(stage="grammar")
+ 5: depth_exceeded(stage="grammar")
+ 6: duplicate_key(stage="grammar")
+ 7: duplicate_field(stage="structure")
+ 8: unknown_field(stage="structure")
+ 9: missing_field(stage="structure")
+ 10: bad_enum(stage="structure")
+ 11: trailing_bytes(stage="document")
+}
+struct Request {
+ 1: required string op
+ 2: optional string name(omit="absent")
+ 3: optional list<string> rights(omit="zero")
+ 4: optional string secret(omit="absent")
+ 5: optional string token(omit="absent")
+ 6: optional string right(omit="absent")
+ 7: optional string why(omit="absent")
+ 8: optional string app(omit="absent")
+ 9: optional string admin(omit="absent")
+}(document="true",unknown_fields="refuse",doc="Existing rights request concepts. Secret/token/admin remain credential inputs checked by the service; request text never substitutes for native peer identity. This descriptor does not replace the existing handwritten line transport.")
+struct AppMetadata {
+ 1: required string id
+ 2: required string name
+ 3: required list<string> rights
+ 4: required string registered
+}(unknown_fields="refuse",doc="Own application registration fields; registered uses the existing RFC3339 time representation. Native App additionally carries identity.listen.Seen observation evidence.")
+struct HoldMetadata {
+ 1: required string app
+ 2: required string name
+ 3: required string right
+ 4: required string why
+ 5: required string since
+}(unknown_fields="refuse",doc="Own held-right fields; since uses existing RFC3339 time representation. Native Hold also carries Seen. The live Lease is connection-owned and cannot be recreated from these fields.")
+struct ResponseMetadata {
+ 1: optional string code(omit="absent")
+ 2: optional string error(omit="absent")
+ 3: optional string secret(omit="absent")
+ 4: optional string token(omit="absent")
+ 5: optional string expires(omit="absent")
+ 6: optional AppMetadata app(omit="absent")
+ 7: optional string right(omit="absent")
+ 8: optional list<AppMetadata> apps(omit="zero")
+ 9: optional list<HoldMetadata> holds(omit="zero")
+}(unknown_fields="refuse",doc="Own response fields projected without native Seen evidence. Any nonempty code/error is refusal, including unknown codes. This is a common descriptor, not a replacement legacy Response codec or generated service client.")
+const list<string> operations = ["register", "ask", "hold", "check", "apps", "grant", "revoke", "forget", "holds"]
+const list<string> known_rights = ["awake"]
+const list<string> refusal_codes = ["internal", "invalid_request", "caller_refused", "unknown_operation", "not_administrator", "pending", "denied", "denied_permanently", "unsupported_hold", "platform_refused", "unknown_app", "unknown_right", "not_granted", "bad_secret", "bad_token"]
+
+struct Subject {
+ 1: required string account
+ 2: required string program
+}(unknown_fields="refuse",doc="Account identifier and normalized absolute executable path. This serialized subject is an assertion by an explicitly authorized enforcement point. It contains no proof or verified flag and cannot authorize its own use. Direct decisions derive their subject from native receiving Program evidence.")
+enum DecisionOutcome {
+ 1: permitted
+ 2: denied
+ 3: not_granted
+ 4: unknown_action
+ 5: invalid
+ 6: forbidden
+ 7: unavailable
+}(unknown="refuse")
+struct Decision {
+ 1: required DecisionOutcome outcome
+ 2: optional string policy_revision(omit="absent")
+}(unknown_fields="refuse",doc="A point-in-time policy decision. Only permitted allows an enforcement point to proceed. denied is an explicit exact deny; not_granted has no exact rule; unknown_action is outside the configured catalog. Evaluated permitted/denied/not_granted/unknown_action decisions carry an opaque revision observed with that decision. Errors carry none. No lease, token, cached permission lifetime or human consent is conveyed.")
+service Authorization {
+ Decision Decide(1:string action,2:string resource)(doc="Evaluate the bound receiving account/program against an exact action/resource rule. This result is advisory to the caller; resource services query the decision point themselves.")
+ Decision DecideFor(1:Subject subject,2:string action,3:string resource)(doc="Evaluate a subject assertion only when the receiving peer is explicitly authorized as an enforcement point for this action/resource. Same account alone grants no relay authority. The designated enforcer is trusted to supply its actual bound subject. Nil or refusing enforcer policy yields forbidden before policy lookup.")
+}(wire_name="abstraction.rights/authorization@1",doc="General exact-rule authorization decision point with bounded catalog and persistence. Unknown, absent, unspecified, failed and refused decisions never permit. Explicitly authorized operator configuration grants/revokes exact rules; no serialized awake lease is introduced.")
+const list<string> resource_actions = ["abstraction.storage/content.read"]
+
+
+struct PolicyRule {
+ 1: required Subject subject
+ 2: required string action
+ 3: required string resource
+ 4: required bool permit
+}(unknown_fields="refuse",doc="One exact policy rule. Subject is the administrative target, never caller proof. Account is 1..128 UTF-8 bytes; program is a normalized absolute path up to 4096 bytes; action is 1..128 bytes and belongs to the immutable catalogue; resource is 1..1024 bytes. All strings exclude control characters. permit=false is an explicit deny; revocation removes the exact rule and restores not_granted.")
+enum PolicyPageOutcome {
+ 1: page
+ 2: gap
+ 3: invalid
+ 4: forbidden
+ 5: unavailable
+}(unknown="refuse")
+struct PolicyPage {
+ 1: required PolicyPageOutcome outcome
+ 2: required string revision
+ 3: required list<string> catalog
+ 4: required list<PolicyRule> rules
+ 5: required string next
+ 6: required bool complete
+}(unknown_fields="refuse",doc="Latest-policy enumeration: 1..64 requested rules and at most 256 KiB encoded reply, including catalogue, cursor and indentation. Catalogue is bounded to 64 actions of 128 bytes. Page carries the exact durable content revision. A noncomplete page has a nonempty next cursor. Refusals have empty revision/catalog/rules/next and complete=false. Cursors are at most 256 UTF-8 bytes, bind receiving account/program and host epoch/revision, and return gap after change/restart/scope mismatch. Restart from empty cursor. No immutable multipage snapshot or historical change replay is promised.")
+enum PolicyEditOutcome {
+ 1: applied
+ 2: conflict
+ 3: invalid
+ 4: forbidden
+ 5: unavailable
+}(unknown="refuse")
+struct PolicyEdit {
+ 1: required PolicyEditOutcome outcome
+ 2: required string revision
+ 3: optional PolicyRule current(omit="absent")
+}(unknown_fields="refuse",doc="Applied/conflict carry the revision and optional exact current rule observed inside the conditional edit; absent current means no exact rule. Other outcomes carry no revision/current. A stale expected revision always conflicts, including when the desired state happens to match. No-op edits at the matching revision preserve it without writing. A lost reply is uncertain: retrying the same expected revision cannot overwrite a later edit, and may conflict after a successful original change. Reconcile the returned current state or fresh history before choosing another edit. This is optimistic concurrency, not an exactly-once mutation journal.")
+service AuthorizationOperator {
+ PolicyPage ListPolicy(1:string cursor,2:i64 limit)(doc="Read bounded current rules and catalogue under explicit operator authorization. Every continuation rechecks authorization; no enumeration session is retained for disconnected/slow callers.")
+ PolicyEdit SetRule(1:string expected_revision,2:PolicyRule rule)(doc="Atomically compare the expected durable revision and set one exact permit/deny rule. Revision is bounded to 128 UTF-8 bytes. Operator context and authority are checked again inside the atomic edit after lock waiting. Unknown catalogue actions and malformed targets are invalid; no resource permission is inferred from the operator request itself.")
+ PolicyEdit RevokeRule(1:string expected_revision,2:Subject subject,3:string action,4:string resource)(doc="Atomically remove one exact rule if the revision matches. The next fresh decision observes successful revocation. A failed/uncertain reply claims no successful revocation; inspect current state before another intent. It does not cancel an existing connection-owned awake lease.")
+}(wire_name="abstraction.rights/operator@1",doc="Explicitly authorized administration of the configured decision policy. Receiving same-account Program proof plus a trusted typed-peer operator callback is required; nil refuses. Policy denial is forbidden; callback/storage failure is unavailable. No caller credential, verified flag or provider path is accepted. Resource services remain the receiving enforcement points. Legacy bearer and awake lease behavior is separate.")

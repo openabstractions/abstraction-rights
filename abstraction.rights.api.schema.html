@@ -1,0 +1,247 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Open Abstractions — schema</title>
+<link rel="stylesheet" href="style.css">
+
+<main>
+<nav class="site"><a class="name" href="index.html">Open Abstractions</a>
+<a href="index.html">Overview</a> <a href="cases.html">Cases</a> <a href="reference.html">Reference</a> <a href="evidence.html">Evidence</a> <a href="coverage.html">Coverage</a> <a href="adopt.html">Adopt</a>
+<a class="right" href="https://github.com/openabstractions">github.com/openabstractions</a></nav>
+<p class="meta" style="margin-top:10px"><a href="#encoding">Encoding</a> · <a href="#types">Types</a> · <a href="#structs">Structs</a> · <a href="#enums">Enumerations</a> · <a href="#constants">Constants</a> · <a href="#vocabulary">Vocabulary</a> · <a href="#refusals">Refusals</a> · <a href="#protocol">Protocol</a></p>
+
+<h1>Schema</h1>
+<p class="lead">One definition; this page and every encoder are emitted from it. Nothing below is written by hand, and each rule tag links the construct to the profile that admits it.</p>
+<h2 id="encoding">Encoding <span class="tag">[DEF-E1]</span></h2>
+<div class="wrap"><table>
+<thead><tr><th>setting</th><th>value</th><th>rule</th></tr></thead>
+<tbody>
+<tr><td><code>escape</code></td><td><code>minimal</code></td><td><span class="tag">[DEF-E2]</span></td></tr>
+<tr><td><code>indent</code></td><td><code>2</code></td><td><span class="tag">[DEF-E3]</span></td></tr>
+<tr><td><code>map_keys</code></td><td><code>utf8-bytes</code></td><td><span class="tag">[DEF-E4]</span></td></tr>
+<tr><td><code>numbers</code></td><td><code>integer-decimal</code></td><td><span class="tag">[DEF-E5]</span></td></tr>
+<tr><td><code>opaque</code></td><td><code>verbatim</code></td><td><span class="tag">[DEF-E6]</span></td></tr>
+<tr><td><code>terminator</code></td><td><code>newline</code></td><td><span class="tag">[DEF-E7]</span></td></tr>
+<tr><td><code>duplicate_keys</code></td><td><code>refuse</code></td><td><span class="tag">[DEF-E8]</span></td></tr>
+<tr><td><code>depth_limit</code></td><td><code>64</code></td><td><span class="tag">[DEF-E9]</span></td></tr>
+</tbody></table></div>
+<h2 id="types">Types</h2>
+<div class="wrap"><table>
+<thead><tr><th>kind</th><th>types</th></tr></thead>
+<tbody>
+<tr><td>built in</td><td><code>DecisionOutcome</code> <code>PolicyEditOutcome</code> <code>PolicyPageOutcome</code> <code>bool</code> <code>string</code></td></tr>
+<tr><td>declared below</td><td><code>AppMetadata</code> <code>PolicyRule</code> <code>Subject</code></td></tr>
+<tr><td>container <span class="tag">[DEF-T3]</span></td><td><code>list&lt;string&gt;</code></td></tr>
+<tr><td>repeated record <span class="tag">[DEF-A9]</span></td><td><code>list&lt;AppMetadata&gt;</code> <code>list&lt;HoldMetadata&gt;</code> <code>list&lt;PolicyRule&gt;</code></td></tr>
+</tbody></table></div>
+<h2 id="structs">Structs <span class="tag">[DEF-T1]</span></h2>
+<p class="meta">A field is required, or says when it is omitted <span class="tag">[DEF-A4]</span>. Each struct says on its own what it does with a field name it has never heard of <span class="tag">[DEF-A7]</span>. A wire name never moves; where a language must spell it differently the field says so <span class="tag">[DEF-A2]</span>.</p>
+<h3 id="struct-Request"><code>Request</code></h3>
+<p class="meta">the document <span class="tag">[DEF-A1]</span> · unknown fields <code>refuse</code></p>
+<div class="wrap"><table>
+<thead><tr><th>id</th><th>field</th><th>type</th><th>presence</th><th>named elsewhere</th></tr></thead>
+<tbody>
+<tr><td>1</td><td><code>op</code></td><td><code>string</code></td><td>required</td><td>—</td></tr>
+<tr><td>2</td><td><code>name</code></td><td><code>string</code></td><td>optional · omitted when absent</td><td>—</td></tr>
+<tr><td>3</td><td><code>rights</code></td><td><code>list&lt;string&gt;</code></td><td>optional · omitted when zero</td><td>—</td></tr>
+<tr><td>4</td><td><code>secret</code></td><td><code>string</code></td><td>optional · omitted when absent</td><td>—</td></tr>
+<tr><td>5</td><td><code>token</code></td><td><code>string</code></td><td>optional · omitted when absent</td><td>—</td></tr>
+<tr><td>6</td><td><code>right</code></td><td><code>string</code></td><td>optional · omitted when absent</td><td>—</td></tr>
+<tr><td>7</td><td><code>why</code></td><td><code>string</code></td><td>optional · omitted when absent</td><td>—</td></tr>
+<tr><td>8</td><td><code>app</code></td><td><code>string</code></td><td>optional · omitted when absent</td><td>—</td></tr>
+<tr><td>9</td><td><code>admin</code></td><td><code>string</code></td><td>optional · omitted when absent</td><td>—</td></tr>
+</tbody></table></div>
+<h3 id="struct-AppMetadata"><code>AppMetadata</code></h3>
+<p class="meta">unknown fields <code>refuse</code></p>
+<div class="wrap"><table>
+<thead><tr><th>id</th><th>field</th><th>type</th><th>presence</th><th>named elsewhere</th></tr></thead>
+<tbody>
+<tr><td>1</td><td><code>id</code></td><td><code>string</code></td><td>required</td><td>—</td></tr>
+<tr><td>2</td><td><code>name</code></td><td><code>string</code></td><td>required</td><td>—</td></tr>
+<tr><td>3</td><td><code>rights</code></td><td><code>list&lt;string&gt;</code></td><td>required</td><td>—</td></tr>
+<tr><td>4</td><td><code>registered</code></td><td><code>string</code></td><td>required</td><td>—</td></tr>
+</tbody></table></div>
+<h3 id="struct-HoldMetadata"><code>HoldMetadata</code></h3>
+<p class="meta">unknown fields <code>refuse</code></p>
+<div class="wrap"><table>
+<thead><tr><th>id</th><th>field</th><th>type</th><th>presence</th><th>named elsewhere</th></tr></thead>
+<tbody>
+<tr><td>1</td><td><code>app</code></td><td><code>string</code></td><td>required</td><td>—</td></tr>
+<tr><td>2</td><td><code>name</code></td><td><code>string</code></td><td>required</td><td>—</td></tr>
+<tr><td>3</td><td><code>right</code></td><td><code>string</code></td><td>required</td><td>—</td></tr>
+<tr><td>4</td><td><code>why</code></td><td><code>string</code></td><td>required</td><td>—</td></tr>
+<tr><td>5</td><td><code>since</code></td><td><code>string</code></td><td>required</td><td>—</td></tr>
+</tbody></table></div>
+<h3 id="struct-ResponseMetadata"><code>ResponseMetadata</code></h3>
+<p class="meta">unknown fields <code>refuse</code></p>
+<div class="wrap"><table>
+<thead><tr><th>id</th><th>field</th><th>type</th><th>presence</th><th>named elsewhere</th></tr></thead>
+<tbody>
+<tr><td>1</td><td><code>code</code></td><td><code>string</code></td><td>optional · omitted when absent</td><td>—</td></tr>
+<tr><td>2</td><td><code>error</code></td><td><code>string</code></td><td>optional · omitted when absent</td><td>—</td></tr>
+<tr><td>3</td><td><code>secret</code></td><td><code>string</code></td><td>optional · omitted when absent</td><td>—</td></tr>
+<tr><td>4</td><td><code>token</code></td><td><code>string</code></td><td>optional · omitted when absent</td><td>—</td></tr>
+<tr><td>5</td><td><code>expires</code></td><td><code>string</code></td><td>optional · omitted when absent</td><td>—</td></tr>
+<tr><td>6</td><td><code>app</code></td><td><code>AppMetadata</code></td><td>optional · omitted when absent</td><td>—</td></tr>
+<tr><td>7</td><td><code>right</code></td><td><code>string</code></td><td>optional · omitted when absent</td><td>—</td></tr>
+<tr><td>8</td><td><code>apps</code></td><td><code>list&lt;AppMetadata&gt;</code></td><td>optional · omitted when zero</td><td>—</td></tr>
+<tr><td>9</td><td><code>holds</code></td><td><code>list&lt;HoldMetadata&gt;</code></td><td>optional · omitted when zero</td><td>—</td></tr>
+</tbody></table></div>
+<h3 id="struct-Subject"><code>Subject</code></h3>
+<p class="meta">unknown fields <code>refuse</code></p>
+<div class="wrap"><table>
+<thead><tr><th>id</th><th>field</th><th>type</th><th>presence</th><th>named elsewhere</th></tr></thead>
+<tbody>
+<tr><td>1</td><td><code>account</code></td><td><code>string</code></td><td>required</td><td>—</td></tr>
+<tr><td>2</td><td><code>program</code></td><td><code>string</code></td><td>required</td><td>—</td></tr>
+</tbody></table></div>
+<h3 id="struct-Decision"><code>Decision</code></h3>
+<p class="meta">unknown fields <code>refuse</code></p>
+<div class="wrap"><table>
+<thead><tr><th>id</th><th>field</th><th>type</th><th>presence</th><th>named elsewhere</th></tr></thead>
+<tbody>
+<tr><td>1</td><td><code>outcome</code></td><td><code>DecisionOutcome</code></td><td>required</td><td>—</td></tr>
+<tr><td>2</td><td><code>policy_revision</code></td><td><code>string</code></td><td>optional · omitted when absent</td><td>—</td></tr>
+</tbody></table></div>
+<h3 id="struct-PolicyRule"><code>PolicyRule</code></h3>
+<p class="meta">unknown fields <code>refuse</code></p>
+<div class="wrap"><table>
+<thead><tr><th>id</th><th>field</th><th>type</th><th>presence</th><th>named elsewhere</th></tr></thead>
+<tbody>
+<tr><td>1</td><td><code>subject</code></td><td><code>Subject</code></td><td>required</td><td>—</td></tr>
+<tr><td>2</td><td><code>action</code></td><td><code>string</code></td><td>required</td><td>—</td></tr>
+<tr><td>3</td><td><code>resource</code></td><td><code>string</code></td><td>required</td><td>—</td></tr>
+<tr><td>4</td><td><code>permit</code></td><td><code>bool</code></td><td>required</td><td>—</td></tr>
+</tbody></table></div>
+<h3 id="struct-PolicyPage"><code>PolicyPage</code></h3>
+<p class="meta">unknown fields <code>refuse</code></p>
+<div class="wrap"><table>
+<thead><tr><th>id</th><th>field</th><th>type</th><th>presence</th><th>named elsewhere</th></tr></thead>
+<tbody>
+<tr><td>1</td><td><code>outcome</code></td><td><code>PolicyPageOutcome</code></td><td>required</td><td>—</td></tr>
+<tr><td>2</td><td><code>revision</code></td><td><code>string</code></td><td>required</td><td>—</td></tr>
+<tr><td>3</td><td><code>catalog</code></td><td><code>list&lt;string&gt;</code></td><td>required</td><td>—</td></tr>
+<tr><td>4</td><td><code>rules</code></td><td><code>list&lt;PolicyRule&gt;</code></td><td>required</td><td>—</td></tr>
+<tr><td>5</td><td><code>next</code></td><td><code>string</code></td><td>required</td><td>—</td></tr>
+<tr><td>6</td><td><code>complete</code></td><td><code>bool</code></td><td>required</td><td>—</td></tr>
+</tbody></table></div>
+<h3 id="struct-PolicyEdit"><code>PolicyEdit</code></h3>
+<p class="meta">unknown fields <code>refuse</code></p>
+<div class="wrap"><table>
+<thead><tr><th>id</th><th>field</th><th>type</th><th>presence</th><th>named elsewhere</th></tr></thead>
+<tbody>
+<tr><td>1</td><td><code>outcome</code></td><td><code>PolicyEditOutcome</code></td><td>required</td><td>—</td></tr>
+<tr><td>2</td><td><code>revision</code></td><td><code>string</code></td><td>required</td><td>—</td></tr>
+<tr><td>3</td><td><code>current</code></td><td><code>PolicyRule</code></td><td>optional · omitted when absent</td><td>—</td></tr>
+</tbody></table></div>
+<h2 id="enums">Enumerations <span class="tag">[DEF-T5]</span></h2>
+<p>Enum fields carry JSON strings containing exact member names, never numeric IDs. Unknown names are preserved with grant and refused as bad_enum with refuse on read and write. Optional absent fields preserve presence separately from an empty string.</p>
+<p class="meta">An enumeration is a closed vocabulary of wire names, and each one says on its own what a reader does with a member it has never heard of <span class="tag">[DEF-A5]</span>.</p>
+<h3 id="enum-DecisionOutcome"><code>DecisionOutcome</code></h3>
+<p class="meta">a member this reader does not know is <code>refuse</code></p>
+<div class="wrap"><table>
+<thead><tr><th>id</th><th>member</th></tr></thead>
+<tbody>
+<tr><td>1</td><td><code>permitted</code></td></tr>
+<tr><td>2</td><td><code>denied</code></td></tr>
+<tr><td>3</td><td><code>not_granted</code></td></tr>
+<tr><td>4</td><td><code>unknown_action</code></td></tr>
+<tr><td>5</td><td><code>invalid</code></td></tr>
+<tr><td>6</td><td><code>forbidden</code></td></tr>
+<tr><td>7</td><td><code>unavailable</code></td></tr>
+</tbody></table></div>
+<h3 id="enum-PolicyPageOutcome"><code>PolicyPageOutcome</code></h3>
+<p class="meta">a member this reader does not know is <code>refuse</code></p>
+<div class="wrap"><table>
+<thead><tr><th>id</th><th>member</th></tr></thead>
+<tbody>
+<tr><td>1</td><td><code>page</code></td></tr>
+<tr><td>2</td><td><code>gap</code></td></tr>
+<tr><td>3</td><td><code>invalid</code></td></tr>
+<tr><td>4</td><td><code>forbidden</code></td></tr>
+<tr><td>5</td><td><code>unavailable</code></td></tr>
+</tbody></table></div>
+<h3 id="enum-PolicyEditOutcome"><code>PolicyEditOutcome</code></h3>
+<p class="meta">a member this reader does not know is <code>refuse</code></p>
+<div class="wrap"><table>
+<thead><tr><th>id</th><th>member</th></tr></thead>
+<tbody>
+<tr><td>1</td><td><code>applied</code></td></tr>
+<tr><td>2</td><td><code>conflict</code></td></tr>
+<tr><td>3</td><td><code>invalid</code></td></tr>
+<tr><td>4</td><td><code>forbidden</code></td></tr>
+<tr><td>5</td><td><code>unavailable</code></td></tr>
+</tbody></table></div>
+<h2 id="constants">Constants <span class="tag">[DEF-A6]</span></h2>
+<div class="wrap"><table>
+<thead><tr><th>name</th><th>type</th><th>value</th></tr></thead>
+<tbody>
+<tr><td><code>operations</code></td><td><code>list&lt;string&gt;</code></td><td><code>register, ask, hold, check, apps, grant, revoke, forget, holds</code></td></tr>
+<tr><td><code>known_rights</code></td><td><code>list&lt;string&gt;</code></td><td><code>awake</code></td></tr>
+<tr><td><code>refusal_codes</code></td><td><code>list&lt;string&gt;</code></td><td><code>internal, invalid_request, caller_refused, unknown_operation, not_administrator, pending, denied, denied_permanently, unsupported_hold, platform_refused, unknown_app, unknown_right, not_granted, bad_secret, bad_token</code></td></tr>
+<tr><td><code>resource_actions</code></td><td><code>list&lt;string&gt;</code></td><td><code>abstraction.storage/content.read</code></td></tr>
+</tbody></table></div>
+<h2 id="refusals">Refusal words <span class="tag">[DEF-R1]</span></h2>
+<div class="wrap"><table>
+<thead><tr><th>order</th><th>word</th><th>stage</th></tr></thead>
+<tbody>
+<tr><td>1</td><td><code>malformed</code></td><td><code>grammar</code></td></tr>
+<tr><td>2</td><td><code>bad_string</code></td><td><code>grammar</code></td></tr>
+<tr><td>3</td><td><code>number_spelling</code></td><td><code>grammar</code></td></tr>
+<tr><td>4</td><td><code>wrong_type</code></td><td><code>grammar</code></td></tr>
+<tr><td>5</td><td><code>depth_exceeded</code></td><td><code>grammar</code></td></tr>
+<tr><td>6</td><td><code>duplicate_key</code></td><td><code>grammar</code></td></tr>
+<tr><td>7</td><td><code>duplicate_field</code></td><td><code>structure</code></td></tr>
+<tr><td>8</td><td><code>unknown_field</code></td><td><code>structure</code></td></tr>
+<tr><td>9</td><td><code>missing_field</code></td><td><code>structure</code></td></tr>
+<tr><td>10</td><td><code>bad_enum</code></td><td><code>structure</code></td></tr>
+<tr><td>11</td><td><code>trailing_bytes</code></td><td><code>document</code></td></tr>
+</tbody></table></div>
+<h2 id="service-Authorization">Service <code>Authorization</code> <span class="tag">[DEF-S1]</span></h2>
+<p>General exact-rule authorization decision point with bounded catalog and persistence. Unknown, absent, unspecified, failed and refused decisions never permit. Explicitly authorized operator configuration grants/revokes exact rules; no serialized awake lease is introduced.</p>
+<p>Wire identity: <code>abstraction.rights/authorization@1</code></p>
+<p>Multiple services share this namespace. Generated ServiceName (Go) and service_name (C++/Python) validate the request envelope and version before returning its service identity for routing. The selected generated dispatcher validates the method and typed arguments; the selector does not authorize callers or interpret method payloads.</p>
+<p>Frames carry version, service, method and typed arguments. Transport owns framing, associated exchanges, deadlines and connections. Unknown version/service/method and malformed arguments are rejected before invoking a handler. One-way WriteFrame success means local submission, not remote acceptance or persistence.</p>
+<p>Request-response methods use ExchangeFrame. Replies carry version, service, method, ok and payload; success payload contains typed value (or an empty object for void). Error payload contains nonempty code and message, which may be empty. ServiceError preserves unknown codes. Unexpected handler failures become handler_error without private details; invalid results become invalid_result. Clients validate reply identity and result before exposing it. A malformed frame or transport failure remains a local error; the transport must associate each response with its exchange. C++ dispatchers are pure protocol bindings, not listening servers.</p>
+<p>Evaluate the bound receiving account/program against an exact action/resource rule. This result is advisory to the caller; resource services query the decision point themselves.</p>
+<h3><code>Decide</code></h3><p><code>request-response</code> <code>Decision</code></p><ul>
+<li>Argument 1: <code>string</code> <code>action</code> (required, including zero/false/empty)</li>
+<li>Argument 2: <code>string</code> <code>resource</code> (required, including zero/false/empty)</li>
+</ul>
+<p>Evaluate a subject assertion only when the receiving peer is explicitly authorized as an enforcement point for this action/resource. Same account alone grants no relay authority. The designated enforcer is trusted to supply its actual bound subject. Nil or refusing enforcer policy yields forbidden before policy lookup.</p>
+<h3><code>DecideFor</code></h3><p><code>request-response</code> <code>Decision</code></p><ul>
+<li>Argument 1: <code>Subject</code> <code>subject</code> (required, including zero/false/empty)</li>
+<li>Argument 2: <code>string</code> <code>action</code> (required, including zero/false/empty)</li>
+<li>Argument 3: <code>string</code> <code>resource</code> (required, including zero/false/empty)</li>
+</ul>
+<h2 id="service-AuthorizationOperator">Service <code>AuthorizationOperator</code> <span class="tag">[DEF-S1]</span></h2>
+<p>Explicitly authorized administration of the configured decision policy. Receiving same-account Program proof plus a trusted typed-peer operator callback is required; nil refuses. Policy denial is forbidden; callback/storage failure is unavailable. No caller credential, verified flag or provider path is accepted. Resource services remain the receiving enforcement points. Legacy bearer and awake lease behavior is separate.</p>
+<p>Wire identity: <code>abstraction.rights/operator@1</code></p>
+<p>Multiple services share this namespace. Generated ServiceName (Go) and service_name (C++/Python) validate the request envelope and version before returning its service identity for routing. The selected generated dispatcher validates the method and typed arguments; the selector does not authorize callers or interpret method payloads.</p>
+<p>Frames carry version, service, method and typed arguments. Transport owns framing, associated exchanges, deadlines and connections. Unknown version/service/method and malformed arguments are rejected before invoking a handler. One-way WriteFrame success means local submission, not remote acceptance or persistence.</p>
+<p>Request-response methods use ExchangeFrame. Replies carry version, service, method, ok and payload; success payload contains typed value (or an empty object for void). Error payload contains nonempty code and message, which may be empty. ServiceError preserves unknown codes. Unexpected handler failures become handler_error without private details; invalid results become invalid_result. Clients validate reply identity and result before exposing it. A malformed frame or transport failure remains a local error; the transport must associate each response with its exchange. C++ dispatchers are pure protocol bindings, not listening servers.</p>
+<p>Read bounded current rules and catalogue under explicit operator authorization. Every continuation rechecks authorization; no enumeration session is retained for disconnected/slow callers.</p>
+<h3><code>ListPolicy</code></h3><p><code>request-response</code> <code>PolicyPage</code></p><ul>
+<li>Argument 1: <code>string</code> <code>cursor</code> (required, including zero/false/empty)</li>
+<li>Argument 2: <code>i64</code> <code>limit</code> (required, including zero/false/empty)</li>
+</ul>
+<p>Atomically compare the expected durable revision and set one exact permit/deny rule. Revision is bounded to 128 UTF-8 bytes. Operator context and authority are checked again inside the atomic edit after lock waiting. Unknown catalogue actions and malformed targets are invalid; no resource permission is inferred from the operator request itself.</p>
+<h3><code>SetRule</code></h3><p><code>request-response</code> <code>PolicyEdit</code></p><ul>
+<li>Argument 1: <code>string</code> <code>expected_revision</code> (required, including zero/false/empty)</li>
+<li>Argument 2: <code>PolicyRule</code> <code>rule</code> (required, including zero/false/empty)</li>
+</ul>
+<p>Atomically remove one exact rule if the revision matches. The next fresh decision observes successful revocation. A failed/uncertain reply claims no successful revocation; inspect current state before another intent. It does not cancel an existing connection-owned awake lease.</p>
+<h3><code>RevokeRule</code></h3><p><code>request-response</code> <code>PolicyEdit</code></p><ul>
+<li>Argument 1: <code>string</code> <code>expected_revision</code> (required, including zero/false/empty)</li>
+<li>Argument 2: <code>Subject</code> <code>subject</code> (required, including zero/false/empty)</li>
+<li>Argument 3: <code>string</code> <code>action</code> (required, including zero/false/empty)</li>
+<li>Argument 4: <code>string</code> <code>resource</code> (required, including zero/false/empty)</li>
+</ul>
+
+<footer>
+<p><a href="index.html">Overview</a> · <a href="cases.html">Cases</a> · <a href="reference.html">Reference</a> · <a href="evidence.html">Evidence</a> · <a href="coverage.html">Coverage</a> · <a href="adopt.html">Adopt</a> ·
+<a href="https://github.com/openabstractions">github.com/openabstractions</a></p>
+</footer>
+</main>
+</html>

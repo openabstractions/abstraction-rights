@@ -1,5 +1,12 @@
 # abstraction-rights
 
+Resource services use the generated `abstraction.rights/authorization@1`
+decision service through `go/client`. `Require(ctx, peer, action, resource)`
+queries an explicitly selected decision point and refuses every non-permitted
+result. [General decision contract](CONTRACT.md) defines trusted enforcement
+points, exact rules, revision and revocation semantics. The existing native
+registration/token/awake workflows below remain separately selected interfaces.
+
 **In development.** No tagged release; `rightsd`, `rights` and `keepawake` run
 end to end on Windows today.
 
@@ -180,3 +187,17 @@ Go 1.26 or newer. Windows 11 verified; Linux and macOS written and not run.
 ## Licence
 
 Apache-2.0. See [LICENSE](https://github.com/openabstractions/abstraction-rights/blob/main/LICENSE).
+
+### Policy administration
+
+The generated `AuthorizationOperator` service reads bounded catalogue/rule pages
+and conditionally sets or revokes exact rules. Configure typed-peer operator
+authorization explicitly on the service; same-account applications receive no
+operator permission by default. Go callers use `client.NewOperator` with the
+selected `abstraction.rights/operator@1` endpoint and its context methods.
+
+Edits carry the revision read from the policy. A conflict returns current state;
+inspect it before choosing a new edit. After an uncertain reply, retry the same
+expected revision or read the policy again. Clients never retry automatically.
+Resources remain protected by their receiving enforcement points. See CONTRACT.md
+for bounds, reconnect gaps and native awake-lease separation.
