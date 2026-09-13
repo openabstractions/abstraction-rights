@@ -44,7 +44,8 @@ named in it.
   yet; `go get` resolves a pseudo-version of `main`. Standard library plus
   [abstraction-identity](https://github.com/openabstractions/abstraction-identity)
   (which brings `golang.org/x/sys`).
-- **Python, C++.** None.
+- **Other languages.** See generated protocol and shared transport/client packages
+  in this repository and the facade. Native provider support is separate.
 
 ## Run
 
@@ -135,7 +136,7 @@ three pieces map onto it directly.
 
 ## Today
 
-**Go only.** One right, `awake`, end to end on Windows 11 over a named pipe:
+**Native Go provider profile.** One right, `awake`, end to end on Windows 11 over a named pipe:
 `rightsd`, `rights`, `keepawake`. **Not examined: Linux, macOS** — the unix
 socket listener, `systemd-inhibit` and `caffeinate` paths are written and have
 never run.
