@@ -135,13 +135,19 @@ export const PolicyPageOutcomeUnknown = "refuse";
 export const PolicyEditOutcomeNames = ["applied", "conflict", "invalid", "forbidden", "unavailable"];
 export const PolicyEditOutcomeUnknown = "refuse";
 
+export const RuleReadOutcomeNames = ["found", "expired", "unknown", "invalid", "forbidden", "unavailable"];
+export const RuleReadOutcomeUnknown = "refuse";
+
+export const ActionEditOutcomeNames = ["applied", "conflict", "unknown", "invalid", "exhausted", "forbidden", "unavailable"];
+export const ActionEditOutcomeUnknown = "refuse";
+
 export const operations = ["register", "ask", "hold", "check", "apps", "grant", "revoke", "forget", "holds"];
 
 export const knownRights = ["awake"];
 
 export const refusalCodes = ["internal", "invalid_request", "caller_refused", "unknown_operation", "not_administrator", "pending", "denied", "denied_permanently", "unsupported_hold", "platform_refused", "unknown_app", "unknown_right", "not_granted", "bad_secret", "bad_token"];
 
-export const resourceActions = ["abstraction.storage/content.read"];
+export const resourceActions = ["abstraction.storage/content.read", "abstraction.storage/content.write", "abstraction.job/acceptance.submit", "abstraction.job/acceptance.cancel", "abstraction.config/user.replace", "abstraction.logging/history.read", "abstraction.model/lookup", "abstraction.router/inventory.read", "abstraction.router/route", "abstraction.storage/content.observe", "abstraction.storage/content.remove"];
 
 export function enc_request(out, v, depth) {
   out.byte(0x7b);
@@ -514,6 +520,122 @@ export function enc_policyedit(out, v, depth) {
   out.byte(0x7d);
 }
 
+export function enc_rulerecord(out, v, depth) {
+  out.byte(0x7b);
+  out.byte(0x0a);
+  pad(out, depth + 1);
+  esc(out, "rule");
+  out.ascii(": ");
+  enc_policyrule(out, v.rule, depth + 1);
+  out.byte(0x2c);
+  out.byte(0x0a);
+  pad(out, depth + 1);
+  esc(out, "set_by");
+  out.ascii(": ");
+  enc_subject(out, v.set_by, depth + 1);
+  out.byte(0x2c);
+  out.byte(0x0a);
+  pad(out, depth + 1);
+  esc(out, "set_at");
+  out.ascii(": ");
+  esc(out, v.set_at);
+  out.byte(0x2c);
+  out.byte(0x0a);
+  pad(out, depth + 1);
+  esc(out, "why");
+  out.ascii(": ");
+  esc(out, v.why);
+  out.byte(0x2c);
+  out.byte(0x0a);
+  pad(out, depth + 1);
+  esc(out, "expires");
+  out.ascii(": ");
+  esc(out, v.expires);
+  out.byte(0x0a);
+  pad(out, depth);
+  out.byte(0x7d);
+}
+
+export function enc_ruleread(out, v, depth) {
+    if (typeof v.outcome !== "string") throw new Refusal("wrong_type",0);
+    if (v.outcome !== "found" && v.outcome !== "expired" && v.outcome !== "unknown" && v.outcome !== "invalid" && v.outcome !== "forbidden" && v.outcome !== "unavailable") { throw new Refusal("bad_enum",0); }
+  out.byte(0x7b);
+  out.byte(0x0a);
+  pad(out, depth + 1);
+  esc(out, "outcome");
+  out.ascii(": ");
+  esc(out, v.outcome);
+  out.byte(0x2c);
+  out.byte(0x0a);
+  pad(out, depth + 1);
+  esc(out, "revision");
+  out.ascii(": ");
+  esc(out, v.revision);
+  if (v.record !== undefined && v.record !== null) {
+    out.byte(0x2c);
+    out.byte(0x0a);
+    pad(out, depth + 1);
+    esc(out, "record");
+    out.ascii(": ");
+    enc_rulerecord(out, v.record, depth + 1);
+  }
+  out.byte(0x0a);
+  pad(out, depth);
+  out.byte(0x7d);
+}
+
+export function enc_catalogentry(out, v, depth) {
+  out.byte(0x7b);
+  out.byte(0x0a);
+  pad(out, depth + 1);
+  esc(out, "action");
+  out.ascii(": ");
+  esc(out, v.action);
+  out.byte(0x2c);
+  out.byte(0x0a);
+  pad(out, depth + 1);
+  esc(out, "registered_by");
+  out.ascii(": ");
+  enc_subject(out, v.registered_by, depth + 1);
+  out.byte(0x2c);
+  out.byte(0x0a);
+  pad(out, depth + 1);
+  esc(out, "registered_at");
+  out.ascii(": ");
+  esc(out, v.registered_at);
+  out.byte(0x0a);
+  pad(out, depth);
+  out.byte(0x7d);
+}
+
+export function enc_actionedit(out, v, depth) {
+    if (typeof v.outcome !== "string") throw new Refusal("wrong_type",0);
+    if (v.outcome !== "applied" && v.outcome !== "conflict" && v.outcome !== "unknown" && v.outcome !== "invalid" && v.outcome !== "exhausted" && v.outcome !== "forbidden" && v.outcome !== "unavailable") { throw new Refusal("bad_enum",0); }
+  out.byte(0x7b);
+  out.byte(0x0a);
+  pad(out, depth + 1);
+  esc(out, "outcome");
+  out.ascii(": ");
+  esc(out, v.outcome);
+  out.byte(0x2c);
+  out.byte(0x0a);
+  pad(out, depth + 1);
+  esc(out, "revision");
+  out.ascii(": ");
+  esc(out, v.revision);
+  if (v.current !== undefined && v.current !== null) {
+    out.byte(0x2c);
+    out.byte(0x0a);
+    pad(out, depth + 1);
+    esc(out, "current");
+    out.ascii(": ");
+    enc_catalogentry(out, v.current, depth + 1);
+  }
+  out.byte(0x0a);
+  pad(out, depth);
+  out.byte(0x7d);
+}
+
 export function enc_oaauthorizationdecidearguments(out, v, depth) {
   out.byte(0x7b);
   out.byte(0x0a);
@@ -617,6 +739,96 @@ export function enc_oaauthorizationoperatorrevokerulearguments(out, v, depth) {
   esc(out, "resource");
   out.ascii(": ");
   esc(out, v.resource);
+  out.byte(0x0a);
+  pad(out, depth);
+  out.byte(0x7d);
+}
+
+export function enc_oaauthorizationoperatorsetruleforarguments(out, v, depth) {
+  out.byte(0x7b);
+  out.byte(0x0a);
+  pad(out, depth + 1);
+  esc(out, "expected_revision");
+  out.ascii(": ");
+  esc(out, v.expected_revision);
+  out.byte(0x2c);
+  out.byte(0x0a);
+  pad(out, depth + 1);
+  esc(out, "rule");
+  out.ascii(": ");
+  enc_policyrule(out, v.rule, depth + 1);
+  out.byte(0x2c);
+  out.byte(0x0a);
+  pad(out, depth + 1);
+  esc(out, "ttl_ms");
+  out.ascii(": ");
+  num(out, v.ttl_ms);
+  out.byte(0x2c);
+  out.byte(0x0a);
+  pad(out, depth + 1);
+  esc(out, "why");
+  out.ascii(": ");
+  esc(out, v.why);
+  out.byte(0x0a);
+  pad(out, depth);
+  out.byte(0x7d);
+}
+
+export function enc_oaauthorizationoperatorreadrulearguments(out, v, depth) {
+  out.byte(0x7b);
+  out.byte(0x0a);
+  pad(out, depth + 1);
+  esc(out, "subject");
+  out.ascii(": ");
+  enc_subject(out, v.subject, depth + 1);
+  out.byte(0x2c);
+  out.byte(0x0a);
+  pad(out, depth + 1);
+  esc(out, "action");
+  out.ascii(": ");
+  esc(out, v.action);
+  out.byte(0x2c);
+  out.byte(0x0a);
+  pad(out, depth + 1);
+  esc(out, "resource");
+  out.ascii(": ");
+  esc(out, v.resource);
+  out.byte(0x0a);
+  pad(out, depth);
+  out.byte(0x7d);
+}
+
+export function enc_oaauthorizationoperatorregisteractionarguments(out, v, depth) {
+  out.byte(0x7b);
+  out.byte(0x0a);
+  pad(out, depth + 1);
+  esc(out, "expected_revision");
+  out.ascii(": ");
+  esc(out, v.expected_revision);
+  out.byte(0x2c);
+  out.byte(0x0a);
+  pad(out, depth + 1);
+  esc(out, "action");
+  out.ascii(": ");
+  esc(out, v.action);
+  out.byte(0x0a);
+  pad(out, depth);
+  out.byte(0x7d);
+}
+
+export function enc_oaauthorizationoperatorretireactionarguments(out, v, depth) {
+  out.byte(0x7b);
+  out.byte(0x0a);
+  pad(out, depth + 1);
+  esc(out, "expected_revision");
+  out.ascii(": ");
+  esc(out, v.expected_revision);
+  out.byte(0x2c);
+  out.byte(0x0a);
+  pad(out, depth + 1);
+  esc(out, "action");
+  out.ascii(": ");
+  esc(out, v.action);
   out.byte(0x0a);
   pad(out, depth);
   out.byte(0x7d);
@@ -761,6 +973,54 @@ export function enc_oaauthorizationoperatorrevokeruleresult(out, v, depth) {
   esc(out, "value");
   out.ascii(": ");
   enc_policyedit(out, v.value, depth + 1);
+  out.byte(0x0a);
+  pad(out, depth);
+  out.byte(0x7d);
+}
+
+export function enc_oaauthorizationoperatorsetruleforresult(out, v, depth) {
+  out.byte(0x7b);
+  out.byte(0x0a);
+  pad(out, depth + 1);
+  esc(out, "value");
+  out.ascii(": ");
+  enc_policyedit(out, v.value, depth + 1);
+  out.byte(0x0a);
+  pad(out, depth);
+  out.byte(0x7d);
+}
+
+export function enc_oaauthorizationoperatorreadruleresult(out, v, depth) {
+  out.byte(0x7b);
+  out.byte(0x0a);
+  pad(out, depth + 1);
+  esc(out, "value");
+  out.ascii(": ");
+  enc_ruleread(out, v.value, depth + 1);
+  out.byte(0x0a);
+  pad(out, depth);
+  out.byte(0x7d);
+}
+
+export function enc_oaauthorizationoperatorregisteractionresult(out, v, depth) {
+  out.byte(0x7b);
+  out.byte(0x0a);
+  pad(out, depth + 1);
+  esc(out, "value");
+  out.ascii(": ");
+  enc_actionedit(out, v.value, depth + 1);
+  out.byte(0x0a);
+  pad(out, depth);
+  out.byte(0x7d);
+}
+
+export function enc_oaauthorizationoperatorretireactionresult(out, v, depth) {
+  out.byte(0x7b);
+  out.byte(0x0a);
+  pad(out, depth + 1);
+  esc(out, "value");
+  out.ascii(": ");
+  enc_actionedit(out, v.value, depth + 1);
   out.byte(0x0a);
   pad(out, depth);
   out.byte(0x7d);
@@ -1070,39 +1330,127 @@ function decodeList(r, elem) {
   return out;
 }
 
+// Existing rights request concepts. Secret/token/admin remain credential inputs
+// checked by the service; request text never substitutes for native peer
+// identity. This descriptor does not replace the existing handwritten line
+// transport.
 export function newRequest() {
   return { op: "", name: "", rights: [], secret: "", token: "", right: "", why: "", app: "", admin: "" };
 }
 
+// Own application registration fields; registered uses the existing RFC3339
+// time representation. Native App additionally carries identity.listen.Seen
+// observation evidence.
 export function newAppMetadata() {
   return { id: "", name: "", rights: [], registered: "" };
 }
 
+// Own held-right fields; since uses existing RFC3339 time representation.
+// Native Hold also carries Seen. The live Lease is connection-owned and cannot
+// be recreated from these fields.
 export function newHoldMetadata() {
   return { app: "", name: "", right: "", why: "", since: "" };
 }
 
+// Own response fields projected without native Seen evidence. Any nonempty
+// code/error is refusal, including unknown codes. This is a common descriptor,
+// not a replacement legacy Response codec or generated service client.
 export function newResponseMetadata() {
   return { code: "", error: "", secret: "", token: "", expires: "", app: null, right: "", apps: [], holds: [] };
 }
 
+// Account identifier and normalized absolute executable path. This serialized
+// subject is an assertion by an explicitly authorized enforcement point. It
+// contains no proof or verified flag and cannot authorize its own use. Direct
+// decisions derive their subject from native receiving Program evidence.
 export function newSubject() {
   return { account: "", program: "" };
 }
 
+// A point-in-time policy decision. Only permitted allows an enforcement point
+// to proceed. denied is an explicit exact deny; not_granted has no unexpired
+// exact rule; unknown_action is outside the current catalogue. Evaluated
+// permitted/denied/not_granted/unknown_action decisions carry an opaque
+// revision observed with that decision. Errors carry none. No lease, token,
+// cached permission lifetime or human consent is conveyed.
 export function newDecision() {
   return { outcome: "", policy_revision: "" };
 }
 
+// One exact policy rule. Subject is the administrative target, never caller
+// proof. Account is 1..128 UTF-8 bytes; program is a normalized absolute path
+// up to 4096 bytes; action is 1..128 bytes and belongs to the current
+// catalogue; resource is 1..1024 bytes. All strings exclude control characters.
+// permit=false is an explicit deny; revocation removes the exact rule and
+// restores not_granted.
 export function newPolicyRule() {
   return { subject: newSubject(), action: "", resource: "", permit: false };
 }
 
+// Latest-policy enumeration: 1..64 requested rules and at most 256 KiB encoded
+// reply, including catalogue, cursor and indentation. Catalogue is the
+// configured seed plus registered actions, sorted, bounded to 64 actions of 128
+// bytes. Rules are every retained rule, including expired rules the next write
+// removes; ReadRule reports expiry and provenance. Page carries the exact
+// durable content revision. A noncomplete page has a nonempty next cursor.
+// Refusals have empty revision/catalog/rules/next and complete=false. Cursors
+// are at most 256 UTF-8 bytes, bind receiving account/program and host
+// epoch/revision, and return gap after change/restart/scope mismatch. Restart
+// from empty cursor. No immutable multipage snapshot or historical change
+// replay is promised.
 export function newPolicyPage() {
   return { outcome: "", revision: "", catalog: [], rules: [], next: "", complete: false };
 }
 
+// Applied/conflict carry the revision and optional exact current rule observed
+// inside the conditional edit; absent current means no exact rule. Other
+// outcomes carry no revision/current. A stale expected revision always
+// conflicts, including when the desired state happens to match. No-op edits at
+// the matching revision preserve it without writing. A lost reply is uncertain:
+// retrying the same expected revision cannot overwrite a later edit, and may
+// conflict after a successful original change. Reconcile the returned current
+// state or fresh history before choosing another edit. This is optimistic
+// concurrency, not an exactly-once mutation journal.
 export function newPolicyEdit() {
+  return { outcome: "", revision: "", current: null };
+}
+
+// One exact rule with its provenance. set_by is the subject the rights service
+// established for the party that set the rule: the operator's receiving Program
+// evidence, or the service's own account and executable for native edits. The
+// request never supplies it. set_at is the service's UTC edit time as RFC 3339
+// with milliseconds. why is the operator's reason of 0..256 UTF-8 bytes without
+// control characters. expires is empty for a rule without expiry, or the UTC
+// instant, in the same format, from which the rule decides nothing.
+export function newRuleRecord() {
+  return { rule: newPolicyRule(), set_by: newSubject(), set_at: "", why: "", expires: "" };
+}
+
+// found and expired carry the revision and the exact record. expired names a
+// retained rule at or past its expiry; it decides nothing and the next policy
+// write removes it. unknown carries the revision and no record. invalid,
+// forbidden and unavailable carry neither.
+export function newRuleRead() {
+  return { outcome: "", revision: "", record: null };
+}
+
+// One registered catalogue action. Seeded actions have no entry. registered_by
+// is the subject the rights service established for the registering party: the
+// operator's receiving Program evidence, or the service's own account and
+// executable for native registration. registered_at is the service's UTC time
+// as RFC 3339 with milliseconds.
+export function newCatalogEntry() {
+  return { action: "", registered_by: newSubject(), registered_at: "" };
+}
+
+// applied, conflict and unknown carry the revision observed inside the
+// conditional edit. applied and conflict carry the action's registration entry
+// when one exists; a seeded or retired action has none. unknown means
+// RetireAction named an action outside the catalogue. exhausted means the
+// catalogue already holds 64 actions. invalid, exhausted, forbidden and
+// unavailable carry no revision or entry. A stale expected revision always
+// conflicts.
+export function newActionEdit() {
   return { outcome: "", revision: "", current: null };
 }
 
@@ -1124,6 +1472,22 @@ export function newOAAuthorizationOperatorSetRuleArguments() {
 
 export function newOAAuthorizationOperatorRevokeRuleArguments() {
   return { expected_revision: "", subject: newSubject(), action: "", resource: "" };
+}
+
+export function newOAAuthorizationOperatorSetRuleForArguments() {
+  return { expected_revision: "", rule: newPolicyRule(), ttl_ms: 0n, why: "" };
+}
+
+export function newOAAuthorizationOperatorReadRuleArguments() {
+  return { subject: newSubject(), action: "", resource: "" };
+}
+
+export function newOAAuthorizationOperatorRegisterActionArguments() {
+  return { expected_revision: "", action: "" };
+}
+
+export function newOAAuthorizationOperatorRetireActionArguments() {
+  return { expected_revision: "", action: "" };
 }
 
 export function newOAServiceFrame() {
@@ -1156,6 +1520,22 @@ export function newOAAuthorizationOperatorSetRuleResult() {
 
 export function newOAAuthorizationOperatorRevokeRuleResult() {
   return { value: newPolicyEdit() };
+}
+
+export function newOAAuthorizationOperatorSetRuleForResult() {
+  return { value: newPolicyEdit() };
+}
+
+export function newOAAuthorizationOperatorReadRuleResult() {
+  return { value: newRuleRead() };
+}
+
+export function newOAAuthorizationOperatorRegisterActionResult() {
+  return { value: newActionEdit() };
+}
+
+export function newOAAuthorizationOperatorRetireActionResult() {
+  return { value: newActionEdit() };
 }
 
 function decode_request(r) {
@@ -1615,6 +1995,188 @@ function decode_policyedit(r) {
   return v;
 }
 
+function decode_rulerecord(r) {
+  if (r.at() !== 0x7b) throw r.refuse("wrong_type");
+  r.enter();
+  r.pos++;
+  const v = newRuleRecord();
+  let seen = 0;
+  r.ws();
+  if (r.at() !== 0x7d) {
+    for (;;) {
+      r.ws();
+      if (r.at() !== 0x22) throw r.refuse("malformed");
+      const key = r.string();
+      r.ws();
+      if (r.at() !== 0x3a) throw r.refuse("malformed");
+      r.pos++;
+      r.ws();
+      if (key === "rule") {
+        if (seen & 1) throw r.refuse("duplicate_field");
+        seen |= 1;
+        v.rule = decode_policyrule(r);
+      } else if (key === "set_by") {
+        if (seen & 2) throw r.refuse("duplicate_field");
+        seen |= 2;
+        v.set_by = decode_subject(r);
+      } else if (key === "set_at") {
+        if (seen & 4) throw r.refuse("duplicate_field");
+        seen |= 4;
+        v.set_at = r.string();
+      } else if (key === "why") {
+        if (seen & 8) throw r.refuse("duplicate_field");
+        seen |= 8;
+        v.why = r.string();
+      } else if (key === "expires") {
+        if (seen & 16) throw r.refuse("duplicate_field");
+        seen |= 16;
+        v.expires = r.string();
+      } else {
+        throw r.refuse("unknown_field");
+      }
+      r.ws();
+      if (r.at() !== 0x2c) break;
+      r.pos++;
+    }
+  }
+  if (r.at() !== 0x7d) throw r.refuse("malformed");
+  r.pos++;
+  r.depth--;
+  if (((seen & 31) >>> 0) !== 31) throw r.refuse("missing_field");
+  return v;
+}
+
+function decode_ruleread(r) {
+  if (r.at() !== 0x7b) throw r.refuse("wrong_type");
+  r.enter();
+  r.pos++;
+  const v = newRuleRead();
+  let seen = 0;
+  r.ws();
+  if (r.at() !== 0x7d) {
+    for (;;) {
+      r.ws();
+      if (r.at() !== 0x22) throw r.refuse("malformed");
+      const key = r.string();
+      r.ws();
+      if (r.at() !== 0x3a) throw r.refuse("malformed");
+      r.pos++;
+      r.ws();
+      if (key === "outcome") {
+        if (seen & 1) throw r.refuse("duplicate_field");
+        seen |= 1;
+        v.outcome = r.string();
+      } else if (key === "revision") {
+        if (seen & 2) throw r.refuse("duplicate_field");
+        seen |= 2;
+        v.revision = r.string();
+      } else if (key === "record") {
+        if (seen & 4) throw r.refuse("duplicate_field");
+        seen |= 4;
+        v.record = decode_rulerecord(r);
+      } else {
+        throw r.refuse("unknown_field");
+      }
+      r.ws();
+      if (r.at() !== 0x2c) break;
+      r.pos++;
+    }
+  }
+  if (r.at() !== 0x7d) throw r.refuse("malformed");
+  r.pos++;
+  r.depth--;
+  if (((seen & 3) >>> 0) !== 3) throw r.refuse("missing_field");
+    if (v.outcome !== "found" && v.outcome !== "expired" && v.outcome !== "unknown" && v.outcome !== "invalid" && v.outcome !== "forbidden" && v.outcome !== "unavailable") { throw r.refuse("bad_enum"); }
+  return v;
+}
+
+function decode_catalogentry(r) {
+  if (r.at() !== 0x7b) throw r.refuse("wrong_type");
+  r.enter();
+  r.pos++;
+  const v = newCatalogEntry();
+  let seen = 0;
+  r.ws();
+  if (r.at() !== 0x7d) {
+    for (;;) {
+      r.ws();
+      if (r.at() !== 0x22) throw r.refuse("malformed");
+      const key = r.string();
+      r.ws();
+      if (r.at() !== 0x3a) throw r.refuse("malformed");
+      r.pos++;
+      r.ws();
+      if (key === "action") {
+        if (seen & 1) throw r.refuse("duplicate_field");
+        seen |= 1;
+        v.action = r.string();
+      } else if (key === "registered_by") {
+        if (seen & 2) throw r.refuse("duplicate_field");
+        seen |= 2;
+        v.registered_by = decode_subject(r);
+      } else if (key === "registered_at") {
+        if (seen & 4) throw r.refuse("duplicate_field");
+        seen |= 4;
+        v.registered_at = r.string();
+      } else {
+        throw r.refuse("unknown_field");
+      }
+      r.ws();
+      if (r.at() !== 0x2c) break;
+      r.pos++;
+    }
+  }
+  if (r.at() !== 0x7d) throw r.refuse("malformed");
+  r.pos++;
+  r.depth--;
+  if (((seen & 7) >>> 0) !== 7) throw r.refuse("missing_field");
+  return v;
+}
+
+function decode_actionedit(r) {
+  if (r.at() !== 0x7b) throw r.refuse("wrong_type");
+  r.enter();
+  r.pos++;
+  const v = newActionEdit();
+  let seen = 0;
+  r.ws();
+  if (r.at() !== 0x7d) {
+    for (;;) {
+      r.ws();
+      if (r.at() !== 0x22) throw r.refuse("malformed");
+      const key = r.string();
+      r.ws();
+      if (r.at() !== 0x3a) throw r.refuse("malformed");
+      r.pos++;
+      r.ws();
+      if (key === "outcome") {
+        if (seen & 1) throw r.refuse("duplicate_field");
+        seen |= 1;
+        v.outcome = r.string();
+      } else if (key === "revision") {
+        if (seen & 2) throw r.refuse("duplicate_field");
+        seen |= 2;
+        v.revision = r.string();
+      } else if (key === "current") {
+        if (seen & 4) throw r.refuse("duplicate_field");
+        seen |= 4;
+        v.current = decode_catalogentry(r);
+      } else {
+        throw r.refuse("unknown_field");
+      }
+      r.ws();
+      if (r.at() !== 0x2c) break;
+      r.pos++;
+    }
+  }
+  if (r.at() !== 0x7d) throw r.refuse("malformed");
+  r.pos++;
+  r.depth--;
+  if (((seen & 3) >>> 0) !== 3) throw r.refuse("missing_field");
+    if (v.outcome !== "applied" && v.outcome !== "conflict" && v.outcome !== "unknown" && v.outcome !== "invalid" && v.outcome !== "exhausted" && v.outcome !== "forbidden" && v.outcome !== "unavailable") { throw r.refuse("bad_enum"); }
+  return v;
+}
+
 function decode_oaauthorizationdecidearguments(r) {
   if (r.at() !== 0x7b) throw r.refuse("wrong_type");
   r.enter();
@@ -1819,6 +2381,174 @@ function decode_oaauthorizationoperatorrevokerulearguments(r) {
   r.pos++;
   r.depth--;
   if (((seen & 15) >>> 0) !== 15) throw r.refuse("missing_field");
+  return v;
+}
+
+function decode_oaauthorizationoperatorsetruleforarguments(r) {
+  if (r.at() !== 0x7b) throw r.refuse("wrong_type");
+  r.enter();
+  r.pos++;
+  const v = newOAAuthorizationOperatorSetRuleForArguments();
+  let seen = 0;
+  r.ws();
+  if (r.at() !== 0x7d) {
+    for (;;) {
+      r.ws();
+      if (r.at() !== 0x22) throw r.refuse("malformed");
+      const key = r.string();
+      r.ws();
+      if (r.at() !== 0x3a) throw r.refuse("malformed");
+      r.pos++;
+      r.ws();
+      if (key === "expected_revision") {
+        if (seen & 1) throw r.refuse("duplicate_field");
+        seen |= 1;
+        v.expected_revision = r.string();
+      } else if (key === "rule") {
+        if (seen & 2) throw r.refuse("duplicate_field");
+        seen |= 2;
+        v.rule = decode_policyrule(r);
+      } else if (key === "ttl_ms") {
+        if (seen & 4) throw r.refuse("duplicate_field");
+        seen |= 4;
+        v.ttl_ms = r.integer(-9223372036854775808n, 9223372036854775807n);
+      } else if (key === "why") {
+        if (seen & 8) throw r.refuse("duplicate_field");
+        seen |= 8;
+        v.why = r.string();
+      } else {
+        throw r.refuse("unknown_field");
+      }
+      r.ws();
+      if (r.at() !== 0x2c) break;
+      r.pos++;
+    }
+  }
+  if (r.at() !== 0x7d) throw r.refuse("malformed");
+  r.pos++;
+  r.depth--;
+  if (((seen & 15) >>> 0) !== 15) throw r.refuse("missing_field");
+  return v;
+}
+
+function decode_oaauthorizationoperatorreadrulearguments(r) {
+  if (r.at() !== 0x7b) throw r.refuse("wrong_type");
+  r.enter();
+  r.pos++;
+  const v = newOAAuthorizationOperatorReadRuleArguments();
+  let seen = 0;
+  r.ws();
+  if (r.at() !== 0x7d) {
+    for (;;) {
+      r.ws();
+      if (r.at() !== 0x22) throw r.refuse("malformed");
+      const key = r.string();
+      r.ws();
+      if (r.at() !== 0x3a) throw r.refuse("malformed");
+      r.pos++;
+      r.ws();
+      if (key === "subject") {
+        if (seen & 1) throw r.refuse("duplicate_field");
+        seen |= 1;
+        v.subject = decode_subject(r);
+      } else if (key === "action") {
+        if (seen & 2) throw r.refuse("duplicate_field");
+        seen |= 2;
+        v.action = r.string();
+      } else if (key === "resource") {
+        if (seen & 4) throw r.refuse("duplicate_field");
+        seen |= 4;
+        v.resource = r.string();
+      } else {
+        throw r.refuse("unknown_field");
+      }
+      r.ws();
+      if (r.at() !== 0x2c) break;
+      r.pos++;
+    }
+  }
+  if (r.at() !== 0x7d) throw r.refuse("malformed");
+  r.pos++;
+  r.depth--;
+  if (((seen & 7) >>> 0) !== 7) throw r.refuse("missing_field");
+  return v;
+}
+
+function decode_oaauthorizationoperatorregisteractionarguments(r) {
+  if (r.at() !== 0x7b) throw r.refuse("wrong_type");
+  r.enter();
+  r.pos++;
+  const v = newOAAuthorizationOperatorRegisterActionArguments();
+  let seen = 0;
+  r.ws();
+  if (r.at() !== 0x7d) {
+    for (;;) {
+      r.ws();
+      if (r.at() !== 0x22) throw r.refuse("malformed");
+      const key = r.string();
+      r.ws();
+      if (r.at() !== 0x3a) throw r.refuse("malformed");
+      r.pos++;
+      r.ws();
+      if (key === "expected_revision") {
+        if (seen & 1) throw r.refuse("duplicate_field");
+        seen |= 1;
+        v.expected_revision = r.string();
+      } else if (key === "action") {
+        if (seen & 2) throw r.refuse("duplicate_field");
+        seen |= 2;
+        v.action = r.string();
+      } else {
+        throw r.refuse("unknown_field");
+      }
+      r.ws();
+      if (r.at() !== 0x2c) break;
+      r.pos++;
+    }
+  }
+  if (r.at() !== 0x7d) throw r.refuse("malformed");
+  r.pos++;
+  r.depth--;
+  if (((seen & 3) >>> 0) !== 3) throw r.refuse("missing_field");
+  return v;
+}
+
+function decode_oaauthorizationoperatorretireactionarguments(r) {
+  if (r.at() !== 0x7b) throw r.refuse("wrong_type");
+  r.enter();
+  r.pos++;
+  const v = newOAAuthorizationOperatorRetireActionArguments();
+  let seen = 0;
+  r.ws();
+  if (r.at() !== 0x7d) {
+    for (;;) {
+      r.ws();
+      if (r.at() !== 0x22) throw r.refuse("malformed");
+      const key = r.string();
+      r.ws();
+      if (r.at() !== 0x3a) throw r.refuse("malformed");
+      r.pos++;
+      r.ws();
+      if (key === "expected_revision") {
+        if (seen & 1) throw r.refuse("duplicate_field");
+        seen |= 1;
+        v.expected_revision = r.string();
+      } else if (key === "action") {
+        if (seen & 2) throw r.refuse("duplicate_field");
+        seen |= 2;
+        v.action = r.string();
+      } else {
+        throw r.refuse("unknown_field");
+      }
+      r.ws();
+      if (r.at() !== 0x2c) break;
+      r.pos++;
+    }
+  }
+  if (r.at() !== 0x7d) throw r.refuse("malformed");
+  r.pos++;
+  r.depth--;
+  if (((seen & 3) >>> 0) !== 3) throw r.refuse("missing_field");
   return v;
 }
 
@@ -2134,6 +2864,146 @@ function decode_oaauthorizationoperatorrevokeruleresult(r) {
   return v;
 }
 
+function decode_oaauthorizationoperatorsetruleforresult(r) {
+  if (r.at() !== 0x7b) throw r.refuse("wrong_type");
+  r.enter();
+  r.pos++;
+  const v = newOAAuthorizationOperatorSetRuleForResult();
+  let seen = 0;
+  r.ws();
+  if (r.at() !== 0x7d) {
+    for (;;) {
+      r.ws();
+      if (r.at() !== 0x22) throw r.refuse("malformed");
+      const key = r.string();
+      r.ws();
+      if (r.at() !== 0x3a) throw r.refuse("malformed");
+      r.pos++;
+      r.ws();
+      if (key === "value") {
+        if (seen & 1) throw r.refuse("duplicate_field");
+        seen |= 1;
+        v.value = decode_policyedit(r);
+      } else {
+        throw r.refuse("unknown_field");
+      }
+      r.ws();
+      if (r.at() !== 0x2c) break;
+      r.pos++;
+    }
+  }
+  if (r.at() !== 0x7d) throw r.refuse("malformed");
+  r.pos++;
+  r.depth--;
+  if (((seen & 1) >>> 0) !== 1) throw r.refuse("missing_field");
+  return v;
+}
+
+function decode_oaauthorizationoperatorreadruleresult(r) {
+  if (r.at() !== 0x7b) throw r.refuse("wrong_type");
+  r.enter();
+  r.pos++;
+  const v = newOAAuthorizationOperatorReadRuleResult();
+  let seen = 0;
+  r.ws();
+  if (r.at() !== 0x7d) {
+    for (;;) {
+      r.ws();
+      if (r.at() !== 0x22) throw r.refuse("malformed");
+      const key = r.string();
+      r.ws();
+      if (r.at() !== 0x3a) throw r.refuse("malformed");
+      r.pos++;
+      r.ws();
+      if (key === "value") {
+        if (seen & 1) throw r.refuse("duplicate_field");
+        seen |= 1;
+        v.value = decode_ruleread(r);
+      } else {
+        throw r.refuse("unknown_field");
+      }
+      r.ws();
+      if (r.at() !== 0x2c) break;
+      r.pos++;
+    }
+  }
+  if (r.at() !== 0x7d) throw r.refuse("malformed");
+  r.pos++;
+  r.depth--;
+  if (((seen & 1) >>> 0) !== 1) throw r.refuse("missing_field");
+  return v;
+}
+
+function decode_oaauthorizationoperatorregisteractionresult(r) {
+  if (r.at() !== 0x7b) throw r.refuse("wrong_type");
+  r.enter();
+  r.pos++;
+  const v = newOAAuthorizationOperatorRegisterActionResult();
+  let seen = 0;
+  r.ws();
+  if (r.at() !== 0x7d) {
+    for (;;) {
+      r.ws();
+      if (r.at() !== 0x22) throw r.refuse("malformed");
+      const key = r.string();
+      r.ws();
+      if (r.at() !== 0x3a) throw r.refuse("malformed");
+      r.pos++;
+      r.ws();
+      if (key === "value") {
+        if (seen & 1) throw r.refuse("duplicate_field");
+        seen |= 1;
+        v.value = decode_actionedit(r);
+      } else {
+        throw r.refuse("unknown_field");
+      }
+      r.ws();
+      if (r.at() !== 0x2c) break;
+      r.pos++;
+    }
+  }
+  if (r.at() !== 0x7d) throw r.refuse("malformed");
+  r.pos++;
+  r.depth--;
+  if (((seen & 1) >>> 0) !== 1) throw r.refuse("missing_field");
+  return v;
+}
+
+function decode_oaauthorizationoperatorretireactionresult(r) {
+  if (r.at() !== 0x7b) throw r.refuse("wrong_type");
+  r.enter();
+  r.pos++;
+  const v = newOAAuthorizationOperatorRetireActionResult();
+  let seen = 0;
+  r.ws();
+  if (r.at() !== 0x7d) {
+    for (;;) {
+      r.ws();
+      if (r.at() !== 0x22) throw r.refuse("malformed");
+      const key = r.string();
+      r.ws();
+      if (r.at() !== 0x3a) throw r.refuse("malformed");
+      r.pos++;
+      r.ws();
+      if (key === "value") {
+        if (seen & 1) throw r.refuse("duplicate_field");
+        seen |= 1;
+        v.value = decode_actionedit(r);
+      } else {
+        throw r.refuse("unknown_field");
+      }
+      r.ws();
+      if (r.at() !== 0x2c) break;
+      r.pos++;
+    }
+  }
+  if (r.at() !== 0x7d) throw r.refuse("malformed");
+  r.pos++;
+  r.depth--;
+  if (((seen & 1) >>> 0) !== 1) throw r.refuse("missing_field");
+  return v;
+}
+
 export function decode(data) {
   const r = new Reader(data);
   r.ws();
@@ -2212,11 +3082,19 @@ _serviceRecords["Decision"] = [["outcome","string","never"],["policy_revision","
 _serviceRecords["PolicyRule"] = [["subject","Subject","never"],["action","string","never"],["resource","string","never"],["permit","bool","never"],];
 _serviceRecords["PolicyPage"] = [["outcome","string","never"],["revision","string","never"],["catalog","list<string>","never"],["rules","list<PolicyRule>","never"],["next","string","never"],["complete","bool","never"],];
 _serviceRecords["PolicyEdit"] = [["outcome","string","never"],["revision","string","never"],["current","PolicyRule","absent"],];
+_serviceRecords["RuleRecord"] = [["rule","PolicyRule","never"],["set_by","Subject","never"],["set_at","string","never"],["why","string","never"],["expires","string","never"],];
+_serviceRecords["RuleRead"] = [["outcome","string","never"],["revision","string","never"],["record","RuleRecord","absent"],];
+_serviceRecords["CatalogEntry"] = [["action","string","never"],["registered_by","Subject","never"],["registered_at","string","never"],];
+_serviceRecords["ActionEdit"] = [["outcome","string","never"],["revision","string","never"],["current","CatalogEntry","absent"],];
 _serviceRecords["OAAuthorizationDecideArguments"] = [["action","string","never"],["resource","string","never"],];
 _serviceRecords["OAAuthorizationDecideForArguments"] = [["subject","Subject","never"],["action","string","never"],["resource","string","never"],];
 _serviceRecords["OAAuthorizationOperatorListPolicyArguments"] = [["cursor","string","never"],["limit","i64","never"],];
 _serviceRecords["OAAuthorizationOperatorSetRuleArguments"] = [["expected_revision","string","never"],["rule","PolicyRule","never"],];
 _serviceRecords["OAAuthorizationOperatorRevokeRuleArguments"] = [["expected_revision","string","never"],["subject","Subject","never"],["action","string","never"],["resource","string","never"],];
+_serviceRecords["OAAuthorizationOperatorSetRuleForArguments"] = [["expected_revision","string","never"],["rule","PolicyRule","never"],["ttl_ms","i64","never"],["why","string","never"],];
+_serviceRecords["OAAuthorizationOperatorReadRuleArguments"] = [["subject","Subject","never"],["action","string","never"],["resource","string","never"],];
+_serviceRecords["OAAuthorizationOperatorRegisterActionArguments"] = [["expected_revision","string","never"],["action","string","never"],];
+_serviceRecords["OAAuthorizationOperatorRetireActionArguments"] = [["expected_revision","string","never"],["action","string","never"],];
 _serviceRecords["OAServiceFrame"] = [["version","i32","never"],["service","string","never"],["method","string","never"],["arguments","json","never"],];
 _serviceRecords["OAServiceReply"] = [["version","i32","never"],["service","string","never"],["method","string","never"],["ok","bool","never"],["payload","json","never"],];
 _serviceRecords["OAServiceError"] = [["code","string","never"],["message","string","never"],];
@@ -2225,6 +3103,10 @@ _serviceRecords["OAAuthorizationDecideForResult"] = [["value","Decision","never"
 _serviceRecords["OAAuthorizationOperatorListPolicyResult"] = [["value","PolicyPage","never"],];
 _serviceRecords["OAAuthorizationOperatorSetRuleResult"] = [["value","PolicyEdit","never"],];
 _serviceRecords["OAAuthorizationOperatorRevokeRuleResult"] = [["value","PolicyEdit","never"],];
+_serviceRecords["OAAuthorizationOperatorSetRuleForResult"] = [["value","PolicyEdit","never"],];
+_serviceRecords["OAAuthorizationOperatorReadRuleResult"] = [["value","RuleRead","never"],];
+_serviceRecords["OAAuthorizationOperatorRegisterActionResult"] = [["value","ActionEdit","never"],];
+_serviceRecords["OAAuthorizationOperatorRetireActionResult"] = [["value","ActionEdit","never"],];
 
 function _serviceRequest(service, method, argumentsBytes) {
   return _serviceEncode(enc_oaserviceframe, {
@@ -2313,6 +3195,57 @@ export class AuthorizationOperatorClient {
     const request = _serviceRequest("abstraction.rights/operator@1", "RevokeRule", payload);
     const reply = _serviceResponse(await this._transport.exchangeFrame(request), "abstraction.rights/operator@1", "RevokeRule");
     const result = _serviceDecode(decode_oaauthorizationoperatorrevokeruleresult, reply, 1);
+    return result.value;
+  }
+  async SetRuleFor(arg0,arg1,arg2,arg3) {
+    const args = newOAAuthorizationOperatorSetRuleForArguments();
+    args["expected_revision"] = arg0;
+    args["rule"] = arg1;
+    args["ttl_ms"] = arg2;
+    args["why"] = arg3;
+    _serviceCheck("OAAuthorizationOperatorSetRuleForArguments", args);
+    const payload = _serviceEncode(enc_oaauthorizationoperatorsetruleforarguments, args, 1);
+    _serviceDecode(decode_oaauthorizationoperatorsetruleforarguments, payload, 1);
+    const request = _serviceRequest("abstraction.rights/operator@1", "SetRuleFor", payload);
+    const reply = _serviceResponse(await this._transport.exchangeFrame(request), "abstraction.rights/operator@1", "SetRuleFor");
+    const result = _serviceDecode(decode_oaauthorizationoperatorsetruleforresult, reply, 1);
+    return result.value;
+  }
+  async ReadRule(arg0,arg1,arg2) {
+    const args = newOAAuthorizationOperatorReadRuleArguments();
+    args["subject"] = arg0;
+    args["action"] = arg1;
+    args["resource"] = arg2;
+    _serviceCheck("OAAuthorizationOperatorReadRuleArguments", args);
+    const payload = _serviceEncode(enc_oaauthorizationoperatorreadrulearguments, args, 1);
+    _serviceDecode(decode_oaauthorizationoperatorreadrulearguments, payload, 1);
+    const request = _serviceRequest("abstraction.rights/operator@1", "ReadRule", payload);
+    const reply = _serviceResponse(await this._transport.exchangeFrame(request), "abstraction.rights/operator@1", "ReadRule");
+    const result = _serviceDecode(decode_oaauthorizationoperatorreadruleresult, reply, 1);
+    return result.value;
+  }
+  async RegisterAction(arg0,arg1) {
+    const args = newOAAuthorizationOperatorRegisterActionArguments();
+    args["expected_revision"] = arg0;
+    args["action"] = arg1;
+    _serviceCheck("OAAuthorizationOperatorRegisterActionArguments", args);
+    const payload = _serviceEncode(enc_oaauthorizationoperatorregisteractionarguments, args, 1);
+    _serviceDecode(decode_oaauthorizationoperatorregisteractionarguments, payload, 1);
+    const request = _serviceRequest("abstraction.rights/operator@1", "RegisterAction", payload);
+    const reply = _serviceResponse(await this._transport.exchangeFrame(request), "abstraction.rights/operator@1", "RegisterAction");
+    const result = _serviceDecode(decode_oaauthorizationoperatorregisteractionresult, reply, 1);
+    return result.value;
+  }
+  async RetireAction(arg0,arg1) {
+    const args = newOAAuthorizationOperatorRetireActionArguments();
+    args["expected_revision"] = arg0;
+    args["action"] = arg1;
+    _serviceCheck("OAAuthorizationOperatorRetireActionArguments", args);
+    const payload = _serviceEncode(enc_oaauthorizationoperatorretireactionarguments, args, 1);
+    _serviceDecode(decode_oaauthorizationoperatorretireactionarguments, payload, 1);
+    const request = _serviceRequest("abstraction.rights/operator@1", "RetireAction", payload);
+    const reply = _serviceResponse(await this._transport.exchangeFrame(request), "abstraction.rights/operator@1", "RetireAction");
+    const result = _serviceDecode(decode_oaauthorizationoperatorretireactionresult, reply, 1);
     return result.value;
   }
 }

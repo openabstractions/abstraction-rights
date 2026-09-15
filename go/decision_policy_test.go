@@ -150,9 +150,9 @@ func TestDecisionPolicyCapacityAndBounds(t *testing.T) {
 		t.Fatal(e)
 	}
 	s := subject(t)
-	f := decisionFile{Profile: DecisionProfile, Catalog: []string{decisionAction}}
+	f := decisionFile{Profile: DecisionProfile}
 	for i := 0; i < MaxDecisionRules; i++ {
-		f.Rules = append(f.Rules, decisionRule{s, decisionAction, strings.Repeat("a", i/100+1) + string(rune(1000+i)), true})
+		f.Rules = append(f.Rules, decisionRule{Subject: s, Action: decisionAction, Resource: strings.Repeat("a", i/100+1) + string(rune(1000+i)), Permit: true, SetBy: s, SetAt: "2026-09-15T00:00:00.000Z"})
 	}
 	// Provider-owned canonical order; a full file can still revoke existing rules.
 	slices.SortFunc(f.Rules, func(a, b decisionRule) int { return strings.Compare(ruleKey(a), ruleKey(b)) })

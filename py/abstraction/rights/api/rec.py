@@ -140,6 +140,14 @@ POLICYEDITOUTCOME_NAMES = ["applied", "conflict", "invalid", "forbidden", "unava
 POLICYEDITOUTCOME_UNKNOWN = "refuse"
 
 
+RULEREADOUTCOME_NAMES = ["found", "expired", "unknown", "invalid", "forbidden", "unavailable"]
+RULEREADOUTCOME_UNKNOWN = "refuse"
+
+
+ACTIONEDITOUTCOME_NAMES = ["applied", "conflict", "unknown", "invalid", "exhausted", "forbidden", "unavailable"]
+ACTIONEDITOUTCOME_UNKNOWN = "refuse"
+
+
 OPERATIONS = ["register", "ask", "hold", "check", "apps", "grant", "revoke", "forget", "holds"]
 
 
@@ -149,9 +157,13 @@ KNOWN_RIGHTS = ["awake"]
 REFUSAL_CODES = ["internal", "invalid_request", "caller_refused", "unknown_operation", "not_administrator", "pending", "denied", "denied_permanently", "unsupported_hold", "platform_refused", "unknown_app", "unknown_right", "not_granted", "bad_secret", "bad_token"]
 
 
-RESOURCE_ACTIONS = ["abstraction.storage/content.read"]
+RESOURCE_ACTIONS = ["abstraction.storage/content.read", "abstraction.storage/content.write", "abstraction.job/acceptance.submit", "abstraction.job/acceptance.cancel", "abstraction.config/user.replace", "abstraction.logging/history.read", "abstraction.model/lookup", "abstraction.router/inventory.read", "abstraction.router/route", "abstraction.storage/content.observe", "abstraction.storage/content.remove"]
 
 
+# Existing rights request concepts. Secret/token/admin remain credential inputs
+# checked by the service; request text never substitutes for native peer
+# identity. This descriptor does not replace the existing handwritten line
+# transport.
 class Request:
     def __init__(self, **kw):
         self.op = kw.get("op", "")
@@ -165,6 +177,9 @@ class Request:
         self.admin = kw.get("admin", "")
 
 
+# Own application registration fields; registered uses the existing RFC3339 time
+# representation. Native App additionally carries identity.listen.Seen
+# observation evidence.
 class AppMetadata:
     def __init__(self, **kw):
         self.id = kw.get("id", "")
@@ -173,6 +188,9 @@ class AppMetadata:
         self.registered = kw.get("registered", "")
 
 
+# Own held-right fields; since uses existing RFC3339 time representation. Native
+# Hold also carries Seen. The live Lease is connection-owned and cannot be
+# recreated from these fields.
 class HoldMetadata:
     def __init__(self, **kw):
         self.app = kw.get("app", "")
@@ -182,6 +200,9 @@ class HoldMetadata:
         self.since = kw.get("since", "")
 
 
+# Own response fields projected without native Seen evidence. Any nonempty
+# code/error is refusal, including unknown codes. This is a common descriptor,
+# not a replacement legacy Response codec or generated service client.
 class ResponseMetadata:
     def __init__(self, **kw):
         self.code = kw.get("code", "")
@@ -195,18 +216,34 @@ class ResponseMetadata:
         self.holds = kw.get("holds", [])
 
 
+# Account identifier and normalized absolute executable path. This serialized
+# subject is an assertion by an explicitly authorized enforcement point. It
+# contains no proof or verified flag and cannot authorize its own use. Direct
+# decisions derive their subject from native receiving Program evidence.
 class Subject:
     def __init__(self, **kw):
         self.account = kw.get("account", "")
         self.program = kw.get("program", "")
 
 
+# A point-in-time policy decision. Only permitted allows an enforcement point to
+# proceed. denied is an explicit exact deny; not_granted has no unexpired exact
+# rule; unknown_action is outside the current catalogue. Evaluated
+# permitted/denied/not_granted/unknown_action decisions carry an opaque revision
+# observed with that decision. Errors carry none. No lease, token, cached
+# permission lifetime or human consent is conveyed.
 class Decision:
     def __init__(self, **kw):
         self.outcome = kw.get("outcome", "")
         self.policy_revision = kw.get("policy_revision", "")
 
 
+# One exact policy rule. Subject is the administrative target, never caller
+# proof. Account is 1..128 UTF-8 bytes; program is a normalized absolute path up
+# to 4096 bytes; action is 1..128 bytes and belongs to the current catalogue;
+# resource is 1..1024 bytes. All strings exclude control characters.
+# permit=false is an explicit deny; revocation removes the exact rule and
+# restores not_granted.
 class PolicyRule:
     def __init__(self, **kw):
         self.subject = kw.get("subject", Subject())
@@ -215,6 +252,17 @@ class PolicyRule:
         self.permit = kw.get("permit", False)
 
 
+# Latest-policy enumeration: 1..64 requested rules and at most 256 KiB encoded
+# reply, including catalogue, cursor and indentation. Catalogue is the
+# configured seed plus registered actions, sorted, bounded to 64 actions of 128
+# bytes. Rules are every retained rule, including expired rules the next write
+# removes; ReadRule reports expiry and provenance. Page carries the exact
+# durable content revision. A noncomplete page has a nonempty next cursor.
+# Refusals have empty revision/catalog/rules/next and complete=false. Cursors
+# are at most 256 UTF-8 bytes, bind receiving account/program and host
+# epoch/revision, and return gap after change/restart/scope mismatch. Restart
+# from empty cursor. No immutable multipage snapshot or historical change replay
+# is promised.
 class PolicyPage:
     def __init__(self, **kw):
         self.outcome = kw.get("outcome", "")
@@ -225,7 +273,69 @@ class PolicyPage:
         self.complete = kw.get("complete", False)
 
 
+# Applied/conflict carry the revision and optional exact current rule observed
+# inside the conditional edit; absent current means no exact rule. Other
+# outcomes carry no revision/current. A stale expected revision always
+# conflicts, including when the desired state happens to match. No-op edits at
+# the matching revision preserve it without writing. A lost reply is uncertain:
+# retrying the same expected revision cannot overwrite a later edit, and may
+# conflict after a successful original change. Reconcile the returned current
+# state or fresh history before choosing another edit. This is optimistic
+# concurrency, not an exactly-once mutation journal.
 class PolicyEdit:
+    def __init__(self, **kw):
+        self.outcome = kw.get("outcome", "")
+        self.revision = kw.get("revision", "")
+        self.current = kw.get("current", None)
+
+
+# One exact rule with its provenance. set_by is the subject the rights service
+# established for the party that set the rule: the operator's receiving Program
+# evidence, or the service's own account and executable for native edits. The
+# request never supplies it. set_at is the service's UTC edit time as RFC 3339
+# with milliseconds. why is the operator's reason of 0..256 UTF-8 bytes without
+# control characters. expires is empty for a rule without expiry, or the UTC
+# instant, in the same format, from which the rule decides nothing.
+class RuleRecord:
+    def __init__(self, **kw):
+        self.rule = kw.get("rule", PolicyRule())
+        self.set_by = kw.get("set_by", Subject())
+        self.set_at = kw.get("set_at", "")
+        self.why = kw.get("why", "")
+        self.expires = kw.get("expires", "")
+
+
+# found and expired carry the revision and the exact record. expired names a
+# retained rule at or past its expiry; it decides nothing and the next policy
+# write removes it. unknown carries the revision and no record. invalid,
+# forbidden and unavailable carry neither.
+class RuleRead:
+    def __init__(self, **kw):
+        self.outcome = kw.get("outcome", "")
+        self.revision = kw.get("revision", "")
+        self.record = kw.get("record", None)
+
+
+# One registered catalogue action. Seeded actions have no entry. registered_by
+# is the subject the rights service established for the registering party: the
+# operator's receiving Program evidence, or the service's own account and
+# executable for native registration. registered_at is the service's UTC time as
+# RFC 3339 with milliseconds.
+class CatalogEntry:
+    def __init__(self, **kw):
+        self.action = kw.get("action", "")
+        self.registered_by = kw.get("registered_by", Subject())
+        self.registered_at = kw.get("registered_at", "")
+
+
+# applied, conflict and unknown carry the revision observed inside the
+# conditional edit. applied and conflict carry the action's registration entry
+# when one exists; a seeded or retired action has none. unknown means
+# RetireAction named an action outside the catalogue. exhausted means the
+# catalogue already holds 64 actions. invalid, exhausted, forbidden and
+# unavailable carry no revision or entry. A stale expected revision always
+# conflicts.
+class ActionEdit:
     def __init__(self, **kw):
         self.outcome = kw.get("outcome", "")
         self.revision = kw.get("revision", "")
@@ -263,6 +373,33 @@ class OAAuthorizationOperatorRevokeRuleArguments:
         self.subject = kw.get("subject", Subject())
         self.action = kw.get("action", "")
         self.resource = kw.get("resource", "")
+
+
+class OAAuthorizationOperatorSetRuleForArguments:
+    def __init__(self, **kw):
+        self.expected_revision = kw.get("expected_revision", "")
+        self.rule = kw.get("rule", PolicyRule())
+        self.ttl_ms = kw.get("ttl_ms", 0)
+        self.why = kw.get("why", "")
+
+
+class OAAuthorizationOperatorReadRuleArguments:
+    def __init__(self, **kw):
+        self.subject = kw.get("subject", Subject())
+        self.action = kw.get("action", "")
+        self.resource = kw.get("resource", "")
+
+
+class OAAuthorizationOperatorRegisterActionArguments:
+    def __init__(self, **kw):
+        self.expected_revision = kw.get("expected_revision", "")
+        self.action = kw.get("action", "")
+
+
+class OAAuthorizationOperatorRetireActionArguments:
+    def __init__(self, **kw):
+        self.expected_revision = kw.get("expected_revision", "")
+        self.action = kw.get("action", "")
 
 
 class OAServiceFrame:
@@ -311,6 +448,26 @@ class OAAuthorizationOperatorSetRuleResult:
 class OAAuthorizationOperatorRevokeRuleResult:
     def __init__(self, **kw):
         self.value = kw.get("value", PolicyEdit())
+
+
+class OAAuthorizationOperatorSetRuleForResult:
+    def __init__(self, **kw):
+        self.value = kw.get("value", PolicyEdit())
+
+
+class OAAuthorizationOperatorReadRuleResult:
+    def __init__(self, **kw):
+        self.value = kw.get("value", RuleRead())
+
+
+class OAAuthorizationOperatorRegisterActionResult:
+    def __init__(self, **kw):
+        self.value = kw.get("value", ActionEdit())
+
+
+class OAAuthorizationOperatorRetireActionResult:
+    def __init__(self, **kw):
+        self.value = kw.get("value", ActionEdit())
 
 
 def enc_request(out, v, depth):
@@ -675,6 +832,120 @@ def enc_policyedit(out, v, depth):
     out += b"}"
 
 
+def enc_rulerecord(out, v, depth):
+    out += b"{"
+    out += b"\n"
+    pad(out, depth + 1)
+    esc(out, "rule")
+    out += b": "
+    enc_policyrule(out, v.rule, depth + 1)
+    out += b","
+    out += b"\n"
+    pad(out, depth + 1)
+    esc(out, "set_by")
+    out += b": "
+    enc_subject(out, v.set_by, depth + 1)
+    out += b","
+    out += b"\n"
+    pad(out, depth + 1)
+    esc(out, "set_at")
+    out += b": "
+    esc(out, v.set_at)
+    out += b","
+    out += b"\n"
+    pad(out, depth + 1)
+    esc(out, "why")
+    out += b": "
+    esc(out, v.why)
+    out += b","
+    out += b"\n"
+    pad(out, depth + 1)
+    esc(out, "expires")
+    out += b": "
+    esc(out, v.expires)
+    out += b"\n"
+    pad(out, depth)
+    out += b"}"
+
+
+def enc_ruleread(out, v, depth):
+    if type(v.outcome) is not str: raise Refusal("wrong_type",0)
+    if v.outcome != "found" and v.outcome != "expired" and v.outcome != "unknown" and v.outcome != "invalid" and v.outcome != "forbidden" and v.outcome != "unavailable": raise Refusal("bad_enum",0)
+    out += b"{"
+    out += b"\n"
+    pad(out, depth + 1)
+    esc(out, "outcome")
+    out += b": "
+    esc(out, v.outcome)
+    out += b","
+    out += b"\n"
+    pad(out, depth + 1)
+    esc(out, "revision")
+    out += b": "
+    esc(out, v.revision)
+    if v.record is not None:
+        out += b","
+        out += b"\n"
+        pad(out, depth + 1)
+        esc(out, "record")
+        out += b": "
+        enc_rulerecord(out, v.record, depth + 1)
+    out += b"\n"
+    pad(out, depth)
+    out += b"}"
+
+
+def enc_catalogentry(out, v, depth):
+    out += b"{"
+    out += b"\n"
+    pad(out, depth + 1)
+    esc(out, "action")
+    out += b": "
+    esc(out, v.action)
+    out += b","
+    out += b"\n"
+    pad(out, depth + 1)
+    esc(out, "registered_by")
+    out += b": "
+    enc_subject(out, v.registered_by, depth + 1)
+    out += b","
+    out += b"\n"
+    pad(out, depth + 1)
+    esc(out, "registered_at")
+    out += b": "
+    esc(out, v.registered_at)
+    out += b"\n"
+    pad(out, depth)
+    out += b"}"
+
+
+def enc_actionedit(out, v, depth):
+    if type(v.outcome) is not str: raise Refusal("wrong_type",0)
+    if v.outcome != "applied" and v.outcome != "conflict" and v.outcome != "unknown" and v.outcome != "invalid" and v.outcome != "exhausted" and v.outcome != "forbidden" and v.outcome != "unavailable": raise Refusal("bad_enum",0)
+    out += b"{"
+    out += b"\n"
+    pad(out, depth + 1)
+    esc(out, "outcome")
+    out += b": "
+    esc(out, v.outcome)
+    out += b","
+    out += b"\n"
+    pad(out, depth + 1)
+    esc(out, "revision")
+    out += b": "
+    esc(out, v.revision)
+    if v.current is not None:
+        out += b","
+        out += b"\n"
+        pad(out, depth + 1)
+        esc(out, "current")
+        out += b": "
+        enc_catalogentry(out, v.current, depth + 1)
+    out += b"\n"
+    pad(out, depth)
+    out += b"}"
+
+
 def enc_oaauthorizationdecidearguments(out, v, depth):
     out += b"{"
     out += b"\n"
@@ -778,6 +1049,96 @@ def enc_oaauthorizationoperatorrevokerulearguments(out, v, depth):
     esc(out, "resource")
     out += b": "
     esc(out, v.resource)
+    out += b"\n"
+    pad(out, depth)
+    out += b"}"
+
+
+def enc_oaauthorizationoperatorsetruleforarguments(out, v, depth):
+    out += b"{"
+    out += b"\n"
+    pad(out, depth + 1)
+    esc(out, "expected_revision")
+    out += b": "
+    esc(out, v.expected_revision)
+    out += b","
+    out += b"\n"
+    pad(out, depth + 1)
+    esc(out, "rule")
+    out += b": "
+    enc_policyrule(out, v.rule, depth + 1)
+    out += b","
+    out += b"\n"
+    pad(out, depth + 1)
+    esc(out, "ttl_ms")
+    out += b": "
+    num(out, v.ttl_ms)
+    out += b","
+    out += b"\n"
+    pad(out, depth + 1)
+    esc(out, "why")
+    out += b": "
+    esc(out, v.why)
+    out += b"\n"
+    pad(out, depth)
+    out += b"}"
+
+
+def enc_oaauthorizationoperatorreadrulearguments(out, v, depth):
+    out += b"{"
+    out += b"\n"
+    pad(out, depth + 1)
+    esc(out, "subject")
+    out += b": "
+    enc_subject(out, v.subject, depth + 1)
+    out += b","
+    out += b"\n"
+    pad(out, depth + 1)
+    esc(out, "action")
+    out += b": "
+    esc(out, v.action)
+    out += b","
+    out += b"\n"
+    pad(out, depth + 1)
+    esc(out, "resource")
+    out += b": "
+    esc(out, v.resource)
+    out += b"\n"
+    pad(out, depth)
+    out += b"}"
+
+
+def enc_oaauthorizationoperatorregisteractionarguments(out, v, depth):
+    out += b"{"
+    out += b"\n"
+    pad(out, depth + 1)
+    esc(out, "expected_revision")
+    out += b": "
+    esc(out, v.expected_revision)
+    out += b","
+    out += b"\n"
+    pad(out, depth + 1)
+    esc(out, "action")
+    out += b": "
+    esc(out, v.action)
+    out += b"\n"
+    pad(out, depth)
+    out += b"}"
+
+
+def enc_oaauthorizationoperatorretireactionarguments(out, v, depth):
+    out += b"{"
+    out += b"\n"
+    pad(out, depth + 1)
+    esc(out, "expected_revision")
+    out += b": "
+    esc(out, v.expected_revision)
+    out += b","
+    out += b"\n"
+    pad(out, depth + 1)
+    esc(out, "action")
+    out += b": "
+    esc(out, v.action)
     out += b"\n"
     pad(out, depth)
     out += b"}"
@@ -922,6 +1283,54 @@ def enc_oaauthorizationoperatorrevokeruleresult(out, v, depth):
     esc(out, "value")
     out += b": "
     enc_policyedit(out, v.value, depth + 1)
+    out += b"\n"
+    pad(out, depth)
+    out += b"}"
+
+
+def enc_oaauthorizationoperatorsetruleforresult(out, v, depth):
+    out += b"{"
+    out += b"\n"
+    pad(out, depth + 1)
+    esc(out, "value")
+    out += b": "
+    enc_policyedit(out, v.value, depth + 1)
+    out += b"\n"
+    pad(out, depth)
+    out += b"}"
+
+
+def enc_oaauthorizationoperatorreadruleresult(out, v, depth):
+    out += b"{"
+    out += b"\n"
+    pad(out, depth + 1)
+    esc(out, "value")
+    out += b": "
+    enc_ruleread(out, v.value, depth + 1)
+    out += b"\n"
+    pad(out, depth)
+    out += b"}"
+
+
+def enc_oaauthorizationoperatorregisteractionresult(out, v, depth):
+    out += b"{"
+    out += b"\n"
+    pad(out, depth + 1)
+    esc(out, "value")
+    out += b": "
+    enc_actionedit(out, v.value, depth + 1)
+    out += b"\n"
+    pad(out, depth)
+    out += b"}"
+
+
+def enc_oaauthorizationoperatorretireactionresult(out, v, depth):
+    out += b"{"
+    out += b"\n"
+    pad(out, depth + 1)
+    esc(out, "value")
+    out += b": "
+    enc_actionedit(out, v.value, depth + 1)
     out += b"\n"
     pad(out, depth)
     out += b"}"
@@ -1777,6 +2186,214 @@ def _decode_policyedit(r):
     return v
 
 
+def _decode_rulerecord(r):
+    if r.at() != _LBRACE:
+        raise r.refuse("wrong_type")
+    r.enter()
+    r.pos += 1
+    v = RuleRecord()
+    seen = 0
+    r.ws()
+    if r.at() != _RBRACE:
+        while True:
+            r.ws()
+            if r.at() != _QUOTE:
+                raise r.refuse("malformed")
+            key = r.string()
+            r.ws()
+            if r.at() != _COLON:
+                raise r.refuse("malformed")
+            r.pos += 1
+            r.ws()
+            if key == "rule":
+                if seen & 1:
+                    raise r.refuse("duplicate_field")
+                seen |= 1
+                v.rule = _decode_policyrule(r)
+            elif key == "set_by":
+                if seen & 2:
+                    raise r.refuse("duplicate_field")
+                seen |= 2
+                v.set_by = _decode_subject(r)
+            elif key == "set_at":
+                if seen & 4:
+                    raise r.refuse("duplicate_field")
+                seen |= 4
+                v.set_at = r.string()
+            elif key == "why":
+                if seen & 8:
+                    raise r.refuse("duplicate_field")
+                seen |= 8
+                v.why = r.string()
+            elif key == "expires":
+                if seen & 16:
+                    raise r.refuse("duplicate_field")
+                seen |= 16
+                v.expires = r.string()
+            else:
+                raise r.refuse("unknown_field")
+            r.ws()
+            if r.at() != _COMMA:
+                break
+            r.pos += 1
+    if r.at() != _RBRACE:
+        raise r.refuse("malformed")
+    r.pos += 1
+    r.depth -= 1
+    if seen & 31 != 31:
+        raise r.refuse("missing_field")
+    return v
+
+
+def _decode_ruleread(r):
+    if r.at() != _LBRACE:
+        raise r.refuse("wrong_type")
+    r.enter()
+    r.pos += 1
+    v = RuleRead()
+    seen = 0
+    r.ws()
+    if r.at() != _RBRACE:
+        while True:
+            r.ws()
+            if r.at() != _QUOTE:
+                raise r.refuse("malformed")
+            key = r.string()
+            r.ws()
+            if r.at() != _COLON:
+                raise r.refuse("malformed")
+            r.pos += 1
+            r.ws()
+            if key == "outcome":
+                if seen & 1:
+                    raise r.refuse("duplicate_field")
+                seen |= 1
+                v.outcome = r.string()
+            elif key == "revision":
+                if seen & 2:
+                    raise r.refuse("duplicate_field")
+                seen |= 2
+                v.revision = r.string()
+            elif key == "record":
+                if seen & 4:
+                    raise r.refuse("duplicate_field")
+                seen |= 4
+                v.record = _decode_rulerecord(r)
+            else:
+                raise r.refuse("unknown_field")
+            r.ws()
+            if r.at() != _COMMA:
+                break
+            r.pos += 1
+    if r.at() != _RBRACE:
+        raise r.refuse("malformed")
+    r.pos += 1
+    r.depth -= 1
+    if seen & 3 != 3:
+        raise r.refuse("missing_field")
+    if v.outcome != "found" and v.outcome != "expired" and v.outcome != "unknown" and v.outcome != "invalid" and v.outcome != "forbidden" and v.outcome != "unavailable": raise r.refuse("bad_enum")
+    return v
+
+
+def _decode_catalogentry(r):
+    if r.at() != _LBRACE:
+        raise r.refuse("wrong_type")
+    r.enter()
+    r.pos += 1
+    v = CatalogEntry()
+    seen = 0
+    r.ws()
+    if r.at() != _RBRACE:
+        while True:
+            r.ws()
+            if r.at() != _QUOTE:
+                raise r.refuse("malformed")
+            key = r.string()
+            r.ws()
+            if r.at() != _COLON:
+                raise r.refuse("malformed")
+            r.pos += 1
+            r.ws()
+            if key == "action":
+                if seen & 1:
+                    raise r.refuse("duplicate_field")
+                seen |= 1
+                v.action = r.string()
+            elif key == "registered_by":
+                if seen & 2:
+                    raise r.refuse("duplicate_field")
+                seen |= 2
+                v.registered_by = _decode_subject(r)
+            elif key == "registered_at":
+                if seen & 4:
+                    raise r.refuse("duplicate_field")
+                seen |= 4
+                v.registered_at = r.string()
+            else:
+                raise r.refuse("unknown_field")
+            r.ws()
+            if r.at() != _COMMA:
+                break
+            r.pos += 1
+    if r.at() != _RBRACE:
+        raise r.refuse("malformed")
+    r.pos += 1
+    r.depth -= 1
+    if seen & 7 != 7:
+        raise r.refuse("missing_field")
+    return v
+
+
+def _decode_actionedit(r):
+    if r.at() != _LBRACE:
+        raise r.refuse("wrong_type")
+    r.enter()
+    r.pos += 1
+    v = ActionEdit()
+    seen = 0
+    r.ws()
+    if r.at() != _RBRACE:
+        while True:
+            r.ws()
+            if r.at() != _QUOTE:
+                raise r.refuse("malformed")
+            key = r.string()
+            r.ws()
+            if r.at() != _COLON:
+                raise r.refuse("malformed")
+            r.pos += 1
+            r.ws()
+            if key == "outcome":
+                if seen & 1:
+                    raise r.refuse("duplicate_field")
+                seen |= 1
+                v.outcome = r.string()
+            elif key == "revision":
+                if seen & 2:
+                    raise r.refuse("duplicate_field")
+                seen |= 2
+                v.revision = r.string()
+            elif key == "current":
+                if seen & 4:
+                    raise r.refuse("duplicate_field")
+                seen |= 4
+                v.current = _decode_catalogentry(r)
+            else:
+                raise r.refuse("unknown_field")
+            r.ws()
+            if r.at() != _COMMA:
+                break
+            r.pos += 1
+    if r.at() != _RBRACE:
+        raise r.refuse("malformed")
+    r.pos += 1
+    r.depth -= 1
+    if seen & 3 != 3:
+        raise r.refuse("missing_field")
+    if v.outcome != "applied" and v.outcome != "conflict" and v.outcome != "unknown" and v.outcome != "invalid" and v.outcome != "exhausted" and v.outcome != "forbidden" and v.outcome != "unavailable": raise r.refuse("bad_enum")
+    return v
+
+
 def _decode_oaauthorizationdecidearguments(r):
     if r.at() != _LBRACE:
         raise r.refuse("wrong_type")
@@ -2008,6 +2625,197 @@ def _decode_oaauthorizationoperatorrevokerulearguments(r):
     r.pos += 1
     r.depth -= 1
     if seen & 15 != 15:
+        raise r.refuse("missing_field")
+    return v
+
+
+def _decode_oaauthorizationoperatorsetruleforarguments(r):
+    if r.at() != _LBRACE:
+        raise r.refuse("wrong_type")
+    r.enter()
+    r.pos += 1
+    v = OAAuthorizationOperatorSetRuleForArguments()
+    seen = 0
+    r.ws()
+    if r.at() != _RBRACE:
+        while True:
+            r.ws()
+            if r.at() != _QUOTE:
+                raise r.refuse("malformed")
+            key = r.string()
+            r.ws()
+            if r.at() != _COLON:
+                raise r.refuse("malformed")
+            r.pos += 1
+            r.ws()
+            if key == "expected_revision":
+                if seen & 1:
+                    raise r.refuse("duplicate_field")
+                seen |= 1
+                v.expected_revision = r.string()
+            elif key == "rule":
+                if seen & 2:
+                    raise r.refuse("duplicate_field")
+                seen |= 2
+                v.rule = _decode_policyrule(r)
+            elif key == "ttl_ms":
+                if seen & 4:
+                    raise r.refuse("duplicate_field")
+                seen |= 4
+                v.ttl_ms = r.integer(-9223372036854775808, 9223372036854775807)
+            elif key == "why":
+                if seen & 8:
+                    raise r.refuse("duplicate_field")
+                seen |= 8
+                v.why = r.string()
+            else:
+                raise r.refuse("unknown_field")
+            r.ws()
+            if r.at() != _COMMA:
+                break
+            r.pos += 1
+    if r.at() != _RBRACE:
+        raise r.refuse("malformed")
+    r.pos += 1
+    r.depth -= 1
+    if seen & 15 != 15:
+        raise r.refuse("missing_field")
+    return v
+
+
+def _decode_oaauthorizationoperatorreadrulearguments(r):
+    if r.at() != _LBRACE:
+        raise r.refuse("wrong_type")
+    r.enter()
+    r.pos += 1
+    v = OAAuthorizationOperatorReadRuleArguments()
+    seen = 0
+    r.ws()
+    if r.at() != _RBRACE:
+        while True:
+            r.ws()
+            if r.at() != _QUOTE:
+                raise r.refuse("malformed")
+            key = r.string()
+            r.ws()
+            if r.at() != _COLON:
+                raise r.refuse("malformed")
+            r.pos += 1
+            r.ws()
+            if key == "subject":
+                if seen & 1:
+                    raise r.refuse("duplicate_field")
+                seen |= 1
+                v.subject = _decode_subject(r)
+            elif key == "action":
+                if seen & 2:
+                    raise r.refuse("duplicate_field")
+                seen |= 2
+                v.action = r.string()
+            elif key == "resource":
+                if seen & 4:
+                    raise r.refuse("duplicate_field")
+                seen |= 4
+                v.resource = r.string()
+            else:
+                raise r.refuse("unknown_field")
+            r.ws()
+            if r.at() != _COMMA:
+                break
+            r.pos += 1
+    if r.at() != _RBRACE:
+        raise r.refuse("malformed")
+    r.pos += 1
+    r.depth -= 1
+    if seen & 7 != 7:
+        raise r.refuse("missing_field")
+    return v
+
+
+def _decode_oaauthorizationoperatorregisteractionarguments(r):
+    if r.at() != _LBRACE:
+        raise r.refuse("wrong_type")
+    r.enter()
+    r.pos += 1
+    v = OAAuthorizationOperatorRegisterActionArguments()
+    seen = 0
+    r.ws()
+    if r.at() != _RBRACE:
+        while True:
+            r.ws()
+            if r.at() != _QUOTE:
+                raise r.refuse("malformed")
+            key = r.string()
+            r.ws()
+            if r.at() != _COLON:
+                raise r.refuse("malformed")
+            r.pos += 1
+            r.ws()
+            if key == "expected_revision":
+                if seen & 1:
+                    raise r.refuse("duplicate_field")
+                seen |= 1
+                v.expected_revision = r.string()
+            elif key == "action":
+                if seen & 2:
+                    raise r.refuse("duplicate_field")
+                seen |= 2
+                v.action = r.string()
+            else:
+                raise r.refuse("unknown_field")
+            r.ws()
+            if r.at() != _COMMA:
+                break
+            r.pos += 1
+    if r.at() != _RBRACE:
+        raise r.refuse("malformed")
+    r.pos += 1
+    r.depth -= 1
+    if seen & 3 != 3:
+        raise r.refuse("missing_field")
+    return v
+
+
+def _decode_oaauthorizationoperatorretireactionarguments(r):
+    if r.at() != _LBRACE:
+        raise r.refuse("wrong_type")
+    r.enter()
+    r.pos += 1
+    v = OAAuthorizationOperatorRetireActionArguments()
+    seen = 0
+    r.ws()
+    if r.at() != _RBRACE:
+        while True:
+            r.ws()
+            if r.at() != _QUOTE:
+                raise r.refuse("malformed")
+            key = r.string()
+            r.ws()
+            if r.at() != _COLON:
+                raise r.refuse("malformed")
+            r.pos += 1
+            r.ws()
+            if key == "expected_revision":
+                if seen & 1:
+                    raise r.refuse("duplicate_field")
+                seen |= 1
+                v.expected_revision = r.string()
+            elif key == "action":
+                if seen & 2:
+                    raise r.refuse("duplicate_field")
+                seen |= 2
+                v.action = r.string()
+            else:
+                raise r.refuse("unknown_field")
+            r.ws()
+            if r.at() != _COMMA:
+                break
+            r.pos += 1
+    if r.at() != _RBRACE:
+        raise r.refuse("malformed")
+    r.pos += 1
+    r.depth -= 1
+    if seen & 3 != 3:
         raise r.refuse("missing_field")
     return v
 
@@ -2364,6 +3172,162 @@ def _decode_oaauthorizationoperatorrevokeruleresult(r):
     return v
 
 
+def _decode_oaauthorizationoperatorsetruleforresult(r):
+    if r.at() != _LBRACE:
+        raise r.refuse("wrong_type")
+    r.enter()
+    r.pos += 1
+    v = OAAuthorizationOperatorSetRuleForResult()
+    seen = 0
+    r.ws()
+    if r.at() != _RBRACE:
+        while True:
+            r.ws()
+            if r.at() != _QUOTE:
+                raise r.refuse("malformed")
+            key = r.string()
+            r.ws()
+            if r.at() != _COLON:
+                raise r.refuse("malformed")
+            r.pos += 1
+            r.ws()
+            if key == "value":
+                if seen & 1:
+                    raise r.refuse("duplicate_field")
+                seen |= 1
+                v.value = _decode_policyedit(r)
+            else:
+                raise r.refuse("unknown_field")
+            r.ws()
+            if r.at() != _COMMA:
+                break
+            r.pos += 1
+    if r.at() != _RBRACE:
+        raise r.refuse("malformed")
+    r.pos += 1
+    r.depth -= 1
+    if seen & 1 != 1:
+        raise r.refuse("missing_field")
+    return v
+
+
+def _decode_oaauthorizationoperatorreadruleresult(r):
+    if r.at() != _LBRACE:
+        raise r.refuse("wrong_type")
+    r.enter()
+    r.pos += 1
+    v = OAAuthorizationOperatorReadRuleResult()
+    seen = 0
+    r.ws()
+    if r.at() != _RBRACE:
+        while True:
+            r.ws()
+            if r.at() != _QUOTE:
+                raise r.refuse("malformed")
+            key = r.string()
+            r.ws()
+            if r.at() != _COLON:
+                raise r.refuse("malformed")
+            r.pos += 1
+            r.ws()
+            if key == "value":
+                if seen & 1:
+                    raise r.refuse("duplicate_field")
+                seen |= 1
+                v.value = _decode_ruleread(r)
+            else:
+                raise r.refuse("unknown_field")
+            r.ws()
+            if r.at() != _COMMA:
+                break
+            r.pos += 1
+    if r.at() != _RBRACE:
+        raise r.refuse("malformed")
+    r.pos += 1
+    r.depth -= 1
+    if seen & 1 != 1:
+        raise r.refuse("missing_field")
+    return v
+
+
+def _decode_oaauthorizationoperatorregisteractionresult(r):
+    if r.at() != _LBRACE:
+        raise r.refuse("wrong_type")
+    r.enter()
+    r.pos += 1
+    v = OAAuthorizationOperatorRegisterActionResult()
+    seen = 0
+    r.ws()
+    if r.at() != _RBRACE:
+        while True:
+            r.ws()
+            if r.at() != _QUOTE:
+                raise r.refuse("malformed")
+            key = r.string()
+            r.ws()
+            if r.at() != _COLON:
+                raise r.refuse("malformed")
+            r.pos += 1
+            r.ws()
+            if key == "value":
+                if seen & 1:
+                    raise r.refuse("duplicate_field")
+                seen |= 1
+                v.value = _decode_actionedit(r)
+            else:
+                raise r.refuse("unknown_field")
+            r.ws()
+            if r.at() != _COMMA:
+                break
+            r.pos += 1
+    if r.at() != _RBRACE:
+        raise r.refuse("malformed")
+    r.pos += 1
+    r.depth -= 1
+    if seen & 1 != 1:
+        raise r.refuse("missing_field")
+    return v
+
+
+def _decode_oaauthorizationoperatorretireactionresult(r):
+    if r.at() != _LBRACE:
+        raise r.refuse("wrong_type")
+    r.enter()
+    r.pos += 1
+    v = OAAuthorizationOperatorRetireActionResult()
+    seen = 0
+    r.ws()
+    if r.at() != _RBRACE:
+        while True:
+            r.ws()
+            if r.at() != _QUOTE:
+                raise r.refuse("malformed")
+            key = r.string()
+            r.ws()
+            if r.at() != _COLON:
+                raise r.refuse("malformed")
+            r.pos += 1
+            r.ws()
+            if key == "value":
+                if seen & 1:
+                    raise r.refuse("duplicate_field")
+                seen |= 1
+                v.value = _decode_actionedit(r)
+            else:
+                raise r.refuse("unknown_field")
+            r.ws()
+            if r.at() != _COMMA:
+                break
+            r.pos += 1
+    if r.at() != _RBRACE:
+        raise r.refuse("malformed")
+    r.pos += 1
+    r.depth -= 1
+    if seen & 1 != 1:
+        raise r.refuse("missing_field")
+    return v
+
+
 def decode(data):
     r = _Reader(bytes(data))
     r.ws()
@@ -2498,11 +3462,19 @@ _SERVICE_RECORDS = {
     "PolicyRule": (PolicyRule, [("subject","Subject","never"),("action","string","never"),("resource","string","never"),("permit","bool","never"),]),
     "PolicyPage": (PolicyPage, [("outcome","string","never"),("revision","string","never"),("catalog","list<string>","never"),("rules","list<PolicyRule>","never"),("next","string","never"),("complete","bool","never"),]),
     "PolicyEdit": (PolicyEdit, [("outcome","string","never"),("revision","string","never"),("current","PolicyRule","absent"),]),
+    "RuleRecord": (RuleRecord, [("rule","PolicyRule","never"),("set_by","Subject","never"),("set_at","string","never"),("why","string","never"),("expires","string","never"),]),
+    "RuleRead": (RuleRead, [("outcome","string","never"),("revision","string","never"),("record","RuleRecord","absent"),]),
+    "CatalogEntry": (CatalogEntry, [("action","string","never"),("registered_by","Subject","never"),("registered_at","string","never"),]),
+    "ActionEdit": (ActionEdit, [("outcome","string","never"),("revision","string","never"),("current","CatalogEntry","absent"),]),
     "OAAuthorizationDecideArguments": (OAAuthorizationDecideArguments, [("action","string","never"),("resource","string","never"),]),
     "OAAuthorizationDecideForArguments": (OAAuthorizationDecideForArguments, [("subject","Subject","never"),("action","string","never"),("resource","string","never"),]),
     "OAAuthorizationOperatorListPolicyArguments": (OAAuthorizationOperatorListPolicyArguments, [("cursor","string","never"),("limit","i64","never"),]),
     "OAAuthorizationOperatorSetRuleArguments": (OAAuthorizationOperatorSetRuleArguments, [("expected_revision","string","never"),("rule","PolicyRule","never"),]),
     "OAAuthorizationOperatorRevokeRuleArguments": (OAAuthorizationOperatorRevokeRuleArguments, [("expected_revision","string","never"),("subject","Subject","never"),("action","string","never"),("resource","string","never"),]),
+    "OAAuthorizationOperatorSetRuleForArguments": (OAAuthorizationOperatorSetRuleForArguments, [("expected_revision","string","never"),("rule","PolicyRule","never"),("ttl_ms","i64","never"),("why","string","never"),]),
+    "OAAuthorizationOperatorReadRuleArguments": (OAAuthorizationOperatorReadRuleArguments, [("subject","Subject","never"),("action","string","never"),("resource","string","never"),]),
+    "OAAuthorizationOperatorRegisterActionArguments": (OAAuthorizationOperatorRegisterActionArguments, [("expected_revision","string","never"),("action","string","never"),]),
+    "OAAuthorizationOperatorRetireActionArguments": (OAAuthorizationOperatorRetireActionArguments, [("expected_revision","string","never"),("action","string","never"),]),
     "OAServiceFrame": (OAServiceFrame, [("version","i32","never"),("service","string","never"),("method","string","never"),("arguments","json","never"),]),
     "OAServiceReply": (OAServiceReply, [("version","i32","never"),("service","string","never"),("method","string","never"),("ok","bool","never"),("payload","json","never"),]),
     "OAServiceError": (OAServiceError, [("code","string","never"),("message","string","never"),]),
@@ -2511,11 +3483,15 @@ _SERVICE_RECORDS = {
     "OAAuthorizationOperatorListPolicyResult": (OAAuthorizationOperatorListPolicyResult, [("value","PolicyPage","never"),]),
     "OAAuthorizationOperatorSetRuleResult": (OAAuthorizationOperatorSetRuleResult, [("value","PolicyEdit","never"),]),
     "OAAuthorizationOperatorRevokeRuleResult": (OAAuthorizationOperatorRevokeRuleResult, [("value","PolicyEdit","never"),]),
+    "OAAuthorizationOperatorSetRuleForResult": (OAAuthorizationOperatorSetRuleForResult, [("value","PolicyEdit","never"),]),
+    "OAAuthorizationOperatorReadRuleResult": (OAAuthorizationOperatorReadRuleResult, [("value","RuleRead","never"),]),
+    "OAAuthorizationOperatorRegisterActionResult": (OAAuthorizationOperatorRegisterActionResult, [("value","ActionEdit","never"),]),
+    "OAAuthorizationOperatorRetireActionResult": (OAAuthorizationOperatorRetireActionResult, [("value","ActionEdit","never"),]),
 }
 
 
 class Authorization:
-    __doc__ = "General exact-rule authorization decision point with bounded catalog and persistence. Unknown, absent, unspecified, failed and refused decisions never permit. Explicitly authorized operator configuration grants/revokes exact rules; no serialized awake lease is introduced."
+    __doc__ = "General exact-rule authorization decision point with a bounded, registrable catalogue and persistence. Unknown, absent, unspecified, expired, failed and refused decisions never permit. Explicitly authorized operator configuration registers actions and grants/revokes exact rules; no serialized awake lease is introduced."
     def Decide(self, action: "str", resource: "str") -> "Decision":
         raise NotImplementedError
     def DecideFor(self, subject: "Subject", action: "str", resource: "str") -> "Decision":
@@ -2556,12 +3532,20 @@ class AuthorizationClient(Authorization):
 
 
 class AuthorizationOperator:
-    __doc__ = "Explicitly authorized administration of the configured decision policy. Receiving same-account Program proof plus a trusted typed-peer operator callback is required; nil refuses. Policy denial is forbidden; callback/storage failure is unavailable. No caller credential, verified flag or provider path is accepted. Resource services remain the receiving enforcement points. Legacy bearer and awake lease behavior is separate."
+    __doc__ = "Explicitly authorized administration of the configured decision policy: catalogue registration and retirement, exact rules with expiry and provenance. Receiving same-account Program proof plus a trusted typed-peer operator callback is required; nil refuses. Policy denial is forbidden; callback/storage failure is unavailable. No caller credential, verified flag or provider path is accepted. Resource services remain the receiving enforcement points. Legacy bearer and awake lease behavior is separate."
     def ListPolicy(self, cursor: "str", limit: "int") -> "PolicyPage":
         raise NotImplementedError
     def SetRule(self, expected_revision: "str", rule: "PolicyRule") -> "PolicyEdit":
         raise NotImplementedError
     def RevokeRule(self, expected_revision: "str", subject: "Subject", action: "str", resource: "str") -> "PolicyEdit":
+        raise NotImplementedError
+    def SetRuleFor(self, expected_revision: "str", rule: "PolicyRule", ttl_ms: "int", why: "str") -> "PolicyEdit":
+        raise NotImplementedError
+    def ReadRule(self, subject: "Subject", action: "str", resource: "str") -> "RuleRead":
+        raise NotImplementedError
+    def RegisterAction(self, expected_revision: "str", action: "str") -> "ActionEdit":
+        raise NotImplementedError
+    def RetireAction(self, expected_revision: "str", action: "str") -> "ActionEdit":
         raise NotImplementedError
 
 
@@ -2610,4 +3594,62 @@ class AuthorizationOperatorClient(AuthorizationOperator):
         _oa_request = _service_request("abstraction.rights/operator@1", "RevokeRule", _oa_arguments)
         _oa_payload = _service_response(self._transport.exchange_frame(_oa_request), "abstraction.rights/operator@1", "RevokeRule")
         _oa_result = _service_decode(_decode_oaauthorizationoperatorrevokeruleresult, _oa_payload, 1)
+        return _oa_result.value
+
+    def SetRuleFor(self, expected_revision: "str", rule: "PolicyRule", ttl_ms: "int", why: "str") -> "PolicyEdit":
+        _service_check("string", expected_revision)
+        _service_check("PolicyRule", rule)
+        _service_check("i64", ttl_ms)
+        _service_check("string", why)
+        _oa_args = OAAuthorizationOperatorSetRuleForArguments()
+        _oa_args.expected_revision = expected_revision
+        _oa_args.rule = rule
+        _oa_args.ttl_ms = ttl_ms
+        _oa_args.why = why
+        _oa_arguments = _service_encode(enc_oaauthorizationoperatorsetruleforarguments, _oa_args, 1)
+        _service_decode(_decode_oaauthorizationoperatorsetruleforarguments, _oa_arguments, 1)
+        _oa_request = _service_request("abstraction.rights/operator@1", "SetRuleFor", _oa_arguments)
+        _oa_payload = _service_response(self._transport.exchange_frame(_oa_request), "abstraction.rights/operator@1", "SetRuleFor")
+        _oa_result = _service_decode(_decode_oaauthorizationoperatorsetruleforresult, _oa_payload, 1)
+        return _oa_result.value
+
+    def ReadRule(self, subject: "Subject", action: "str", resource: "str") -> "RuleRead":
+        _service_check("Subject", subject)
+        _service_check("string", action)
+        _service_check("string", resource)
+        _oa_args = OAAuthorizationOperatorReadRuleArguments()
+        _oa_args.subject = subject
+        _oa_args.action = action
+        _oa_args.resource = resource
+        _oa_arguments = _service_encode(enc_oaauthorizationoperatorreadrulearguments, _oa_args, 1)
+        _service_decode(_decode_oaauthorizationoperatorreadrulearguments, _oa_arguments, 1)
+        _oa_request = _service_request("abstraction.rights/operator@1", "ReadRule", _oa_arguments)
+        _oa_payload = _service_response(self._transport.exchange_frame(_oa_request), "abstraction.rights/operator@1", "ReadRule")
+        _oa_result = _service_decode(_decode_oaauthorizationoperatorreadruleresult, _oa_payload, 1)
+        return _oa_result.value
+
+    def RegisterAction(self, expected_revision: "str", action: "str") -> "ActionEdit":
+        _service_check("string", expected_revision)
+        _service_check("string", action)
+        _oa_args = OAAuthorizationOperatorRegisterActionArguments()
+        _oa_args.expected_revision = expected_revision
+        _oa_args.action = action
+        _oa_arguments = _service_encode(enc_oaauthorizationoperatorregisteractionarguments, _oa_args, 1)
+        _service_decode(_decode_oaauthorizationoperatorregisteractionarguments, _oa_arguments, 1)
+        _oa_request = _service_request("abstraction.rights/operator@1", "RegisterAction", _oa_arguments)
+        _oa_payload = _service_response(self._transport.exchange_frame(_oa_request), "abstraction.rights/operator@1", "RegisterAction")
+        _oa_result = _service_decode(_decode_oaauthorizationoperatorregisteractionresult, _oa_payload, 1)
+        return _oa_result.value
+
+    def RetireAction(self, expected_revision: "str", action: "str") -> "ActionEdit":
+        _service_check("string", expected_revision)
+        _service_check("string", action)
+        _oa_args = OAAuthorizationOperatorRetireActionArguments()
+        _oa_args.expected_revision = expected_revision
+        _oa_args.action = action
+        _oa_arguments = _service_encode(enc_oaauthorizationoperatorretireactionarguments, _oa_args, 1)
+        _service_decode(_decode_oaauthorizationoperatorretireactionarguments, _oa_arguments, 1)
+        _oa_request = _service_request("abstraction.rights/operator@1", "RetireAction", _oa_arguments)
+        _oa_payload = _service_response(self._transport.exchange_frame(_oa_request), "abstraction.rights/operator@1", "RetireAction")
+        _oa_result = _service_decode(_decode_oaauthorizationoperatorretireactionresult, _oa_payload, 1)
         return _oa_result.value

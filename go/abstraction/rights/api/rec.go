@@ -250,14 +250,52 @@ const PolicyEditOutcomeUnavailable = "unavailable"
 
 const PolicyEditOutcomeUnknown = "refuse"
 
+var RuleReadOutcomeNames = []string{"found", "expired", "unknown", "invalid", "forbidden", "unavailable"}
+
+const RuleReadOutcomeFound = "found"
+
+const RuleReadOutcomeExpired = "expired"
+
+const RuleReadOutcomeUnknown = "unknown"
+
+const RuleReadOutcomeInvalid = "invalid"
+
+const RuleReadOutcomeForbidden = "forbidden"
+
+const RuleReadOutcomeUnavailable = "unavailable"
+
+const RuleReadOutcomeUnknownPolicy = "refuse"
+
+var ActionEditOutcomeNames = []string{"applied", "conflict", "unknown", "invalid", "exhausted", "forbidden", "unavailable"}
+
+const ActionEditOutcomeApplied = "applied"
+
+const ActionEditOutcomeConflict = "conflict"
+
+const ActionEditOutcomeUnknown = "unknown"
+
+const ActionEditOutcomeInvalid = "invalid"
+
+const ActionEditOutcomeExhausted = "exhausted"
+
+const ActionEditOutcomeForbidden = "forbidden"
+
+const ActionEditOutcomeUnavailable = "unavailable"
+
+const ActionEditOutcomeUnknownPolicy = "refuse"
+
 var Operations = []string{"register", "ask", "hold", "check", "apps", "grant", "revoke", "forget", "holds"}
 
 var KnownRights = []string{"awake"}
 
 var RefusalCodes = []string{"internal", "invalid_request", "caller_refused", "unknown_operation", "not_administrator", "pending", "denied", "denied_permanently", "unsupported_hold", "platform_refused", "unknown_app", "unknown_right", "not_granted", "bad_secret", "bad_token"}
 
-var ResourceActions = []string{"abstraction.storage/content.read"}
+var ResourceActions = []string{"abstraction.storage/content.read", "abstraction.storage/content.write", "abstraction.job/acceptance.submit", "abstraction.job/acceptance.cancel", "abstraction.config/user.replace", "abstraction.logging/history.read", "abstraction.model/lookup", "abstraction.router/inventory.read", "abstraction.router/route", "abstraction.storage/content.observe", "abstraction.storage/content.remove"}
 
+// Existing rights request concepts. Secret/token/admin remain credential inputs
+// checked by the service; request text never substitutes for native peer
+// identity. This descriptor does not replace the existing handwritten line
+// transport.
 type Request struct {
 	Op     string
 	Name   string
@@ -270,6 +308,9 @@ type Request struct {
 	Admin  string
 }
 
+// Own application registration fields; registered uses the existing RFC3339
+// time representation. Native App additionally carries identity.listen.Seen
+// observation evidence.
 type AppMetadata struct {
 	Id         string
 	Name       string
@@ -277,6 +318,9 @@ type AppMetadata struct {
 	Registered string
 }
 
+// Own held-right fields; since uses existing RFC3339 time representation.
+// Native Hold also carries Seen. The live Lease is connection-owned and cannot
+// be recreated from these fields.
 type HoldMetadata struct {
 	App   string
 	Name  string
@@ -285,6 +329,9 @@ type HoldMetadata struct {
 	Since string
 }
 
+// Own response fields projected without native Seen evidence. Any nonempty
+// code/error is refusal, including unknown codes. This is a common descriptor,
+// not a replacement legacy Response codec or generated service client.
 type ResponseMetadata struct {
 	Code    string
 	Error   string
@@ -297,16 +344,32 @@ type ResponseMetadata struct {
 	Holds   []HoldMetadata
 }
 
+// Account identifier and normalized absolute executable path. This serialized
+// subject is an assertion by an explicitly authorized enforcement point. It
+// contains no proof or verified flag and cannot authorize its own use. Direct
+// decisions derive their subject from native receiving Program evidence.
 type Subject struct {
 	Account string
 	Program string
 }
 
+// A point-in-time policy decision. Only permitted allows an enforcement point
+// to proceed. denied is an explicit exact deny; not_granted has no unexpired
+// exact rule; unknown_action is outside the current catalogue. Evaluated
+// permitted/denied/not_granted/unknown_action decisions carry an opaque
+// revision observed with that decision. Errors carry none. No lease, token,
+// cached permission lifetime or human consent is conveyed.
 type Decision struct {
 	Outcome        string
 	PolicyRevision string
 }
 
+// One exact policy rule. Subject is the administrative target, never caller
+// proof. Account is 1..128 UTF-8 bytes; program is a normalized absolute path
+// up to 4096 bytes; action is 1..128 bytes and belongs to the current
+// catalogue; resource is 1..1024 bytes. All strings exclude control characters.
+// permit=false is an explicit deny; revocation removes the exact rule and
+// restores not_granted.
 type PolicyRule struct {
 	Subject  Subject
 	Action   string
@@ -314,6 +377,17 @@ type PolicyRule struct {
 	Permit   bool
 }
 
+// Latest-policy enumeration: 1..64 requested rules and at most 256 KiB encoded
+// reply, including catalogue, cursor and indentation. Catalogue is the
+// configured seed plus registered actions, sorted, bounded to 64 actions of 128
+// bytes. Rules are every retained rule, including expired rules the next write
+// removes; ReadRule reports expiry and provenance. Page carries the exact
+// durable content revision. A noncomplete page has a nonempty next cursor.
+// Refusals have empty revision/catalog/rules/next and complete=false. Cursors
+// are at most 256 UTF-8 bytes, bind receiving account/program and host
+// epoch/revision, and return gap after change/restart/scope mismatch. Restart
+// from empty cursor. No immutable multipage snapshot or historical change
+// replay is promised.
 type PolicyPage struct {
 	Outcome  string
 	Revision string
@@ -323,10 +397,68 @@ type PolicyPage struct {
 	Complete bool
 }
 
+// Applied/conflict carry the revision and optional exact current rule observed
+// inside the conditional edit; absent current means no exact rule. Other
+// outcomes carry no revision/current. A stale expected revision always
+// conflicts, including when the desired state happens to match. No-op edits at
+// the matching revision preserve it without writing. A lost reply is uncertain:
+// retrying the same expected revision cannot overwrite a later edit, and may
+// conflict after a successful original change. Reconcile the returned current
+// state or fresh history before choosing another edit. This is optimistic
+// concurrency, not an exactly-once mutation journal.
 type PolicyEdit struct {
 	Outcome  string
 	Revision string
 	Current  *PolicyRule
+}
+
+// One exact rule with its provenance. set_by is the subject the rights service
+// established for the party that set the rule: the operator's receiving Program
+// evidence, or the service's own account and executable for native edits. The
+// request never supplies it. set_at is the service's UTC edit time as RFC 3339
+// with milliseconds. why is the operator's reason of 0..256 UTF-8 bytes without
+// control characters. expires is empty for a rule without expiry, or the UTC
+// instant, in the same format, from which the rule decides nothing.
+type RuleRecord struct {
+	Rule    PolicyRule
+	SetBy   Subject
+	SetAt   string
+	Why     string
+	Expires string
+}
+
+// found and expired carry the revision and the exact record. expired names a
+// retained rule at or past its expiry; it decides nothing and the next policy
+// write removes it. unknown carries the revision and no record. invalid,
+// forbidden and unavailable carry neither.
+type RuleRead struct {
+	Outcome  string
+	Revision string
+	Record   *RuleRecord
+}
+
+// One registered catalogue action. Seeded actions have no entry. registered_by
+// is the subject the rights service established for the registering party: the
+// operator's receiving Program evidence, or the service's own account and
+// executable for native registration. registered_at is the service's UTC time
+// as RFC 3339 with milliseconds.
+type CatalogEntry struct {
+	Action       string
+	RegisteredBy Subject
+	RegisteredAt string
+}
+
+// applied, conflict and unknown carry the revision observed inside the
+// conditional edit. applied and conflict carry the action's registration entry
+// when one exists; a seeded or retired action has none. unknown means
+// RetireAction named an action outside the catalogue. exhausted means the
+// catalogue already holds 64 actions. invalid, exhausted, forbidden and
+// unavailable carry no revision or entry. A stale expected revision always
+// conflicts.
+type ActionEdit struct {
+	Outcome  string
+	Revision string
+	Current  *CatalogEntry
 }
 
 type OAAuthorizationDecideArguments struct {
@@ -355,6 +487,29 @@ type OAAuthorizationOperatorRevokeRuleArguments struct {
 	Subject          Subject
 	Action           string
 	Resource         string
+}
+
+type OAAuthorizationOperatorSetRuleForArguments struct {
+	ExpectedRevision string
+	Rule             PolicyRule
+	TtlMs            int64
+	Why              string
+}
+
+type OAAuthorizationOperatorReadRuleArguments struct {
+	Subject  Subject
+	Action   string
+	Resource string
+}
+
+type OAAuthorizationOperatorRegisterActionArguments struct {
+	ExpectedRevision string
+	Action           string
+}
+
+type OAAuthorizationOperatorRetireActionArguments struct {
+	ExpectedRevision string
+	Action           string
 }
 
 type OAServiceFrame struct {
@@ -395,6 +550,22 @@ type OAAuthorizationOperatorSetRuleResult struct {
 
 type OAAuthorizationOperatorRevokeRuleResult struct {
 	Value PolicyEdit
+}
+
+type OAAuthorizationOperatorSetRuleForResult struct {
+	Value PolicyEdit
+}
+
+type OAAuthorizationOperatorReadRuleResult struct {
+	Value RuleRead
+}
+
+type OAAuthorizationOperatorRegisterActionResult struct {
+	Value ActionEdit
+}
+
+type OAAuthorizationOperatorRetireActionResult struct {
+	Value ActionEdit
 }
 
 func encRequest(out []byte, v *Request, depth int) []byte {
@@ -798,6 +969,124 @@ func encPolicyEdit(out []byte, v *PolicyEdit, depth int) []byte {
 	return append(out, '}')
 }
 
+func encRuleRecord(out []byte, v *RuleRecord, depth int) []byte {
+	out = append(out, '{')
+	out = append(out, '\n')
+	out = pad(out, depth+1)
+	out = esc(out, "rule")
+	out = append(out, ':', ' ')
+	out = encPolicyRule(out, &v.Rule, depth+1)
+	out = append(out, ',')
+	out = append(out, '\n')
+	out = pad(out, depth+1)
+	out = esc(out, "set_by")
+	out = append(out, ':', ' ')
+	out = encSubject(out, &v.SetBy, depth+1)
+	out = append(out, ',')
+	out = append(out, '\n')
+	out = pad(out, depth+1)
+	out = esc(out, "set_at")
+	out = append(out, ':', ' ')
+	out = esc(out, v.SetAt)
+	out = append(out, ',')
+	out = append(out, '\n')
+	out = pad(out, depth+1)
+	out = esc(out, "why")
+	out = append(out, ':', ' ')
+	out = esc(out, v.Why)
+	out = append(out, ',')
+	out = append(out, '\n')
+	out = pad(out, depth+1)
+	out = esc(out, "expires")
+	out = append(out, ':', ' ')
+	out = esc(out, v.Expires)
+	out = append(out, '\n')
+	out = pad(out, depth)
+	return append(out, '}')
+}
+
+func encRuleRead(out []byte, v *RuleRead, depth int) []byte {
+	if v.Outcome != "found" && v.Outcome != "expired" && v.Outcome != "unknown" && v.Outcome != "invalid" && v.Outcome != "forbidden" && v.Outcome != "unavailable" {
+		panic(&Refusal{Word: "bad_enum", Offset: 0})
+	}
+	out = append(out, '{')
+	out = append(out, '\n')
+	out = pad(out, depth+1)
+	out = esc(out, "outcome")
+	out = append(out, ':', ' ')
+	out = esc(out, v.Outcome)
+	out = append(out, ',')
+	out = append(out, '\n')
+	out = pad(out, depth+1)
+	out = esc(out, "revision")
+	out = append(out, ':', ' ')
+	out = esc(out, v.Revision)
+	if v.Record != nil {
+		out = append(out, ',')
+		out = append(out, '\n')
+		out = pad(out, depth+1)
+		out = esc(out, "record")
+		out = append(out, ':', ' ')
+		out = encRuleRecord(out, v.Record, depth+1)
+	}
+	out = append(out, '\n')
+	out = pad(out, depth)
+	return append(out, '}')
+}
+
+func encCatalogEntry(out []byte, v *CatalogEntry, depth int) []byte {
+	out = append(out, '{')
+	out = append(out, '\n')
+	out = pad(out, depth+1)
+	out = esc(out, "action")
+	out = append(out, ':', ' ')
+	out = esc(out, v.Action)
+	out = append(out, ',')
+	out = append(out, '\n')
+	out = pad(out, depth+1)
+	out = esc(out, "registered_by")
+	out = append(out, ':', ' ')
+	out = encSubject(out, &v.RegisteredBy, depth+1)
+	out = append(out, ',')
+	out = append(out, '\n')
+	out = pad(out, depth+1)
+	out = esc(out, "registered_at")
+	out = append(out, ':', ' ')
+	out = esc(out, v.RegisteredAt)
+	out = append(out, '\n')
+	out = pad(out, depth)
+	return append(out, '}')
+}
+
+func encActionEdit(out []byte, v *ActionEdit, depth int) []byte {
+	if v.Outcome != "applied" && v.Outcome != "conflict" && v.Outcome != "unknown" && v.Outcome != "invalid" && v.Outcome != "exhausted" && v.Outcome != "forbidden" && v.Outcome != "unavailable" {
+		panic(&Refusal{Word: "bad_enum", Offset: 0})
+	}
+	out = append(out, '{')
+	out = append(out, '\n')
+	out = pad(out, depth+1)
+	out = esc(out, "outcome")
+	out = append(out, ':', ' ')
+	out = esc(out, v.Outcome)
+	out = append(out, ',')
+	out = append(out, '\n')
+	out = pad(out, depth+1)
+	out = esc(out, "revision")
+	out = append(out, ':', ' ')
+	out = esc(out, v.Revision)
+	if v.Current != nil {
+		out = append(out, ',')
+		out = append(out, '\n')
+		out = pad(out, depth+1)
+		out = esc(out, "current")
+		out = append(out, ':', ' ')
+		out = encCatalogEntry(out, v.Current, depth+1)
+	}
+	out = append(out, '\n')
+	out = pad(out, depth)
+	return append(out, '}')
+}
+
 func encOAAuthorizationDecideArguments(out []byte, v *OAAuthorizationDecideArguments, depth int) []byte {
 	out = append(out, '{')
 	out = append(out, '\n')
@@ -901,6 +1190,96 @@ func encOAAuthorizationOperatorRevokeRuleArguments(out []byte, v *OAAuthorizatio
 	out = esc(out, "resource")
 	out = append(out, ':', ' ')
 	out = esc(out, v.Resource)
+	out = append(out, '\n')
+	out = pad(out, depth)
+	return append(out, '}')
+}
+
+func encOAAuthorizationOperatorSetRuleForArguments(out []byte, v *OAAuthorizationOperatorSetRuleForArguments, depth int) []byte {
+	out = append(out, '{')
+	out = append(out, '\n')
+	out = pad(out, depth+1)
+	out = esc(out, "expected_revision")
+	out = append(out, ':', ' ')
+	out = esc(out, v.ExpectedRevision)
+	out = append(out, ',')
+	out = append(out, '\n')
+	out = pad(out, depth+1)
+	out = esc(out, "rule")
+	out = append(out, ':', ' ')
+	out = encPolicyRule(out, &v.Rule, depth+1)
+	out = append(out, ',')
+	out = append(out, '\n')
+	out = pad(out, depth+1)
+	out = esc(out, "ttl_ms")
+	out = append(out, ':', ' ')
+	out = num(out, v.TtlMs)
+	out = append(out, ',')
+	out = append(out, '\n')
+	out = pad(out, depth+1)
+	out = esc(out, "why")
+	out = append(out, ':', ' ')
+	out = esc(out, v.Why)
+	out = append(out, '\n')
+	out = pad(out, depth)
+	return append(out, '}')
+}
+
+func encOAAuthorizationOperatorReadRuleArguments(out []byte, v *OAAuthorizationOperatorReadRuleArguments, depth int) []byte {
+	out = append(out, '{')
+	out = append(out, '\n')
+	out = pad(out, depth+1)
+	out = esc(out, "subject")
+	out = append(out, ':', ' ')
+	out = encSubject(out, &v.Subject, depth+1)
+	out = append(out, ',')
+	out = append(out, '\n')
+	out = pad(out, depth+1)
+	out = esc(out, "action")
+	out = append(out, ':', ' ')
+	out = esc(out, v.Action)
+	out = append(out, ',')
+	out = append(out, '\n')
+	out = pad(out, depth+1)
+	out = esc(out, "resource")
+	out = append(out, ':', ' ')
+	out = esc(out, v.Resource)
+	out = append(out, '\n')
+	out = pad(out, depth)
+	return append(out, '}')
+}
+
+func encOAAuthorizationOperatorRegisterActionArguments(out []byte, v *OAAuthorizationOperatorRegisterActionArguments, depth int) []byte {
+	out = append(out, '{')
+	out = append(out, '\n')
+	out = pad(out, depth+1)
+	out = esc(out, "expected_revision")
+	out = append(out, ':', ' ')
+	out = esc(out, v.ExpectedRevision)
+	out = append(out, ',')
+	out = append(out, '\n')
+	out = pad(out, depth+1)
+	out = esc(out, "action")
+	out = append(out, ':', ' ')
+	out = esc(out, v.Action)
+	out = append(out, '\n')
+	out = pad(out, depth)
+	return append(out, '}')
+}
+
+func encOAAuthorizationOperatorRetireActionArguments(out []byte, v *OAAuthorizationOperatorRetireActionArguments, depth int) []byte {
+	out = append(out, '{')
+	out = append(out, '\n')
+	out = pad(out, depth+1)
+	out = esc(out, "expected_revision")
+	out = append(out, ':', ' ')
+	out = esc(out, v.ExpectedRevision)
+	out = append(out, ',')
+	out = append(out, '\n')
+	out = pad(out, depth+1)
+	out = esc(out, "action")
+	out = append(out, ':', ' ')
+	out = esc(out, v.Action)
 	out = append(out, '\n')
 	out = pad(out, depth)
 	return append(out, '}')
@@ -1049,6 +1428,54 @@ func encOAAuthorizationOperatorRevokeRuleResult(out []byte, v *OAAuthorizationOp
 	out = esc(out, "value")
 	out = append(out, ':', ' ')
 	out = encPolicyEdit(out, &v.Value, depth+1)
+	out = append(out, '\n')
+	out = pad(out, depth)
+	return append(out, '}')
+}
+
+func encOAAuthorizationOperatorSetRuleForResult(out []byte, v *OAAuthorizationOperatorSetRuleForResult, depth int) []byte {
+	out = append(out, '{')
+	out = append(out, '\n')
+	out = pad(out, depth+1)
+	out = esc(out, "value")
+	out = append(out, ':', ' ')
+	out = encPolicyEdit(out, &v.Value, depth+1)
+	out = append(out, '\n')
+	out = pad(out, depth)
+	return append(out, '}')
+}
+
+func encOAAuthorizationOperatorReadRuleResult(out []byte, v *OAAuthorizationOperatorReadRuleResult, depth int) []byte {
+	out = append(out, '{')
+	out = append(out, '\n')
+	out = pad(out, depth+1)
+	out = esc(out, "value")
+	out = append(out, ':', ' ')
+	out = encRuleRead(out, &v.Value, depth+1)
+	out = append(out, '\n')
+	out = pad(out, depth)
+	return append(out, '}')
+}
+
+func encOAAuthorizationOperatorRegisterActionResult(out []byte, v *OAAuthorizationOperatorRegisterActionResult, depth int) []byte {
+	out = append(out, '{')
+	out = append(out, '\n')
+	out = pad(out, depth+1)
+	out = esc(out, "value")
+	out = append(out, ':', ' ')
+	out = encActionEdit(out, &v.Value, depth+1)
+	out = append(out, '\n')
+	out = pad(out, depth)
+	return append(out, '}')
+}
+
+func encOAAuthorizationOperatorRetireActionResult(out []byte, v *OAAuthorizationOperatorRetireActionResult, depth int) []byte {
+	out = append(out, '{')
+	out = append(out, '\n')
+	out = pad(out, depth+1)
+	out = esc(out, "value")
+	out = append(out, ':', ' ')
+	out = encActionEdit(out, &v.Value, depth+1)
 	out = append(out, '\n')
 	out = pad(out, depth)
 	return append(out, '}')
@@ -2457,6 +2884,348 @@ func (r *reader) decodePolicyEdit() (*PolicyEdit, error) {
 	return v, nil
 }
 
+func (r *reader) decodeRuleRecord() (*RuleRecord, error) {
+	if r.at() != '{' {
+		return nil, r.refuse("wrong_type")
+	}
+	if err := r.enter(); err != nil {
+		return nil, err
+	}
+	r.pos++
+	v := &RuleRecord{}
+	var seen uint32
+	r.ws()
+	if r.at() != '}' {
+		for {
+			r.ws()
+			if r.at() != '"' {
+				return nil, r.refuse("malformed")
+			}
+			key, err := r.str()
+			if err != nil {
+				return nil, err
+			}
+			r.ws()
+			if r.at() != ':' {
+				return nil, r.refuse("malformed")
+			}
+			r.pos++
+			r.ws()
+			switch key {
+			case "rule":
+				if seen&1 != 0 {
+					return nil, r.refuse("duplicate_field")
+				}
+				seen |= 1
+				x, err := r.decodePolicyRule()
+				if err != nil {
+					return nil, err
+				}
+				v.Rule = *x
+			case "set_by":
+				if seen&2 != 0 {
+					return nil, r.refuse("duplicate_field")
+				}
+				seen |= 2
+				x, err := r.decodeSubject()
+				if err != nil {
+					return nil, err
+				}
+				v.SetBy = *x
+			case "set_at":
+				if seen&4 != 0 {
+					return nil, r.refuse("duplicate_field")
+				}
+				seen |= 4
+				x, err := r.str()
+				if err != nil {
+					return nil, err
+				}
+				v.SetAt = x
+			case "why":
+				if seen&8 != 0 {
+					return nil, r.refuse("duplicate_field")
+				}
+				seen |= 8
+				x, err := r.str()
+				if err != nil {
+					return nil, err
+				}
+				v.Why = x
+			case "expires":
+				if seen&16 != 0 {
+					return nil, r.refuse("duplicate_field")
+				}
+				seen |= 16
+				x, err := r.str()
+				if err != nil {
+					return nil, err
+				}
+				v.Expires = x
+			default:
+				return nil, r.refuse("unknown_field")
+			}
+			r.ws()
+			if r.at() != ',' {
+				break
+			}
+			r.pos++
+		}
+	}
+	if r.at() != '}' {
+		return nil, r.refuse("malformed")
+	}
+	r.pos++
+	r.depth--
+	if seen&31 != 31 {
+		return nil, r.refuse("missing_field")
+	}
+	return v, nil
+}
+
+func (r *reader) decodeRuleRead() (*RuleRead, error) {
+	if r.at() != '{' {
+		return nil, r.refuse("wrong_type")
+	}
+	if err := r.enter(); err != nil {
+		return nil, err
+	}
+	r.pos++
+	v := &RuleRead{}
+	var seen uint32
+	r.ws()
+	if r.at() != '}' {
+		for {
+			r.ws()
+			if r.at() != '"' {
+				return nil, r.refuse("malformed")
+			}
+			key, err := r.str()
+			if err != nil {
+				return nil, err
+			}
+			r.ws()
+			if r.at() != ':' {
+				return nil, r.refuse("malformed")
+			}
+			r.pos++
+			r.ws()
+			switch key {
+			case "outcome":
+				if seen&1 != 0 {
+					return nil, r.refuse("duplicate_field")
+				}
+				seen |= 1
+				x, err := r.str()
+				if err != nil {
+					return nil, err
+				}
+				v.Outcome = x
+			case "revision":
+				if seen&2 != 0 {
+					return nil, r.refuse("duplicate_field")
+				}
+				seen |= 2
+				x, err := r.str()
+				if err != nil {
+					return nil, err
+				}
+				v.Revision = x
+			case "record":
+				if seen&4 != 0 {
+					return nil, r.refuse("duplicate_field")
+				}
+				seen |= 4
+				x, err := r.decodeRuleRecord()
+				if err != nil {
+					return nil, err
+				}
+				v.Record = x
+			default:
+				return nil, r.refuse("unknown_field")
+			}
+			r.ws()
+			if r.at() != ',' {
+				break
+			}
+			r.pos++
+		}
+	}
+	if r.at() != '}' {
+		return nil, r.refuse("malformed")
+	}
+	r.pos++
+	r.depth--
+	if seen&3 != 3 {
+		return nil, r.refuse("missing_field")
+	}
+	if v.Outcome != "found" && v.Outcome != "expired" && v.Outcome != "unknown" && v.Outcome != "invalid" && v.Outcome != "forbidden" && v.Outcome != "unavailable" {
+		return nil, r.refuse("bad_enum")
+	}
+	return v, nil
+}
+
+func (r *reader) decodeCatalogEntry() (*CatalogEntry, error) {
+	if r.at() != '{' {
+		return nil, r.refuse("wrong_type")
+	}
+	if err := r.enter(); err != nil {
+		return nil, err
+	}
+	r.pos++
+	v := &CatalogEntry{}
+	var seen uint32
+	r.ws()
+	if r.at() != '}' {
+		for {
+			r.ws()
+			if r.at() != '"' {
+				return nil, r.refuse("malformed")
+			}
+			key, err := r.str()
+			if err != nil {
+				return nil, err
+			}
+			r.ws()
+			if r.at() != ':' {
+				return nil, r.refuse("malformed")
+			}
+			r.pos++
+			r.ws()
+			switch key {
+			case "action":
+				if seen&1 != 0 {
+					return nil, r.refuse("duplicate_field")
+				}
+				seen |= 1
+				x, err := r.str()
+				if err != nil {
+					return nil, err
+				}
+				v.Action = x
+			case "registered_by":
+				if seen&2 != 0 {
+					return nil, r.refuse("duplicate_field")
+				}
+				seen |= 2
+				x, err := r.decodeSubject()
+				if err != nil {
+					return nil, err
+				}
+				v.RegisteredBy = *x
+			case "registered_at":
+				if seen&4 != 0 {
+					return nil, r.refuse("duplicate_field")
+				}
+				seen |= 4
+				x, err := r.str()
+				if err != nil {
+					return nil, err
+				}
+				v.RegisteredAt = x
+			default:
+				return nil, r.refuse("unknown_field")
+			}
+			r.ws()
+			if r.at() != ',' {
+				break
+			}
+			r.pos++
+		}
+	}
+	if r.at() != '}' {
+		return nil, r.refuse("malformed")
+	}
+	r.pos++
+	r.depth--
+	if seen&7 != 7 {
+		return nil, r.refuse("missing_field")
+	}
+	return v, nil
+}
+
+func (r *reader) decodeActionEdit() (*ActionEdit, error) {
+	if r.at() != '{' {
+		return nil, r.refuse("wrong_type")
+	}
+	if err := r.enter(); err != nil {
+		return nil, err
+	}
+	r.pos++
+	v := &ActionEdit{}
+	var seen uint32
+	r.ws()
+	if r.at() != '}' {
+		for {
+			r.ws()
+			if r.at() != '"' {
+				return nil, r.refuse("malformed")
+			}
+			key, err := r.str()
+			if err != nil {
+				return nil, err
+			}
+			r.ws()
+			if r.at() != ':' {
+				return nil, r.refuse("malformed")
+			}
+			r.pos++
+			r.ws()
+			switch key {
+			case "outcome":
+				if seen&1 != 0 {
+					return nil, r.refuse("duplicate_field")
+				}
+				seen |= 1
+				x, err := r.str()
+				if err != nil {
+					return nil, err
+				}
+				v.Outcome = x
+			case "revision":
+				if seen&2 != 0 {
+					return nil, r.refuse("duplicate_field")
+				}
+				seen |= 2
+				x, err := r.str()
+				if err != nil {
+					return nil, err
+				}
+				v.Revision = x
+			case "current":
+				if seen&4 != 0 {
+					return nil, r.refuse("duplicate_field")
+				}
+				seen |= 4
+				x, err := r.decodeCatalogEntry()
+				if err != nil {
+					return nil, err
+				}
+				v.Current = x
+			default:
+				return nil, r.refuse("unknown_field")
+			}
+			r.ws()
+			if r.at() != ',' {
+				break
+			}
+			r.pos++
+		}
+	}
+	if r.at() != '}' {
+		return nil, r.refuse("malformed")
+	}
+	r.pos++
+	r.depth--
+	if seen&3 != 3 {
+		return nil, r.refuse("missing_field")
+	}
+	if v.Outcome != "applied" && v.Outcome != "conflict" && v.Outcome != "unknown" && v.Outcome != "invalid" && v.Outcome != "exhausted" && v.Outcome != "forbidden" && v.Outcome != "unavailable" {
+		return nil, r.refuse("bad_enum")
+	}
+	return v, nil
+}
+
 func (r *reader) decodeOAAuthorizationDecideArguments() (*OAAuthorizationDecideArguments, error) {
 	if r.at() != '{' {
 		return nil, r.refuse("wrong_type")
@@ -2827,6 +3596,312 @@ func (r *reader) decodeOAAuthorizationOperatorRevokeRuleArguments() (*OAAuthoriz
 	r.pos++
 	r.depth--
 	if seen&15 != 15 {
+		return nil, r.refuse("missing_field")
+	}
+	return v, nil
+}
+
+func (r *reader) decodeOAAuthorizationOperatorSetRuleForArguments() (*OAAuthorizationOperatorSetRuleForArguments, error) {
+	if r.at() != '{' {
+		return nil, r.refuse("wrong_type")
+	}
+	if err := r.enter(); err != nil {
+		return nil, err
+	}
+	r.pos++
+	v := &OAAuthorizationOperatorSetRuleForArguments{}
+	var seen uint32
+	r.ws()
+	if r.at() != '}' {
+		for {
+			r.ws()
+			if r.at() != '"' {
+				return nil, r.refuse("malformed")
+			}
+			key, err := r.str()
+			if err != nil {
+				return nil, err
+			}
+			r.ws()
+			if r.at() != ':' {
+				return nil, r.refuse("malformed")
+			}
+			r.pos++
+			r.ws()
+			switch key {
+			case "expected_revision":
+				if seen&1 != 0 {
+					return nil, r.refuse("duplicate_field")
+				}
+				seen |= 1
+				x, err := r.str()
+				if err != nil {
+					return nil, err
+				}
+				v.ExpectedRevision = x
+			case "rule":
+				if seen&2 != 0 {
+					return nil, r.refuse("duplicate_field")
+				}
+				seen |= 2
+				x, err := r.decodePolicyRule()
+				if err != nil {
+					return nil, err
+				}
+				v.Rule = *x
+			case "ttl_ms":
+				if seen&4 != 0 {
+					return nil, r.refuse("duplicate_field")
+				}
+				seen |= 4
+				x, err := r.integer(-9223372036854775808, 9223372036854775807)
+				if err != nil {
+					return nil, err
+				}
+				v.TtlMs = x
+			case "why":
+				if seen&8 != 0 {
+					return nil, r.refuse("duplicate_field")
+				}
+				seen |= 8
+				x, err := r.str()
+				if err != nil {
+					return nil, err
+				}
+				v.Why = x
+			default:
+				return nil, r.refuse("unknown_field")
+			}
+			r.ws()
+			if r.at() != ',' {
+				break
+			}
+			r.pos++
+		}
+	}
+	if r.at() != '}' {
+		return nil, r.refuse("malformed")
+	}
+	r.pos++
+	r.depth--
+	if seen&15 != 15 {
+		return nil, r.refuse("missing_field")
+	}
+	return v, nil
+}
+
+func (r *reader) decodeOAAuthorizationOperatorReadRuleArguments() (*OAAuthorizationOperatorReadRuleArguments, error) {
+	if r.at() != '{' {
+		return nil, r.refuse("wrong_type")
+	}
+	if err := r.enter(); err != nil {
+		return nil, err
+	}
+	r.pos++
+	v := &OAAuthorizationOperatorReadRuleArguments{}
+	var seen uint32
+	r.ws()
+	if r.at() != '}' {
+		for {
+			r.ws()
+			if r.at() != '"' {
+				return nil, r.refuse("malformed")
+			}
+			key, err := r.str()
+			if err != nil {
+				return nil, err
+			}
+			r.ws()
+			if r.at() != ':' {
+				return nil, r.refuse("malformed")
+			}
+			r.pos++
+			r.ws()
+			switch key {
+			case "subject":
+				if seen&1 != 0 {
+					return nil, r.refuse("duplicate_field")
+				}
+				seen |= 1
+				x, err := r.decodeSubject()
+				if err != nil {
+					return nil, err
+				}
+				v.Subject = *x
+			case "action":
+				if seen&2 != 0 {
+					return nil, r.refuse("duplicate_field")
+				}
+				seen |= 2
+				x, err := r.str()
+				if err != nil {
+					return nil, err
+				}
+				v.Action = x
+			case "resource":
+				if seen&4 != 0 {
+					return nil, r.refuse("duplicate_field")
+				}
+				seen |= 4
+				x, err := r.str()
+				if err != nil {
+					return nil, err
+				}
+				v.Resource = x
+			default:
+				return nil, r.refuse("unknown_field")
+			}
+			r.ws()
+			if r.at() != ',' {
+				break
+			}
+			r.pos++
+		}
+	}
+	if r.at() != '}' {
+		return nil, r.refuse("malformed")
+	}
+	r.pos++
+	r.depth--
+	if seen&7 != 7 {
+		return nil, r.refuse("missing_field")
+	}
+	return v, nil
+}
+
+func (r *reader) decodeOAAuthorizationOperatorRegisterActionArguments() (*OAAuthorizationOperatorRegisterActionArguments, error) {
+	if r.at() != '{' {
+		return nil, r.refuse("wrong_type")
+	}
+	if err := r.enter(); err != nil {
+		return nil, err
+	}
+	r.pos++
+	v := &OAAuthorizationOperatorRegisterActionArguments{}
+	var seen uint32
+	r.ws()
+	if r.at() != '}' {
+		for {
+			r.ws()
+			if r.at() != '"' {
+				return nil, r.refuse("malformed")
+			}
+			key, err := r.str()
+			if err != nil {
+				return nil, err
+			}
+			r.ws()
+			if r.at() != ':' {
+				return nil, r.refuse("malformed")
+			}
+			r.pos++
+			r.ws()
+			switch key {
+			case "expected_revision":
+				if seen&1 != 0 {
+					return nil, r.refuse("duplicate_field")
+				}
+				seen |= 1
+				x, err := r.str()
+				if err != nil {
+					return nil, err
+				}
+				v.ExpectedRevision = x
+			case "action":
+				if seen&2 != 0 {
+					return nil, r.refuse("duplicate_field")
+				}
+				seen |= 2
+				x, err := r.str()
+				if err != nil {
+					return nil, err
+				}
+				v.Action = x
+			default:
+				return nil, r.refuse("unknown_field")
+			}
+			r.ws()
+			if r.at() != ',' {
+				break
+			}
+			r.pos++
+		}
+	}
+	if r.at() != '}' {
+		return nil, r.refuse("malformed")
+	}
+	r.pos++
+	r.depth--
+	if seen&3 != 3 {
+		return nil, r.refuse("missing_field")
+	}
+	return v, nil
+}
+
+func (r *reader) decodeOAAuthorizationOperatorRetireActionArguments() (*OAAuthorizationOperatorRetireActionArguments, error) {
+	if r.at() != '{' {
+		return nil, r.refuse("wrong_type")
+	}
+	if err := r.enter(); err != nil {
+		return nil, err
+	}
+	r.pos++
+	v := &OAAuthorizationOperatorRetireActionArguments{}
+	var seen uint32
+	r.ws()
+	if r.at() != '}' {
+		for {
+			r.ws()
+			if r.at() != '"' {
+				return nil, r.refuse("malformed")
+			}
+			key, err := r.str()
+			if err != nil {
+				return nil, err
+			}
+			r.ws()
+			if r.at() != ':' {
+				return nil, r.refuse("malformed")
+			}
+			r.pos++
+			r.ws()
+			switch key {
+			case "expected_revision":
+				if seen&1 != 0 {
+					return nil, r.refuse("duplicate_field")
+				}
+				seen |= 1
+				x, err := r.str()
+				if err != nil {
+					return nil, err
+				}
+				v.ExpectedRevision = x
+			case "action":
+				if seen&2 != 0 {
+					return nil, r.refuse("duplicate_field")
+				}
+				seen |= 2
+				x, err := r.str()
+				if err != nil {
+					return nil, err
+				}
+				v.Action = x
+			default:
+				return nil, r.refuse("unknown_field")
+			}
+			r.ws()
+			if r.at() != ',' {
+				break
+			}
+			r.pos++
+		}
+	}
+	if r.at() != '}' {
+		return nil, r.refuse("malformed")
+	}
+	r.pos++
+	r.depth--
+	if seen&3 != 3 {
 		return nil, r.refuse("missing_field")
 	}
 	return v, nil
@@ -3384,6 +4459,242 @@ func (r *reader) decodeOAAuthorizationOperatorRevokeRuleResult() (*OAAuthorizati
 	return v, nil
 }
 
+func (r *reader) decodeOAAuthorizationOperatorSetRuleForResult() (*OAAuthorizationOperatorSetRuleForResult, error) {
+	if r.at() != '{' {
+		return nil, r.refuse("wrong_type")
+	}
+	if err := r.enter(); err != nil {
+		return nil, err
+	}
+	r.pos++
+	v := &OAAuthorizationOperatorSetRuleForResult{}
+	var seen uint32
+	r.ws()
+	if r.at() != '}' {
+		for {
+			r.ws()
+			if r.at() != '"' {
+				return nil, r.refuse("malformed")
+			}
+			key, err := r.str()
+			if err != nil {
+				return nil, err
+			}
+			r.ws()
+			if r.at() != ':' {
+				return nil, r.refuse("malformed")
+			}
+			r.pos++
+			r.ws()
+			switch key {
+			case "value":
+				if seen&1 != 0 {
+					return nil, r.refuse("duplicate_field")
+				}
+				seen |= 1
+				x, err := r.decodePolicyEdit()
+				if err != nil {
+					return nil, err
+				}
+				v.Value = *x
+			default:
+				return nil, r.refuse("unknown_field")
+			}
+			r.ws()
+			if r.at() != ',' {
+				break
+			}
+			r.pos++
+		}
+	}
+	if r.at() != '}' {
+		return nil, r.refuse("malformed")
+	}
+	r.pos++
+	r.depth--
+	if seen&1 != 1 {
+		return nil, r.refuse("missing_field")
+	}
+	return v, nil
+}
+
+func (r *reader) decodeOAAuthorizationOperatorReadRuleResult() (*OAAuthorizationOperatorReadRuleResult, error) {
+	if r.at() != '{' {
+		return nil, r.refuse("wrong_type")
+	}
+	if err := r.enter(); err != nil {
+		return nil, err
+	}
+	r.pos++
+	v := &OAAuthorizationOperatorReadRuleResult{}
+	var seen uint32
+	r.ws()
+	if r.at() != '}' {
+		for {
+			r.ws()
+			if r.at() != '"' {
+				return nil, r.refuse("malformed")
+			}
+			key, err := r.str()
+			if err != nil {
+				return nil, err
+			}
+			r.ws()
+			if r.at() != ':' {
+				return nil, r.refuse("malformed")
+			}
+			r.pos++
+			r.ws()
+			switch key {
+			case "value":
+				if seen&1 != 0 {
+					return nil, r.refuse("duplicate_field")
+				}
+				seen |= 1
+				x, err := r.decodeRuleRead()
+				if err != nil {
+					return nil, err
+				}
+				v.Value = *x
+			default:
+				return nil, r.refuse("unknown_field")
+			}
+			r.ws()
+			if r.at() != ',' {
+				break
+			}
+			r.pos++
+		}
+	}
+	if r.at() != '}' {
+		return nil, r.refuse("malformed")
+	}
+	r.pos++
+	r.depth--
+	if seen&1 != 1 {
+		return nil, r.refuse("missing_field")
+	}
+	return v, nil
+}
+
+func (r *reader) decodeOAAuthorizationOperatorRegisterActionResult() (*OAAuthorizationOperatorRegisterActionResult, error) {
+	if r.at() != '{' {
+		return nil, r.refuse("wrong_type")
+	}
+	if err := r.enter(); err != nil {
+		return nil, err
+	}
+	r.pos++
+	v := &OAAuthorizationOperatorRegisterActionResult{}
+	var seen uint32
+	r.ws()
+	if r.at() != '}' {
+		for {
+			r.ws()
+			if r.at() != '"' {
+				return nil, r.refuse("malformed")
+			}
+			key, err := r.str()
+			if err != nil {
+				return nil, err
+			}
+			r.ws()
+			if r.at() != ':' {
+				return nil, r.refuse("malformed")
+			}
+			r.pos++
+			r.ws()
+			switch key {
+			case "value":
+				if seen&1 != 0 {
+					return nil, r.refuse("duplicate_field")
+				}
+				seen |= 1
+				x, err := r.decodeActionEdit()
+				if err != nil {
+					return nil, err
+				}
+				v.Value = *x
+			default:
+				return nil, r.refuse("unknown_field")
+			}
+			r.ws()
+			if r.at() != ',' {
+				break
+			}
+			r.pos++
+		}
+	}
+	if r.at() != '}' {
+		return nil, r.refuse("malformed")
+	}
+	r.pos++
+	r.depth--
+	if seen&1 != 1 {
+		return nil, r.refuse("missing_field")
+	}
+	return v, nil
+}
+
+func (r *reader) decodeOAAuthorizationOperatorRetireActionResult() (*OAAuthorizationOperatorRetireActionResult, error) {
+	if r.at() != '{' {
+		return nil, r.refuse("wrong_type")
+	}
+	if err := r.enter(); err != nil {
+		return nil, err
+	}
+	r.pos++
+	v := &OAAuthorizationOperatorRetireActionResult{}
+	var seen uint32
+	r.ws()
+	if r.at() != '}' {
+		for {
+			r.ws()
+			if r.at() != '"' {
+				return nil, r.refuse("malformed")
+			}
+			key, err := r.str()
+			if err != nil {
+				return nil, err
+			}
+			r.ws()
+			if r.at() != ':' {
+				return nil, r.refuse("malformed")
+			}
+			r.pos++
+			r.ws()
+			switch key {
+			case "value":
+				if seen&1 != 0 {
+					return nil, r.refuse("duplicate_field")
+				}
+				seen |= 1
+				x, err := r.decodeActionEdit()
+				if err != nil {
+					return nil, err
+				}
+				v.Value = *x
+			default:
+				return nil, r.refuse("unknown_field")
+			}
+			r.ws()
+			if r.at() != ',' {
+				break
+			}
+			r.pos++
+		}
+	}
+	if r.at() != '}' {
+		return nil, r.refuse("malformed")
+	}
+	r.pos++
+	r.depth--
+	if seen&1 != 1 {
+		return nil, r.refuse("missing_field")
+	}
+	return v, nil
+}
+
 func Decode(in []byte) (*Request, error) {
 	r := &reader{buf: in}
 	r.ws()
@@ -3755,6 +5066,10 @@ type AuthorizationOperator interface {
 	ListPolicy(string, int64) (PolicyPage, error)
 	SetRule(string, PolicyRule) (PolicyEdit, error)
 	RevokeRule(string, Subject, string, string) (PolicyEdit, error)
+	SetRuleFor(string, PolicyRule, int64, string) (PolicyEdit, error)
+	ReadRule(Subject, string, string) (RuleRead, error)
+	RegisterAction(string, string) (ActionEdit, error)
+	RetireAction(string, string) (ActionEdit, error)
 }
 type AuthorizationOperatorTransport interface {
 	FrameExchanger
@@ -3895,6 +5210,174 @@ func (c *AuthorizationOperatorClient) RevokeRule(arg0 string, arg1 Subject, arg2
 	result = decoded.Value
 	return
 }
+func (c *AuthorizationOperatorClient) SetRuleFor(arg0 string, arg1 PolicyRule, arg2 int64, arg3 string) (result PolicyEdit, err error) {
+	defer func() {
+		if p := recover(); p != nil {
+			if e, ok := p.(*Refusal); ok {
+				err = e
+			} else {
+				panic(p)
+			}
+		}
+	}()
+	args := OAAuthorizationOperatorSetRuleForArguments{ExpectedRevision: arg0, Rule: arg1, TtlMs: arg2, Why: arg3}
+	v := OAServiceFrame{Version: 1, Service: "abstraction.rights/operator@1", Method: "SetRuleFor", Arguments: Raw(encOAAuthorizationOperatorSetRuleForArguments(nil, &args, 1))}
+	frame := encOAServiceFrame(nil, &v, 0)
+	if _, err = servicePayload(frame); err != nil {
+		return
+	}
+	var response []byte
+	response, err = c.transport.ExchangeFrame(frame)
+	if err != nil {
+		return
+	}
+	var payload Raw
+	payload, err = serviceResponse(response, v.Service, v.Method)
+	if err != nil {
+		return
+	}
+	r := &reader{buf: []byte(payload), depth: 1}
+	r.ws()
+	var decoded *OAAuthorizationOperatorSetRuleForResult
+	decoded, err = r.decodeOAAuthorizationOperatorSetRuleForResult()
+	if err != nil {
+		return
+	}
+	_ = decoded
+	r.ws()
+	if r.pos != len(r.buf) {
+		err = r.refuse("trailing_bytes")
+		return
+	}
+	result = decoded.Value
+	return
+}
+func (c *AuthorizationOperatorClient) ReadRule(arg0 Subject, arg1 string, arg2 string) (result RuleRead, err error) {
+	defer func() {
+		if p := recover(); p != nil {
+			if e, ok := p.(*Refusal); ok {
+				err = e
+			} else {
+				panic(p)
+			}
+		}
+	}()
+	args := OAAuthorizationOperatorReadRuleArguments{Subject: arg0, Action: arg1, Resource: arg2}
+	v := OAServiceFrame{Version: 1, Service: "abstraction.rights/operator@1", Method: "ReadRule", Arguments: Raw(encOAAuthorizationOperatorReadRuleArguments(nil, &args, 1))}
+	frame := encOAServiceFrame(nil, &v, 0)
+	if _, err = servicePayload(frame); err != nil {
+		return
+	}
+	var response []byte
+	response, err = c.transport.ExchangeFrame(frame)
+	if err != nil {
+		return
+	}
+	var payload Raw
+	payload, err = serviceResponse(response, v.Service, v.Method)
+	if err != nil {
+		return
+	}
+	r := &reader{buf: []byte(payload), depth: 1}
+	r.ws()
+	var decoded *OAAuthorizationOperatorReadRuleResult
+	decoded, err = r.decodeOAAuthorizationOperatorReadRuleResult()
+	if err != nil {
+		return
+	}
+	_ = decoded
+	r.ws()
+	if r.pos != len(r.buf) {
+		err = r.refuse("trailing_bytes")
+		return
+	}
+	result = decoded.Value
+	return
+}
+func (c *AuthorizationOperatorClient) RegisterAction(arg0 string, arg1 string) (result ActionEdit, err error) {
+	defer func() {
+		if p := recover(); p != nil {
+			if e, ok := p.(*Refusal); ok {
+				err = e
+			} else {
+				panic(p)
+			}
+		}
+	}()
+	args := OAAuthorizationOperatorRegisterActionArguments{ExpectedRevision: arg0, Action: arg1}
+	v := OAServiceFrame{Version: 1, Service: "abstraction.rights/operator@1", Method: "RegisterAction", Arguments: Raw(encOAAuthorizationOperatorRegisterActionArguments(nil, &args, 1))}
+	frame := encOAServiceFrame(nil, &v, 0)
+	if _, err = servicePayload(frame); err != nil {
+		return
+	}
+	var response []byte
+	response, err = c.transport.ExchangeFrame(frame)
+	if err != nil {
+		return
+	}
+	var payload Raw
+	payload, err = serviceResponse(response, v.Service, v.Method)
+	if err != nil {
+		return
+	}
+	r := &reader{buf: []byte(payload), depth: 1}
+	r.ws()
+	var decoded *OAAuthorizationOperatorRegisterActionResult
+	decoded, err = r.decodeOAAuthorizationOperatorRegisterActionResult()
+	if err != nil {
+		return
+	}
+	_ = decoded
+	r.ws()
+	if r.pos != len(r.buf) {
+		err = r.refuse("trailing_bytes")
+		return
+	}
+	result = decoded.Value
+	return
+}
+func (c *AuthorizationOperatorClient) RetireAction(arg0 string, arg1 string) (result ActionEdit, err error) {
+	defer func() {
+		if p := recover(); p != nil {
+			if e, ok := p.(*Refusal); ok {
+				err = e
+			} else {
+				panic(p)
+			}
+		}
+	}()
+	args := OAAuthorizationOperatorRetireActionArguments{ExpectedRevision: arg0, Action: arg1}
+	v := OAServiceFrame{Version: 1, Service: "abstraction.rights/operator@1", Method: "RetireAction", Arguments: Raw(encOAAuthorizationOperatorRetireActionArguments(nil, &args, 1))}
+	frame := encOAServiceFrame(nil, &v, 0)
+	if _, err = servicePayload(frame); err != nil {
+		return
+	}
+	var response []byte
+	response, err = c.transport.ExchangeFrame(frame)
+	if err != nil {
+		return
+	}
+	var payload Raw
+	payload, err = serviceResponse(response, v.Service, v.Method)
+	if err != nil {
+		return
+	}
+	r := &reader{buf: []byte(payload), depth: 1}
+	r.ws()
+	var decoded *OAAuthorizationOperatorRetireActionResult
+	decoded, err = r.decodeOAAuthorizationOperatorRetireActionResult()
+	if err != nil {
+		return
+	}
+	_ = decoded
+	r.ws()
+	if r.pos != len(r.buf) {
+		err = r.refuse("trailing_bytes")
+		return
+	}
+	result = decoded.Value
+	return
+}
 func (d *AuthorizationOperatorDispatcher) WriteFrame(frame []byte) error {
 	v, err := servicePayload(frame)
 	if err != nil {
@@ -3909,6 +5392,14 @@ func (d *AuthorizationOperatorDispatcher) WriteFrame(frame []byte) error {
 	case "SetRule":
 		return DispatchError("wrong_mode")
 	case "RevokeRule":
+		return DispatchError("wrong_mode")
+	case "SetRuleFor":
+		return DispatchError("wrong_mode")
+	case "ReadRule":
+		return DispatchError("wrong_mode")
+	case "RegisterAction":
+		return DispatchError("wrong_mode")
+	case "RetireAction":
 		return DispatchError("wrong_mode")
 	default:
 		return DispatchError("unknown_method")
@@ -3961,6 +5452,58 @@ func (d *AuthorizationOperatorDispatcher) ExchangeFrame(frame []byte) ([]byte, e
 			return serviceReply(v, "", r.refuse("trailing_bytes"))
 		}
 		payload, err := d.invokeRevokeRule(args)
+		return serviceReply(v, payload, err)
+	case "SetRuleFor":
+		r := &reader{buf: []byte(v.Arguments), depth: 1}
+		r.ws()
+		args, err := r.decodeOAAuthorizationOperatorSetRuleForArguments()
+		if err != nil {
+			return serviceReply(v, "", err)
+		}
+		r.ws()
+		if r.pos != len(r.buf) {
+			return serviceReply(v, "", r.refuse("trailing_bytes"))
+		}
+		payload, err := d.invokeSetRuleFor(args)
+		return serviceReply(v, payload, err)
+	case "ReadRule":
+		r := &reader{buf: []byte(v.Arguments), depth: 1}
+		r.ws()
+		args, err := r.decodeOAAuthorizationOperatorReadRuleArguments()
+		if err != nil {
+			return serviceReply(v, "", err)
+		}
+		r.ws()
+		if r.pos != len(r.buf) {
+			return serviceReply(v, "", r.refuse("trailing_bytes"))
+		}
+		payload, err := d.invokeReadRule(args)
+		return serviceReply(v, payload, err)
+	case "RegisterAction":
+		r := &reader{buf: []byte(v.Arguments), depth: 1}
+		r.ws()
+		args, err := r.decodeOAAuthorizationOperatorRegisterActionArguments()
+		if err != nil {
+			return serviceReply(v, "", err)
+		}
+		r.ws()
+		if r.pos != len(r.buf) {
+			return serviceReply(v, "", r.refuse("trailing_bytes"))
+		}
+		payload, err := d.invokeRegisterAction(args)
+		return serviceReply(v, payload, err)
+	case "RetireAction":
+		r := &reader{buf: []byte(v.Arguments), depth: 1}
+		r.ws()
+		args, err := r.decodeOAAuthorizationOperatorRetireActionArguments()
+		if err != nil {
+			return serviceReply(v, "", err)
+		}
+		r.ws()
+		if r.pos != len(r.buf) {
+			return serviceReply(v, "", r.refuse("trailing_bytes"))
+		}
+		payload, err := d.invokeRetireAction(args)
 		return serviceReply(v, payload, err)
 	default:
 		return serviceReply(v, "", DispatchError("unknown_method"))
@@ -4051,6 +5594,134 @@ func (d *AuthorizationOperatorDispatcher) invokeRevokeRule(args *OAAuthorization
 	r := &reader{buf: []byte(payload), depth: 1}
 	r.ws()
 	if _, e := r.decodeOAAuthorizationOperatorRevokeRuleResult(); e != nil {
+		payload = ""
+		err = &ServiceError{Code: "invalid_result"}
+		return
+	}
+	r.ws()
+	if r.pos != len(r.buf) {
+		payload = ""
+		err = &ServiceError{Code: "invalid_result"}
+	}
+	return
+}
+func (d *AuthorizationOperatorDispatcher) invokeSetRuleFor(args *OAAuthorizationOperatorSetRuleForArguments) (payload Raw, err error) {
+	defer func() {
+		if p := recover(); p != nil {
+			payload = ""
+			if _, ok := p.(*Refusal); ok {
+				err = &ServiceError{Code: "invalid_result"}
+			} else {
+				err = &ServiceError{Code: "handler_error", Message: "handler failed"}
+			}
+		}
+	}()
+	var result PolicyEdit
+	result, err = d.Handler.SetRuleFor(args.ExpectedRevision, args.Rule, args.TtlMs, args.Why)
+	if err != nil {
+		return
+	}
+	value := OAAuthorizationOperatorSetRuleForResult{Value: result}
+	payload = Raw(encOAAuthorizationOperatorSetRuleForResult(nil, &value, 1))
+	r := &reader{buf: []byte(payload), depth: 1}
+	r.ws()
+	if _, e := r.decodeOAAuthorizationOperatorSetRuleForResult(); e != nil {
+		payload = ""
+		err = &ServiceError{Code: "invalid_result"}
+		return
+	}
+	r.ws()
+	if r.pos != len(r.buf) {
+		payload = ""
+		err = &ServiceError{Code: "invalid_result"}
+	}
+	return
+}
+func (d *AuthorizationOperatorDispatcher) invokeReadRule(args *OAAuthorizationOperatorReadRuleArguments) (payload Raw, err error) {
+	defer func() {
+		if p := recover(); p != nil {
+			payload = ""
+			if _, ok := p.(*Refusal); ok {
+				err = &ServiceError{Code: "invalid_result"}
+			} else {
+				err = &ServiceError{Code: "handler_error", Message: "handler failed"}
+			}
+		}
+	}()
+	var result RuleRead
+	result, err = d.Handler.ReadRule(args.Subject, args.Action, args.Resource)
+	if err != nil {
+		return
+	}
+	value := OAAuthorizationOperatorReadRuleResult{Value: result}
+	payload = Raw(encOAAuthorizationOperatorReadRuleResult(nil, &value, 1))
+	r := &reader{buf: []byte(payload), depth: 1}
+	r.ws()
+	if _, e := r.decodeOAAuthorizationOperatorReadRuleResult(); e != nil {
+		payload = ""
+		err = &ServiceError{Code: "invalid_result"}
+		return
+	}
+	r.ws()
+	if r.pos != len(r.buf) {
+		payload = ""
+		err = &ServiceError{Code: "invalid_result"}
+	}
+	return
+}
+func (d *AuthorizationOperatorDispatcher) invokeRegisterAction(args *OAAuthorizationOperatorRegisterActionArguments) (payload Raw, err error) {
+	defer func() {
+		if p := recover(); p != nil {
+			payload = ""
+			if _, ok := p.(*Refusal); ok {
+				err = &ServiceError{Code: "invalid_result"}
+			} else {
+				err = &ServiceError{Code: "handler_error", Message: "handler failed"}
+			}
+		}
+	}()
+	var result ActionEdit
+	result, err = d.Handler.RegisterAction(args.ExpectedRevision, args.Action)
+	if err != nil {
+		return
+	}
+	value := OAAuthorizationOperatorRegisterActionResult{Value: result}
+	payload = Raw(encOAAuthorizationOperatorRegisterActionResult(nil, &value, 1))
+	r := &reader{buf: []byte(payload), depth: 1}
+	r.ws()
+	if _, e := r.decodeOAAuthorizationOperatorRegisterActionResult(); e != nil {
+		payload = ""
+		err = &ServiceError{Code: "invalid_result"}
+		return
+	}
+	r.ws()
+	if r.pos != len(r.buf) {
+		payload = ""
+		err = &ServiceError{Code: "invalid_result"}
+	}
+	return
+}
+func (d *AuthorizationOperatorDispatcher) invokeRetireAction(args *OAAuthorizationOperatorRetireActionArguments) (payload Raw, err error) {
+	defer func() {
+		if p := recover(); p != nil {
+			payload = ""
+			if _, ok := p.(*Refusal); ok {
+				err = &ServiceError{Code: "invalid_result"}
+			} else {
+				err = &ServiceError{Code: "handler_error", Message: "handler failed"}
+			}
+		}
+	}()
+	var result ActionEdit
+	result, err = d.Handler.RetireAction(args.ExpectedRevision, args.Action)
+	if err != nil {
+		return
+	}
+	value := OAAuthorizationOperatorRetireActionResult{Value: result}
+	payload = Raw(encOAAuthorizationOperatorRetireActionResult(nil, &value, 1))
+	r := &reader{buf: []byte(payload), depth: 1}
+	r.ws()
+	if _, e := r.decodeOAAuthorizationOperatorRetireActionResult(); e != nil {
 		payload = ""
 		err = &ServiceError{Code: "invalid_result"}
 		return

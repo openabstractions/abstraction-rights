@@ -7,6 +7,28 @@ result. [General decision contract](CONTRACT.md) defines trusted enforcement
 points, exact rules, revision and revocation semantics. The existing native
 registration/token/awake workflows below remain separately selected interfaces.
 
+The installed runtime enforces these catalogue actions before each call. A
+policy grants the action on the named resource. The runtime registers them into
+its decision policy at composition (`runtime.ResourceRightsActions`), and an
+operator registers further `<owner>/<name>` actions with `RegisterAction`:
+
+| service call | action | resource |
+| --- | --- | --- |
+| storage Open | `abstraction.storage/content.read` | content digest |
+| storage Begin, Append, Commit | `abstraction.storage/content.write` | content digest |
+| storage change Observe, List | `abstraction.storage/content.observe` | `abstraction.storage/changes` |
+| job Submit | `abstraction.job/acceptance.submit` | `abstraction.job/acceptance@1` |
+| job CancelWork | `abstraction.job/acceptance.cancel` | `abstraction.job/acceptance@1` |
+| config ReplaceUser | `abstraction.config/user.replace` | `abstraction.config/editor@1` |
+| logging history read and observe | `abstraction.logging/history.read` | `abstraction.logging/history` |
+| model lookup | `abstraction.model/lookup` | requested registry name |
+| router inventory | `abstraction.router/inventory.read` | `abstraction.router/inventory` |
+| router route | `abstraction.router/route` | requested model |
+
+An evaluated refusal reaches the caller as that service's `forbidden` outcome.
+A decision the service cannot obtain reaches it as `unavailable`, with no state
+changed. Other job methods keep same-owner Program authorization.
+
 **In development.** No tagged release; `rightsd`, `rights` and `keepawake` run
 end to end on Windows today.
 

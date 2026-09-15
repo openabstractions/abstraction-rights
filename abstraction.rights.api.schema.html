@@ -30,8 +30,8 @@
 <div class="wrap"><table>
 <thead><tr><th>kind</th><th>types</th></tr></thead>
 <tbody>
-<tr><td>built in</td><td><code>DecisionOutcome</code> <code>PolicyEditOutcome</code> <code>PolicyPageOutcome</code> <code>bool</code> <code>string</code></td></tr>
-<tr><td>declared below</td><td><code>AppMetadata</code> <code>PolicyRule</code> <code>Subject</code></td></tr>
+<tr><td>built in</td><td><code>ActionEditOutcome</code> <code>DecisionOutcome</code> <code>PolicyEditOutcome</code> <code>PolicyPageOutcome</code> <code>RuleReadOutcome</code> <code>bool</code> <code>string</code></td></tr>
+<tr><td>declared below</td><td><code>AppMetadata</code> <code>CatalogEntry</code> <code>PolicyRule</code> <code>RuleRecord</code> <code>Subject</code></td></tr>
 <tr><td>container <span class="tag">[DEF-T3]</span></td><td><code>list&lt;string&gt;</code></td></tr>
 <tr><td>repeated record <span class="tag">[DEF-A9]</span></td><td><code>list&lt;AppMetadata&gt;</code> <code>list&lt;HoldMetadata&gt;</code> <code>list&lt;PolicyRule&gt;</code></td></tr>
 </tbody></table></div>
@@ -135,6 +135,44 @@
 <tr><td>2</td><td><code>revision</code></td><td><code>string</code></td><td>required</td><td>—</td></tr>
 <tr><td>3</td><td><code>current</code></td><td><code>PolicyRule</code></td><td>optional · omitted when absent</td><td>—</td></tr>
 </tbody></table></div>
+<h3 id="struct-RuleRecord"><code>RuleRecord</code></h3>
+<p class="meta">unknown fields <code>refuse</code></p>
+<div class="wrap"><table>
+<thead><tr><th>id</th><th>field</th><th>type</th><th>presence</th><th>named elsewhere</th></tr></thead>
+<tbody>
+<tr><td>1</td><td><code>rule</code></td><td><code>PolicyRule</code></td><td>required</td><td>—</td></tr>
+<tr><td>2</td><td><code>set_by</code></td><td><code>Subject</code></td><td>required</td><td>—</td></tr>
+<tr><td>3</td><td><code>set_at</code></td><td><code>string</code></td><td>required</td><td>—</td></tr>
+<tr><td>4</td><td><code>why</code></td><td><code>string</code></td><td>required</td><td>—</td></tr>
+<tr><td>5</td><td><code>expires</code></td><td><code>string</code></td><td>required</td><td>—</td></tr>
+</tbody></table></div>
+<h3 id="struct-RuleRead"><code>RuleRead</code></h3>
+<p class="meta">unknown fields <code>refuse</code></p>
+<div class="wrap"><table>
+<thead><tr><th>id</th><th>field</th><th>type</th><th>presence</th><th>named elsewhere</th></tr></thead>
+<tbody>
+<tr><td>1</td><td><code>outcome</code></td><td><code>RuleReadOutcome</code></td><td>required</td><td>—</td></tr>
+<tr><td>2</td><td><code>revision</code></td><td><code>string</code></td><td>required</td><td>—</td></tr>
+<tr><td>3</td><td><code>record</code></td><td><code>RuleRecord</code></td><td>optional · omitted when absent</td><td>—</td></tr>
+</tbody></table></div>
+<h3 id="struct-CatalogEntry"><code>CatalogEntry</code></h3>
+<p class="meta">unknown fields <code>refuse</code></p>
+<div class="wrap"><table>
+<thead><tr><th>id</th><th>field</th><th>type</th><th>presence</th><th>named elsewhere</th></tr></thead>
+<tbody>
+<tr><td>1</td><td><code>action</code></td><td><code>string</code></td><td>required</td><td>—</td></tr>
+<tr><td>2</td><td><code>registered_by</code></td><td><code>Subject</code></td><td>required</td><td>—</td></tr>
+<tr><td>3</td><td><code>registered_at</code></td><td><code>string</code></td><td>required</td><td>—</td></tr>
+</tbody></table></div>
+<h3 id="struct-ActionEdit"><code>ActionEdit</code></h3>
+<p class="meta">unknown fields <code>refuse</code></p>
+<div class="wrap"><table>
+<thead><tr><th>id</th><th>field</th><th>type</th><th>presence</th><th>named elsewhere</th></tr></thead>
+<tbody>
+<tr><td>1</td><td><code>outcome</code></td><td><code>ActionEditOutcome</code></td><td>required</td><td>—</td></tr>
+<tr><td>2</td><td><code>revision</code></td><td><code>string</code></td><td>required</td><td>—</td></tr>
+<tr><td>3</td><td><code>current</code></td><td><code>CatalogEntry</code></td><td>optional · omitted when absent</td><td>—</td></tr>
+</tbody></table></div>
 <h2 id="enums">Enumerations <span class="tag">[DEF-T5]</span></h2>
 <p>Enum fields carry JSON strings containing exact member names, never numeric IDs. Unknown names are preserved with grant and refused as bad_enum with refuse on read and write. Optional absent fields preserve presence separately from an empty string.</p>
 <p class="meta">An enumeration is a closed vocabulary of wire names, and each one says on its own what a reader does with a member it has never heard of <span class="tag">[DEF-A5]</span>.</p>
@@ -173,6 +211,31 @@
 <tr><td>4</td><td><code>forbidden</code></td></tr>
 <tr><td>5</td><td><code>unavailable</code></td></tr>
 </tbody></table></div>
+<h3 id="enum-RuleReadOutcome"><code>RuleReadOutcome</code></h3>
+<p class="meta">a member this reader does not know is <code>refuse</code></p>
+<div class="wrap"><table>
+<thead><tr><th>id</th><th>member</th></tr></thead>
+<tbody>
+<tr><td>1</td><td><code>found</code></td></tr>
+<tr><td>2</td><td><code>expired</code></td></tr>
+<tr><td>3</td><td><code>unknown</code></td></tr>
+<tr><td>4</td><td><code>invalid</code></td></tr>
+<tr><td>5</td><td><code>forbidden</code></td></tr>
+<tr><td>6</td><td><code>unavailable</code></td></tr>
+</tbody></table></div>
+<h3 id="enum-ActionEditOutcome"><code>ActionEditOutcome</code></h3>
+<p class="meta">a member this reader does not know is <code>refuse</code></p>
+<div class="wrap"><table>
+<thead><tr><th>id</th><th>member</th></tr></thead>
+<tbody>
+<tr><td>1</td><td><code>applied</code></td></tr>
+<tr><td>2</td><td><code>conflict</code></td></tr>
+<tr><td>3</td><td><code>unknown</code></td></tr>
+<tr><td>4</td><td><code>invalid</code></td></tr>
+<tr><td>5</td><td><code>exhausted</code></td></tr>
+<tr><td>6</td><td><code>forbidden</code></td></tr>
+<tr><td>7</td><td><code>unavailable</code></td></tr>
+</tbody></table></div>
 <h2 id="constants">Constants <span class="tag">[DEF-A6]</span></h2>
 <div class="wrap"><table>
 <thead><tr><th>name</th><th>type</th><th>value</th></tr></thead>
@@ -180,7 +243,7 @@
 <tr><td><code>operations</code></td><td><code>list&lt;string&gt;</code></td><td><code>register, ask, hold, check, apps, grant, revoke, forget, holds</code></td></tr>
 <tr><td><code>known_rights</code></td><td><code>list&lt;string&gt;</code></td><td><code>awake</code></td></tr>
 <tr><td><code>refusal_codes</code></td><td><code>list&lt;string&gt;</code></td><td><code>internal, invalid_request, caller_refused, unknown_operation, not_administrator, pending, denied, denied_permanently, unsupported_hold, platform_refused, unknown_app, unknown_right, not_granted, bad_secret, bad_token</code></td></tr>
-<tr><td><code>resource_actions</code></td><td><code>list&lt;string&gt;</code></td><td><code>abstraction.storage/content.read</code></td></tr>
+<tr><td><code>resource_actions</code></td><td><code>list&lt;string&gt;</code></td><td><code>abstraction.storage/content.read, abstraction.storage/content.write, abstraction.job/acceptance.submit, abstraction.job/acceptance.cancel, abstraction.config/user.replace, abstraction.logging/history.read, abstraction.model/lookup, abstraction.router/inventory.read, abstraction.router/route, abstraction.storage/content.observe, abstraction.storage/content.remove</code></td></tr>
 </tbody></table></div>
 <h2 id="refusals">Refusal words <span class="tag">[DEF-R1]</span></h2>
 <div class="wrap"><table>
@@ -199,7 +262,7 @@
 <tr><td>11</td><td><code>trailing_bytes</code></td><td><code>document</code></td></tr>
 </tbody></table></div>
 <h2 id="service-Authorization">Service <code>Authorization</code> <span class="tag">[DEF-S1]</span></h2>
-<p>General exact-rule authorization decision point with bounded catalog and persistence. Unknown, absent, unspecified, failed and refused decisions never permit. Explicitly authorized operator configuration grants/revokes exact rules; no serialized awake lease is introduced.</p>
+<p>General exact-rule authorization decision point with a bounded, registrable catalogue and persistence. Unknown, absent, unspecified, expired, failed and refused decisions never permit. Explicitly authorized operator configuration registers actions and grants/revokes exact rules; no serialized awake lease is introduced.</p>
 <p>Wire identity: <code>abstraction.rights/authorization@1</code></p>
 <p>Multiple services share this namespace. Generated ServiceName (Go) and service_name (C++/Python) validate the request envelope and version before returning its service identity for routing. The selected generated dispatcher validates the method and typed arguments; the selector does not authorize callers or interpret method payloads.</p>
 <p>Frames carry version, service, method and typed arguments. Transport owns framing, associated exchanges, deadlines and connections. Unknown version/service/method and malformed arguments are rejected before invoking a handler. One-way WriteFrame success means local submission, not remote acceptance or persistence.</p>
@@ -216,7 +279,7 @@
 <li>Argument 3: <code>string</code> <code>resource</code> (required, including zero/false/empty)</li>
 </ul>
 <h2 id="service-AuthorizationOperator">Service <code>AuthorizationOperator</code> <span class="tag">[DEF-S1]</span></h2>
-<p>Explicitly authorized administration of the configured decision policy. Receiving same-account Program proof plus a trusted typed-peer operator callback is required; nil refuses. Policy denial is forbidden; callback/storage failure is unavailable. No caller credential, verified flag or provider path is accepted. Resource services remain the receiving enforcement points. Legacy bearer and awake lease behavior is separate.</p>
+<p>Explicitly authorized administration of the configured decision policy: catalogue registration and retirement, exact rules with expiry and provenance. Receiving same-account Program proof plus a trusted typed-peer operator callback is required; nil refuses. Policy denial is forbidden; callback/storage failure is unavailable. No caller credential, verified flag or provider path is accepted. Resource services remain the receiving enforcement points. Legacy bearer and awake lease behavior is separate.</p>
 <p>Wire identity: <code>abstraction.rights/operator@1</code></p>
 <p>Multiple services share this namespace. Generated ServiceName (Go) and service_name (C++/Python) validate the request envelope and version before returning its service identity for routing. The selected generated dispatcher validates the method and typed arguments; the selector does not authorize callers or interpret method payloads.</p>
 <p>Frames carry version, service, method and typed arguments. Transport owns framing, associated exchanges, deadlines and connections. Unknown version/service/method and malformed arguments are rejected before invoking a handler. One-way WriteFrame success means local submission, not remote acceptance or persistence.</p>
@@ -226,7 +289,7 @@
 <li>Argument 1: <code>string</code> <code>cursor</code> (required, including zero/false/empty)</li>
 <li>Argument 2: <code>i64</code> <code>limit</code> (required, including zero/false/empty)</li>
 </ul>
-<p>Atomically compare the expected durable revision and set one exact permit/deny rule. Revision is bounded to 128 UTF-8 bytes. Operator context and authority are checked again inside the atomic edit after lock waiting. Unknown catalogue actions and malformed targets are invalid; no resource permission is inferred from the operator request itself.</p>
+<p>Atomically compare the expected durable revision and set one exact permit/deny rule with no expiry and an empty reason. Revision is bounded to 128 UTF-8 bytes. Operator context and authority are checked again inside the atomic edit after lock waiting. The rule records the operator&#39;s established subject and the edit time. An unexpired rule with the same permit is a no-op that keeps its record. Uncatalogued actions and malformed targets are invalid; no resource permission is inferred from the operator request itself.</p>
 <h3><code>SetRule</code></h3><p><code>request-response</code> <code>PolicyEdit</code></p><ul>
 <li>Argument 1: <code>string</code> <code>expected_revision</code> (required, including zero/false/empty)</li>
 <li>Argument 2: <code>PolicyRule</code> <code>rule</code> (required, including zero/false/empty)</li>
@@ -237,6 +300,29 @@
 <li>Argument 2: <code>Subject</code> <code>subject</code> (required, including zero/false/empty)</li>
 <li>Argument 3: <code>string</code> <code>action</code> (required, including zero/false/empty)</li>
 <li>Argument 4: <code>string</code> <code>resource</code> (required, including zero/false/empty)</li>
+</ul>
+<p>As SetRule, recording why and an expiry ttl_ms after the service&#39;s edit time. ttl_ms 0 sets no expiry; otherwise it is 1..31536000000. why is 0..256 UTF-8 bytes without control characters. A retained rule with the same permit, reason and expiry is a no-op; any other difference writes, including a new expiry.</p>
+<h3><code>SetRuleFor</code></h3><p><code>request-response</code> <code>PolicyEdit</code></p><ul>
+<li>Argument 1: <code>string</code> <code>expected_revision</code> (required, including zero/false/empty)</li>
+<li>Argument 2: <code>PolicyRule</code> <code>rule</code> (required, including zero/false/empty)</li>
+<li>Argument 3: <code>i64</code> <code>ttl_ms</code> (required, including zero/false/empty)</li>
+<li>Argument 4: <code>string</code> <code>why</code> (required, including zero/false/empty)</li>
+</ul>
+<p>Read one exact rule with its provenance and expiry under operator authorization, rechecked after the read.</p>
+<h3><code>ReadRule</code></h3><p><code>request-response</code> <code>RuleRead</code></p><ul>
+<li>Argument 1: <code>Subject</code> <code>subject</code> (required, including zero/false/empty)</li>
+<li>Argument 2: <code>string</code> <code>action</code> (required, including zero/false/empty)</li>
+<li>Argument 3: <code>string</code> <code>resource</code> (required, including zero/false/empty)</li>
+</ul>
+<p>Add an action named &lt;owner&gt;/&lt;name&gt; to the catalogue. owner is 1..64 bytes and name 1..63 bytes of lowercase ASCII letters, digits, &#39;.&#39;, &#39;_&#39; and &#39;-&#39;, each beginning with a letter or digit. Registering an action already in the catalogue applies without writing. A registration records the operator&#39;s established subject and the service time. Registration grants nothing: decisions on the action read not_granted until a rule exists.</p>
+<h3><code>RegisterAction</code></h3><p><code>request-response</code> <code>ActionEdit</code></p><ul>
+<li>Argument 1: <code>string</code> <code>expected_revision</code> (required, including zero/false/empty)</li>
+<li>Argument 2: <code>string</code> <code>action</code> (required, including zero/false/empty)</li>
+</ul>
+<p>Remove a registered action and every rule naming it. Retiring a seeded action is invalid. Retiring an action outside the catalogue is unknown. Decisions on a retired action read unknown_action.</p>
+<h3><code>RetireAction</code></h3><p><code>request-response</code> <code>ActionEdit</code></p><ul>
+<li>Argument 1: <code>string</code> <code>expected_revision</code> (required, including zero/false/empty)</li>
+<li>Argument 2: <code>string</code> <code>action</code> (required, including zero/false/empty)</li>
 </ul>
 
 <footer>

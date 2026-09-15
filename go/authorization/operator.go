@@ -7,9 +7,11 @@ import (
 	"encoding/json"
 	"errors"
 	identity "github.com/openabstractions/abstraction-identity"
+	rights "github.com/openabstractions/abstraction-rights/go"
 	wire "github.com/openabstractions/abstraction-rights/go/abstraction/rights/api"
 	"strconv"
 	"strings"
+	"time"
 	"unicode/utf8"
 )
 
@@ -119,18 +121,57 @@ func (r *operatorReceiver) ListPolicy(cursor string, limit int64) (wire.PolicyPa
 	return page, nil
 }
 func (r *operatorReceiver) SetRule(expected string, rule wire.PolicyRule) (wire.PolicyEdit, error) {
-	return r.edit(expected, rule.Subject, rule.Action, rule.Resource, &rule.Permit)
+	return r.edit(expected, rule.Subject, rule.Action, rule.Resource, rights.RuleEdit{Permit: &rule.Permit})
 }
 func (r *operatorReceiver) RevokeRule(expected string, subject wire.Subject, action, resource string) (wire.PolicyEdit, error) {
-	return r.edit(expected, subject, action, resource, nil)
+	return r.edit(expected, subject, action, resource, rights.RuleEdit{})
 }
-func (r *operatorReceiver) edit(expected string, subject wire.Subject, action, resource string, permit *bool) (wire.PolicyEdit, error) {
-	if _, err := r.authorize(); err != nil {
-		return wire.PolicyEdit{Outcome: operatorError(err)}, nil
+func (r *operatorReceiver) SetRuleFor(expected string, rule wire.PolicyRule, ttlMS int64, why string) (wire.PolicyEdit, error) {
+	ttl := time.Duration(ttlMS) * time.Millisecond
+	if ttlMS < 0 || ttlMS > rights.MaxRuleTTL.Milliseconds() {
+		ttl = -1
 	}
-	result, err := r.host.policy.EditRule(expected, subject, action, resource, permit, func() error { _, err := r.authorize(); return err })
+	return r.edit(expected, rule.Subject, rule.Action, rule.Resource, rights.RuleEdit{Permit: &rule.Permit, TTL: ttl, Why: why, Exact: true})
+}
+
+// edit records the operator subject established for this call as the rule's
+// provenance and rechecks authority inside the atomic edit.
+func (r *operatorReceiver) edit(expected string, subject wire.Subject, action, resource string, edit rights.RuleEdit) (wire.PolicyEdit, error) {
+	by, err := r.authorize()
 	if err != nil {
 		return wire.PolicyEdit{Outcome: operatorError(err)}, nil
+	}
+	edit.By = by
+	result, err := r.host.policy.ChangeRule(expected, subject, action, resource, edit, func() error { _, err := r.authorize(); return err })
+	if err != nil {
+		return wire.PolicyEdit{Outcome: operatorError(err)}, nil
+	}
+	return result, nil
+}
+func (r *operatorReceiver) ReadRule(subject wire.Subject, action, resource string) (wire.RuleRead, error) {
+	if _, err := r.authorize(); err != nil {
+		return wire.RuleRead{Outcome: operatorError(err)}, nil
+	}
+	result := r.host.policy.ReadRule(subject, action, resource)
+	if _, err := r.authorize(); err != nil {
+		return wire.RuleRead{Outcome: operatorError(err)}, nil
+	}
+	return result, nil
+}
+func (r *operatorReceiver) RegisterAction(expected, action string) (wire.ActionEdit, error) {
+	return r.editAction(expected, action, true)
+}
+func (r *operatorReceiver) RetireAction(expected, action string) (wire.ActionEdit, error) {
+	return r.editAction(expected, action, false)
+}
+func (r *operatorReceiver) editAction(expected, action string, register bool) (wire.ActionEdit, error) {
+	by, err := r.authorize()
+	if err != nil {
+		return wire.ActionEdit{Outcome: operatorError(err)}, nil
+	}
+	result, err := r.host.policy.EditAction(expected, action, register, by, func() error { _, err := r.authorize(); return err })
+	if err != nil {
+		return wire.ActionEdit{Outcome: operatorError(err)}, nil
 	}
 	return result, nil
 }

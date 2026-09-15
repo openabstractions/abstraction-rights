@@ -96,6 +96,121 @@ func (c *Operator) RevokeRuleContext(ctx context.Context, expected string, subje
 	return checkedPolicyEdit(result, err, subject, action, resource, nil)
 }
 
+type RuleRecord = wire.RuleRecord
+type CatalogEntry = wire.CatalogEntry
+
+const stampFormat = "2006-01-02T15:04:05.000Z"
+const maxRuleTTL = 365 * 24 * time.Hour
+
+func validStamp(s string) bool {
+	t, err := time.Parse(stampFormat, s)
+	return err == nil && t.UTC().Format(stampFormat) == s
+}
+func validSubject(s Subject) bool {
+	return boundedOperatorString(s.Account, 128) && boundedOperatorString(s.Program, 4096) && filepath.IsAbs(s.Program) && filepath.Clean(s.Program) == s.Program
+}
+func validActionName(action string) bool {
+	owner, name, ok := strings.Cut(action, "/")
+	part := func(s string, max int) bool {
+		if len(s) == 0 || len(s) > max {
+			return false
+		}
+		for i := 0; i < len(s); i++ {
+			c := s[i]
+			if !(c >= 'a' && c <= 'z' || c >= '0' && c <= '9' || i > 0 && (c == '.' || c == '_' || c == '-')) {
+				return false
+			}
+		}
+		return true
+	}
+	return ok && part(owner, 64) && part(name, 63)
+}
+
+// SetRuleForContext sets one exact rule with a reason and an expiry ttl after the
+// service's edit time. A zero ttl sets no expiry.
+func (c *Operator) SetRuleForContext(ctx context.Context, expected string, rule PolicyRule, ttl time.Duration, why string) (wire.PolicyEdit, error) {
+	if err := ctx.Err(); err != nil {
+		return wire.PolicyEdit{}, err
+	}
+	rule.Subject.Program = filepath.Clean(rule.Subject.Program)
+	if !boundedOperatorString(expected, 128) || !validPolicyRule(rule) || ttl < 0 || ttl > maxRuleTTL || ttl%time.Millisecond != 0 || !(why == "" || boundedOperatorString(why, 256)) {
+		return wire.PolicyEdit{}, errors.New("rights: invalid policy edit")
+	}
+	result, err := wire.NewAuthorizationOperatorClient(c.transport.WithContext(ctx)).SetRuleFor(expected, rule, ttl.Milliseconds(), why)
+	return checkedPolicyEdit(result, err, rule.Subject, rule.Action, rule.Resource, &rule.Permit)
+}
+
+// ReadRuleContext reads one exact rule with the provenance the service recorded.
+func (c *Operator) ReadRuleContext(ctx context.Context, subject Subject, action, resource string) (wire.RuleRead, error) {
+	if err := ctx.Err(); err != nil {
+		return wire.RuleRead{}, err
+	}
+	subject.Program = filepath.Clean(subject.Program)
+	if !validPolicyRule(PolicyRule{Subject: subject, Action: action, Resource: resource}) {
+		return wire.RuleRead{}, errors.New("rights: invalid rule read")
+	}
+	result, err := wire.NewAuthorizationOperatorClient(c.transport.WithContext(ctx)).ReadRule(subject, action, resource)
+	if err != nil {
+		return wire.RuleRead{}, err
+	}
+	switch result.Outcome {
+	case "found", "expired":
+		r := result.Record
+		if !boundedOperatorString(result.Revision, 128) || r == nil || !validPolicyRule(r.Rule) || r.Rule.Subject != subject ||
+			r.Rule.Action != action || r.Rule.Resource != resource || !validSubject(r.SetBy) || !validStamp(r.SetAt) ||
+			!(r.Why == "" || boundedOperatorString(r.Why, 256)) || (r.Expires != "" && !validStamp(r.Expires)) ||
+			(result.Outcome == "expired" && r.Expires == "") {
+			return wire.RuleRead{}, errors.New("rights: malformed rule record")
+		}
+	case "unknown":
+		if !boundedOperatorString(result.Revision, 128) || result.Record != nil {
+			return wire.RuleRead{}, errors.New("rights: malformed unknown rule")
+		}
+	default:
+		if result.Revision != "" || result.Record != nil {
+			return wire.RuleRead{}, errors.New("rights: malformed rule refusal")
+		}
+	}
+	return result, nil
+}
+
+// RegisterActionContext conditionally adds an <owner>/<name> action to the catalogue.
+func (c *Operator) RegisterActionContext(ctx context.Context, expected, action string) (wire.ActionEdit, error) {
+	if err := ctx.Err(); err != nil {
+		return wire.ActionEdit{}, err
+	}
+	if !boundedOperatorString(expected, 128) || !validActionName(action) {
+		return wire.ActionEdit{}, errors.New("rights: invalid action registration")
+	}
+	result, err := wire.NewAuthorizationOperatorClient(c.transport.WithContext(ctx)).RegisterAction(expected, action)
+	return checkedActionEdit(result, err, action)
+}
+
+// RetireActionContext conditionally removes a registered action and its rules.
+func (c *Operator) RetireActionContext(ctx context.Context, expected, action string) (wire.ActionEdit, error) {
+	if err := ctx.Err(); err != nil {
+		return wire.ActionEdit{}, err
+	}
+	if !boundedOperatorString(expected, 128) || !boundedOperatorString(action, 128) {
+		return wire.ActionEdit{}, errors.New("rights: invalid action retirement")
+	}
+	result, err := wire.NewAuthorizationOperatorClient(c.transport.WithContext(ctx)).RetireAction(expected, action)
+	return checkedActionEdit(result, err, action)
+}
+func checkedActionEdit(result wire.ActionEdit, err error, action string) (wire.ActionEdit, error) {
+	if err != nil {
+		return wire.ActionEdit{}, err
+	}
+	observed := result.Outcome == "applied" || result.Outcome == "conflict" || result.Outcome == "unknown"
+	if observed != boundedOperatorString(result.Revision, 128) || (result.Current != nil && (result.Outcome == "unknown" || !observed)) {
+		return wire.ActionEdit{}, errors.New("rights: malformed action edit")
+	}
+	if e := result.Current; e != nil && (e.Action != action || !validSubject(e.RegisteredBy) || !validStamp(e.RegisteredAt)) {
+		return wire.ActionEdit{}, errors.New("rights: mismatched catalogue entry")
+	}
+	return result, nil
+}
+
 // A lost reply is uncertain. Clients never retry or substitute a fresh revision.
 func checkedPolicyEdit(result wire.PolicyEdit, err error, subject Subject, action, resource string, permit *bool) (wire.PolicyEdit, error) {
 	if err != nil {

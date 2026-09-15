@@ -1,6 +1,17 @@
 {
   "name": "@openabstractions/rights",
   "version": "0.0.0",
+  "description": "Generated JavaScript clients and codecs for authorization decisions and operator policy administration.",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/openabstractions/abstraction-rights.git",
+    "directory": "javascript"
+  },
+  "homepage": "https://github.com/openabstractions/abstraction-rights#readme",
+  "bugs": {
+    "url": "https://github.com/openabstractions/abstraction-rights/issues"
+  },
   "type": "module",
   "exports": "./js/abstraction/rights/api/rec.mjs",
   "files": [
