@@ -23,7 +23,7 @@ func TestOperatorPolicyConcurrentRevisionAndReconciliation(t *testing.T) {
 	}
 	authorize := func() error { return nil }
 	noop, err := p.EditRule(initial.Revision, s, decisionAction, "x", nil, authorize)
-	if err != nil || noop.Outcome != "applied" || noop.Revision != initial.Revision || noop.Current != nil {
+	if err != nil || noop.Outcome != wire.PolicyEditOutcomeApplied || noop.Revision != initial.Revision || noop.Current != nil {
 		t.Fatal(noop, err)
 	}
 	if _, err = os.Stat(path); !errors.Is(err, os.ErrNotExist) {
@@ -48,10 +48,10 @@ func TestOperatorPolicyConcurrentRevisionAndReconciliation(t *testing.T) {
 	var current wire.PolicyEdit
 	for r := range results {
 		switch r.Outcome {
-		case "applied":
+		case wire.PolicyEditOutcomeApplied:
 			applied++
 			current = r
-		case "conflict":
+		case wire.PolicyEditOutcomeConflict:
 			conflict++
 		default:
 			t.Fatal(r)
@@ -69,7 +69,7 @@ func TestOperatorPolicyConcurrentRevisionAndReconciliation(t *testing.T) {
 		t.Fatal(err)
 	}
 	retry, err := reopened.EditRule(initial.Revision, s, decisionAction, "x", &current.Current.Permit, authorize)
-	if err != nil || retry.Outcome != "conflict" || retry.Revision != current.Revision || *retry.Current != *current.Current {
+	if err != nil || retry.Outcome != wire.PolicyEditOutcomeConflict || retry.Revision != current.Revision || *retry.Current != *current.Current {
 		t.Fatal("uncertain retry overwrote", retry, err)
 	}
 	after, err := os.ReadFile(path)
@@ -77,14 +77,14 @@ func TestOperatorPolicyConcurrentRevisionAndReconciliation(t *testing.T) {
 		t.Fatal("conflict wrote", err)
 	}
 	same, err := reopened.EditRule(current.Revision, s, decisionAction, "x", &current.Current.Permit, authorize)
-	if err != nil || same.Outcome != "applied" || same.Revision != current.Revision {
+	if err != nil || same.Outcome != wire.PolicyEditOutcomeApplied || same.Revision != current.Revision {
 		t.Fatal(same, err)
 	}
 	revoked, err := reopened.EditRule(current.Revision, s, decisionAction, "x", nil, authorize)
-	if err != nil || revoked.Outcome != "applied" || revoked.Current != nil {
+	if err != nil || revoked.Outcome != wire.PolicyEditOutcomeApplied || revoked.Current != nil {
 		t.Fatal(revoked, err)
 	}
-	if d := reopened.Decide(s, decisionAction, "x"); d.Outcome != "not_granted" || d.PolicyRevision != revoked.Revision {
+	if d := reopened.Decide(s, decisionAction, "x"); d.Outcome != wire.DecisionOutcomeNotGranted || d.PolicyRevision != revoked.Revision {
 		t.Fatal(d)
 	}
 }
@@ -98,7 +98,7 @@ func TestOperatorPolicyRejectsMalformedAndUnavailableWithoutWriting(t *testing.T
 	s := subject(t)
 	permit := true
 	invalid, err := p.EditRule(snapshot.Revision, s, "not-in-catalog", "x", &permit, func() error { return nil })
-	if err != nil || invalid.Outcome != "invalid" {
+	if err != nil || invalid.Outcome != wire.PolicyEditOutcomeInvalid {
 		t.Fatal(invalid, err)
 	}
 	if _, err = os.Stat(path); !errors.Is(err, os.ErrNotExist) {
@@ -112,7 +112,7 @@ func TestOperatorPolicyRejectsMalformedAndUnavailableWithoutWriting(t *testing.T
 			t.Fatal("corrupt policy appeared valid")
 		}
 		r, err := p.EditRule(snapshot.Revision, s, decisionAction, "x", &permit, func() error { return nil })
-		if err == nil || r.Outcome != "unavailable" || r.Revision != "" || r.Current != nil {
+		if err == nil || r.Outcome != wire.PolicyEditOutcomeUnavailable || r.Revision != "" || r.Current != nil {
 			t.Fatal(r, err)
 		}
 		after, err := os.ReadFile(path)

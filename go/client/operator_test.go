@@ -17,16 +17,16 @@ func TestOperatorRefusesForgedEditResults(t *testing.T) {
 	badRule := rule
 	badRule.Resource = "other"
 	for _, v := range []wire.PolicyEdit{
-		{Outcome: "applied", Revision: "revision"},
-		{Outcome: "conflict", Current: &rule},
-		{Outcome: "forbidden", Revision: "revision"},
-		{Outcome: "applied", Revision: "revision", Current: &badRule},
+		{Outcome: wire.PolicyEditOutcomeApplied, Revision: "revision"},
+		{Outcome: wire.PolicyEditOutcomeConflict, Current: &rule},
+		{Outcome: wire.PolicyEditOutcomeForbidden, Revision: "revision"},
+		{Outcome: wire.PolicyEditOutcomeApplied, Revision: "revision", Current: &badRule},
 	} {
 		if _, err := checkedPolicyEdit(v, nil, s, "action", "resource", &permit); err == nil {
 			t.Fatal("forged edit accepted", v)
 		}
 	}
-	if _, err := checkedPolicyEdit(wire.PolicyEdit{Outcome: "applied", Revision: "revision", Current: &rule}, nil, s, "action", "resource", nil); err == nil {
+	if _, err := checkedPolicyEdit(wire.PolicyEdit{Outcome: wire.PolicyEditOutcomeApplied, Revision: "revision", Current: &rule}, nil, s, "action", "resource", nil); err == nil {
 		t.Fatal("revoke accepted retained rule")
 	}
 }

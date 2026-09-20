@@ -87,7 +87,7 @@ service Authorization {
 // The OA seed of the action catalogue. A policy host starts from the seed it is
 // configured with; resource services register further <owner>/<name> actions
 // through RegisterAction or the native registration API.
-const list<string> resource_actions = ["abstraction.storage/content.read", "abstraction.storage/content.write", "abstraction.job/acceptance.submit", "abstraction.job/acceptance.cancel", "abstraction.config/user.replace", "abstraction.logging/history.read", "abstraction.model/lookup", "abstraction.router/inventory.read", "abstraction.router/route", "abstraction.storage/content.observe", "abstraction.storage/content.remove"]
+const list<string> resource_actions = ["abstraction.storage/content.read", "abstraction.storage/content.write", "abstraction.job/acceptance.submit", "abstraction.job/acceptance.cancel", "abstraction.config/user.replace", "abstraction.logging/history.read", "abstraction.model/lookup", "abstraction.router/inventory.read", "abstraction.router/route", "abstraction.storage/content.observe", "abstraction.storage/content.remove"](catalogue="open")
 
 
 struct PolicyRule {

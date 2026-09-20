@@ -27,7 +27,7 @@ func (r *receiver) Decide(action, resource string) (wire.Decision, error) {
 	if e != nil || s.Account != r.host.owner {
 		return wire.Decision{Outcome: wire.DecisionOutcomeForbidden}, nil
 	}
-	return r.host.policy.Decide(s, action, resource), nil
+	return r.host.policy.DecideContext(r.ctx, s, action, resource), nil
 }
 func (r *receiver) DecideFor(subject wire.Subject, action, resource string) (wire.Decision, error) {
 	s, peer, e := r.caller()
@@ -43,5 +43,5 @@ func (r *receiver) DecideFor(subject wire.Subject, action, resource string) (wir
 	if e = r.call.Recheck(); e != nil {
 		return wire.Decision{Outcome: wire.DecisionOutcomeForbidden}, nil
 	}
-	return r.host.policy.Decide(subject, action, resource), nil
+	return r.host.policy.DecideContext(r.ctx, subject, action, resource), nil
 }

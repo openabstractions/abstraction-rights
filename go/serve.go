@@ -21,7 +21,10 @@ func Serve(args []string) error {
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
-	slog.SetDefault(slog.New(logging.Default("rights")))
+	// rightsd can start with no logging runtime running. Its own diagnostics go
+	// to the explicitly selected environment chain, heard on stderr when nothing
+	// is configured [LOG-S8].
+	slog.SetDefault(slog.New(logging.LegacyDefault("rights")))
 
 	s, err := Start(*endpoint, *state, *asksAt)
 	if err != nil {

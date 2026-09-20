@@ -113,19 +113,9 @@ func (h *Host) Serve(ctx context.Context) error {
 			}
 			if e == nil {
 				var reply []byte
-				var service string
-				service, e = wire.ServiceName(call.Frame)
-				if e == nil {
-					switch service {
-					case "abstraction.rights/authorization@1":
-						reply, e = (&wire.AuthorizationDispatcher{Handler: &receiver{host: h, call: call, ctx: callCtx}}).ExchangeFrame(call.Frame)
-					case "abstraction.rights/operator@1":
-						reply, e = (&wire.AuthorizationOperatorDispatcher{Handler: &operatorReceiver{receiver{host: h, call: call, ctx: call.WaitContext()}}}).ExchangeFrame(call.Frame)
-					default:
-						e = errors.New("rights: unsupported service")
-					}
-				}
-
+				reply, e = wire.ServeEndpoint(call.Frame, "openabstractions", "",
+					&wire.AuthorizationDispatcher{Handler: &receiver{host: h, call: call, ctx: callCtx}},
+					&wire.AuthorizationOperatorDispatcher{Handler: &operatorReceiver{receiver{host: h, call: call, ctx: call.WaitContext()}}})
 				if e == nil {
 					e = call.Reply(reply)
 				}

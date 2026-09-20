@@ -15,13 +15,21 @@ prefix, wildcard, regex or unknown action implies permission.
 explicit host `AuthorizeEnforcer` callback for this action/resource. Nil refuses
 every relay call. The authorized enforcer is trusted to assert its actual bound
 subject; serialization itself conveys no proof. The subject has account and
-normalized absolute executable path, with no verified flag. Same-account access
+program, with no verified flag. The program is `msix:<package family name>` for
+a Windows caller whose MSIX package identity is proven at `signed` and whose image
+lies inside that package's installed folder, and otherwise the normalized
+absolute executable path. Any process of the account can start an arbitrary
+program with an installed package's identity, so identity alone never names the
+package. Same-account access
 alone confers no enforcement-point authority. Both modes require the service's
 account; remote subject assertion is outside this local profile.
 
 `SubjectFromPeer` requires every shared Program requirement before extracting
-account and path. Native path cleaning matches the receiving platform. Program
-path identifies this profile's subject; moving the executable changes identity.
+account and program, which identity `SubjectProgram` names. Native path cleaning
+matches the receiving platform. A program path identifies an unpackaged subject;
+moving the executable changes identity. A package family survives package
+updates, whose image paths change with every version; a process a packaged app
+starts has no package identity of its own and keeps its path.
 The shared platform's actual proof applies. Server authenticity remains a
 separate unfinished boundary; a reachable endpoint alone is not server trust.
 
@@ -30,7 +38,10 @@ Only `permitted` permits resource access. `denied` is an explicit exact deny;
 current catalogue.
 `invalid`, `forbidden`, and `unavailable` also refuse. Evaluated outcomes carry
 the opaque policy revision read with the decision. Storage/read/parse failure
-returns unavailable without revision. Unknown wire outcomes refuse decoding.
+returns unavailable without revision. The Go provider bounds each read of its
+state by `DecisionReadBudget`, 500 ms, and by the call's context: a file whose
+read is denied answers `unavailable` from `Decide`, `DecideFor`, `ReadRule` and
+`ListPolicy` within that budget. Unknown wire outcomes refuse decoding.
 The Go native `Client.Require` helper preserves transport errors and returns a
 typed DecisionError for every non-permitted outcome. No unavailable/absent
 fallback permits access. Callers pass the same context across their operations;
@@ -55,7 +66,17 @@ An I/O error may leave commit outcome uncertain; operators reconcile/retry using
 the current policy decision/revision. No process-local failure latch changes
 restart behavior. The additive operator profile below uses conditional edits.
 
-Account is 1..128 bytes; program is 1..4096 bytes and absolute; action is 1..128
+A host whose installation created the file sets `StateRequired`. From then on
+an absent file is an outage: decisions read `unavailable` and native edits,
+registrations and operator edits refuse, so a removed file never reads as an
+empty policy. Native `DecisionPolicy.Require(ctx, peer, action, resource)`
+decides in the host's own process for a peer its receiving service bound, with
+`SubjectFromPeer` and the same result shape as the client's `Require`. A
+runtime that serves its own resource services decides through it and designates
+no enforcer. It reads the file on every call.
+
+Account is 1..128 bytes; program is 1..4096 bytes and absolute, or
+`msix:<package family name>`; action is 1..128
 bytes; resource is 1..1024 bytes. All are valid UTF-8 without control characters.
 The file is bounded to 4 MiB and 4096 exact rules. Canonical provider JSON,
 version, configured catalog and sorted unique rules are validated on every read

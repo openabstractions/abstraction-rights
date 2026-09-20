@@ -15,123 +15,6 @@ namespace abstraction::rights::api {
 
 using Raw = std::string;
 
-inline void esc(std::string& out, const std::string& s);
-
-inline void esc_byte(std::string& out, unsigned char c) {
-    static const char* kHex = "0123456789abcdef";
-    switch (c) {
-        case '"': out += "\\\""; return;
-        case '\\': out += "\\\\"; return;
-        case 0x08: out += "\\b"; return;
-        case 0x0c: out += "\\f"; return;
-        case '\n': out += "\\n"; return;
-        case '\r': out += "\\r"; return;
-        case '\t': out += "\\t"; return;
-        default: break;
-    }
-    if (c < 0x20) {
-        out += "\\u00";
-        out += kHex[c >> 4];
-        out += kHex[c & 0x0F];
-    } else {
-        out += static_cast<char>(c);
-    }
-}
-
-inline void num(std::string& out, std::int64_t n) { out += std::to_string(n); }
-
-inline void pad(std::string& out, int depth) {
-    out.append(static_cast<std::size_t>(depth) * 2, ' ');
-}
-
-inline void strs(std::string& out, const std::vector<std::string>& v, int depth) {
-    if (v.empty()) { out += "[]"; return; }
-    out += "[\n";
-    for (std::size_t i = 0; i < v.size(); ++i) {
-        pad(out, depth + 1);
-        esc(out, v[i]);
-        if (i + 1 < v.size()) out += ',';
-        out += '\n';
-    }
-    pad(out, depth);
-    out += ']';
-}
-
-inline bool ws(unsigned char c) { return c == ' ' || c == '\t' || c == '\n' || c == '\r'; }
-
-inline void raw(std::string& out, const std::string& s, int depth) {
-    const std::size_t n = s.size();
-    for (std::size_t i = 0; i < n;) {
-        const unsigned char c = static_cast<unsigned char>(s[i]);
-        if (ws(c)) {
-            ++i;
-        } else if (c == '"') {
-            std::size_t j = i + 1;
-            while (j < n) {
-                if (s[j] == '\\') { j += 2; continue; }
-                if (s[j] == '"') { ++j; break; }
-                ++j;
-            }
-            out.append(s, i, j - i);
-            i = j;
-        } else if (c == '{' || c == '[') {
-            out += static_cast<char>(c);
-            ++i;
-            std::size_t j = i;
-            while (j < n && ws(static_cast<unsigned char>(s[j]))) ++j;
-            if (j < n && (s[j] == '}' || s[j] == ']')) {
-                out += s[j];
-                i = j + 1;
-            } else {
-                ++depth;
-                out += '\n';
-                pad(out, depth);
-            }
-        } else if (c == '}' || c == ']') {
-            --depth;
-            out += '\n';
-            pad(out, depth);
-            out += static_cast<char>(c);
-            ++i;
-        } else if (c == ',') {
-            out += ",\n";
-            pad(out, depth);
-            ++i;
-        } else if (c == ':') {
-            out += ": ";
-            ++i;
-        } else {
-            out += static_cast<char>(c);
-            ++i;
-        }
-    }
-}
-
-// std::char_traits<char>::compare is specified to order by unsigned char, so a
-// std::map<std::string, ...> already walks its keys in UTF-8 byte order — which
-// is what the definition declares. Nothing sorts here because nothing needs to.
-inline void rawmap(std::string& out, const std::map<std::string, Raw>& m, int depth) {
-    if (m.empty()) { out += "{}"; return; }
-    out += "{\n";
-    std::size_t i = 0;
-    for (const auto& kv : m) {
-        pad(out, depth + 1);
-        esc(out, kv.first);
-        out += ": ";
-        raw(out, kv.second, depth + 1);
-        if (++i < m.size()) out += ',';
-        out += '\n';
-    }
-    pad(out, depth);
-    out += '}';
-}
-
-inline void esc(std::string& out, const std::string& s) {
-    out += '"';
-    for (unsigned char c : s) esc_byte(out, c);
-    out += '"';
-}
-
 class Refusal : public std::runtime_error {
 public:
     Refusal(const char* word, std::size_t offset)
@@ -142,35 +25,218 @@ public:
     std::size_t offset;
 };
 
-template <typename T>
-inline void enc_list(std::string& out, const std::vector<T>& v, int depth,
-                     void (*enc)(std::string&, const T&, int)) {
-    if (v.empty()) { out += "[]"; return; }
-    out += "[\n";
-    for (std::size_t i = 0; i < v.size(); ++i) {
-        pad(out, depth + 1);
-        enc(out, v[i], depth + 1);
-        if (i + 1 < v.size()) out += ',';
-        out += '\n';
+enum class DecisionOutcome : std::int32_t {
+    Permitted = 1,
+    Denied = 2,
+    NotGranted = 3,
+    UnknownAction = 4,
+    Invalid = 5,
+    Forbidden = 6,
+    Unavailable = 7,
+};
+
+// The member's name on the wire; empty for a value that names no member.
+inline constexpr std::string_view wire_name(DecisionOutcome value) {
+    switch (value) {
+        case DecisionOutcome::Permitted: return "permitted";
+        case DecisionOutcome::Denied: return "denied";
+        case DecisionOutcome::NotGranted: return "not_granted";
+        case DecisionOutcome::UnknownAction: return "unknown_action";
+        case DecisionOutcome::Invalid: return "invalid";
+        case DecisionOutcome::Forbidden: return "forbidden";
+        case DecisionOutcome::Unavailable: return "unavailable";
     }
-    pad(out, depth);
-    out += ']';
+    return {};
 }
 
+// The member a wire name spells; empty for a name this vocabulary refuses.
+inline std::optional<DecisionOutcome> parse_decision_outcome(std::string_view name) {
+    if (name == "permitted") return DecisionOutcome::Permitted;
+    if (name == "denied") return DecisionOutcome::Denied;
+    if (name == "not_granted") return DecisionOutcome::NotGranted;
+    if (name == "unknown_action") return DecisionOutcome::UnknownAction;
+    if (name == "invalid") return DecisionOutcome::Invalid;
+    if (name == "forbidden") return DecisionOutcome::Forbidden;
+    if (name == "unavailable") return DecisionOutcome::Unavailable;
+    return std::nullopt;
+}
+
+// A member equals its wire name, so code holding the contract's word compares directly.
+inline constexpr bool operator==(DecisionOutcome value, std::string_view name) { return wire_name(value) == name; }
+inline constexpr bool operator!=(DecisionOutcome value, std::string_view name) { return wire_name(value) != name; }
+inline constexpr bool operator==(std::string_view name, DecisionOutcome value) { return wire_name(value) == name; }
+inline constexpr bool operator!=(std::string_view name, DecisionOutcome value) { return wire_name(value) != name; }
+
 inline const std::vector<std::string> kDecisionOutcomeNames = {"permitted", "denied", "not_granted", "unknown_action", "invalid", "forbidden", "unavailable"};
-inline const std::string kDecisionOutcomeUnknown = "refuse";
+
+enum class PolicyPageOutcome : std::int32_t {
+    Page = 1,
+    Gap = 2,
+    Invalid = 3,
+    Forbidden = 4,
+    Unavailable = 5,
+};
+
+// The member's name on the wire; empty for a value that names no member.
+inline constexpr std::string_view wire_name(PolicyPageOutcome value) {
+    switch (value) {
+        case PolicyPageOutcome::Page: return "page";
+        case PolicyPageOutcome::Gap: return "gap";
+        case PolicyPageOutcome::Invalid: return "invalid";
+        case PolicyPageOutcome::Forbidden: return "forbidden";
+        case PolicyPageOutcome::Unavailable: return "unavailable";
+    }
+    return {};
+}
+
+// The member a wire name spells; empty for a name this vocabulary refuses.
+inline std::optional<PolicyPageOutcome> parse_policy_page_outcome(std::string_view name) {
+    if (name == "page") return PolicyPageOutcome::Page;
+    if (name == "gap") return PolicyPageOutcome::Gap;
+    if (name == "invalid") return PolicyPageOutcome::Invalid;
+    if (name == "forbidden") return PolicyPageOutcome::Forbidden;
+    if (name == "unavailable") return PolicyPageOutcome::Unavailable;
+    return std::nullopt;
+}
+
+// A member equals its wire name, so code holding the contract's word compares directly.
+inline constexpr bool operator==(PolicyPageOutcome value, std::string_view name) { return wire_name(value) == name; }
+inline constexpr bool operator!=(PolicyPageOutcome value, std::string_view name) { return wire_name(value) != name; }
+inline constexpr bool operator==(std::string_view name, PolicyPageOutcome value) { return wire_name(value) == name; }
+inline constexpr bool operator!=(std::string_view name, PolicyPageOutcome value) { return wire_name(value) != name; }
 
 inline const std::vector<std::string> kPolicyPageOutcomeNames = {"page", "gap", "invalid", "forbidden", "unavailable"};
-inline const std::string kPolicyPageOutcomeUnknown = "refuse";
+
+enum class PolicyEditOutcome : std::int32_t {
+    Applied = 1,
+    Conflict = 2,
+    Invalid = 3,
+    Forbidden = 4,
+    Unavailable = 5,
+};
+
+// The member's name on the wire; empty for a value that names no member.
+inline constexpr std::string_view wire_name(PolicyEditOutcome value) {
+    switch (value) {
+        case PolicyEditOutcome::Applied: return "applied";
+        case PolicyEditOutcome::Conflict: return "conflict";
+        case PolicyEditOutcome::Invalid: return "invalid";
+        case PolicyEditOutcome::Forbidden: return "forbidden";
+        case PolicyEditOutcome::Unavailable: return "unavailable";
+    }
+    return {};
+}
+
+// The member a wire name spells; empty for a name this vocabulary refuses.
+inline std::optional<PolicyEditOutcome> parse_policy_edit_outcome(std::string_view name) {
+    if (name == "applied") return PolicyEditOutcome::Applied;
+    if (name == "conflict") return PolicyEditOutcome::Conflict;
+    if (name == "invalid") return PolicyEditOutcome::Invalid;
+    if (name == "forbidden") return PolicyEditOutcome::Forbidden;
+    if (name == "unavailable") return PolicyEditOutcome::Unavailable;
+    return std::nullopt;
+}
+
+// A member equals its wire name, so code holding the contract's word compares directly.
+inline constexpr bool operator==(PolicyEditOutcome value, std::string_view name) { return wire_name(value) == name; }
+inline constexpr bool operator!=(PolicyEditOutcome value, std::string_view name) { return wire_name(value) != name; }
+inline constexpr bool operator==(std::string_view name, PolicyEditOutcome value) { return wire_name(value) == name; }
+inline constexpr bool operator!=(std::string_view name, PolicyEditOutcome value) { return wire_name(value) != name; }
 
 inline const std::vector<std::string> kPolicyEditOutcomeNames = {"applied", "conflict", "invalid", "forbidden", "unavailable"};
-inline const std::string kPolicyEditOutcomeUnknown = "refuse";
+
+enum class RuleReadOutcome : std::int32_t {
+    Found = 1,
+    Expired = 2,
+    Unknown = 3,
+    Invalid = 4,
+    Forbidden = 5,
+    Unavailable = 6,
+};
+
+// The member's name on the wire; empty for a value that names no member.
+inline constexpr std::string_view wire_name(RuleReadOutcome value) {
+    switch (value) {
+        case RuleReadOutcome::Found: return "found";
+        case RuleReadOutcome::Expired: return "expired";
+        case RuleReadOutcome::Unknown: return "unknown";
+        case RuleReadOutcome::Invalid: return "invalid";
+        case RuleReadOutcome::Forbidden: return "forbidden";
+        case RuleReadOutcome::Unavailable: return "unavailable";
+    }
+    return {};
+}
+
+// The member a wire name spells; empty for a name this vocabulary refuses.
+inline std::optional<RuleReadOutcome> parse_rule_read_outcome(std::string_view name) {
+    if (name == "found") return RuleReadOutcome::Found;
+    if (name == "expired") return RuleReadOutcome::Expired;
+    if (name == "unknown") return RuleReadOutcome::Unknown;
+    if (name == "invalid") return RuleReadOutcome::Invalid;
+    if (name == "forbidden") return RuleReadOutcome::Forbidden;
+    if (name == "unavailable") return RuleReadOutcome::Unavailable;
+    return std::nullopt;
+}
+
+// A member equals its wire name, so code holding the contract's word compares directly.
+inline constexpr bool operator==(RuleReadOutcome value, std::string_view name) { return wire_name(value) == name; }
+inline constexpr bool operator!=(RuleReadOutcome value, std::string_view name) { return wire_name(value) != name; }
+inline constexpr bool operator==(std::string_view name, RuleReadOutcome value) { return wire_name(value) == name; }
+inline constexpr bool operator!=(std::string_view name, RuleReadOutcome value) { return wire_name(value) != name; }
 
 inline const std::vector<std::string> kRuleReadOutcomeNames = {"found", "expired", "unknown", "invalid", "forbidden", "unavailable"};
-inline const std::string kRuleReadOutcomeUnknown = "refuse";
+
+enum class ActionEditOutcome : std::int32_t {
+    Applied = 1,
+    Conflict = 2,
+    Unknown = 3,
+    Invalid = 4,
+    Exhausted = 5,
+    Forbidden = 6,
+    Unavailable = 7,
+};
+
+// The member's name on the wire; empty for a value that names no member.
+inline constexpr std::string_view wire_name(ActionEditOutcome value) {
+    switch (value) {
+        case ActionEditOutcome::Applied: return "applied";
+        case ActionEditOutcome::Conflict: return "conflict";
+        case ActionEditOutcome::Unknown: return "unknown";
+        case ActionEditOutcome::Invalid: return "invalid";
+        case ActionEditOutcome::Exhausted: return "exhausted";
+        case ActionEditOutcome::Forbidden: return "forbidden";
+        case ActionEditOutcome::Unavailable: return "unavailable";
+    }
+    return {};
+}
+
+// The member a wire name spells; empty for a name this vocabulary refuses.
+inline std::optional<ActionEditOutcome> parse_action_edit_outcome(std::string_view name) {
+    if (name == "applied") return ActionEditOutcome::Applied;
+    if (name == "conflict") return ActionEditOutcome::Conflict;
+    if (name == "unknown") return ActionEditOutcome::Unknown;
+    if (name == "invalid") return ActionEditOutcome::Invalid;
+    if (name == "exhausted") return ActionEditOutcome::Exhausted;
+    if (name == "forbidden") return ActionEditOutcome::Forbidden;
+    if (name == "unavailable") return ActionEditOutcome::Unavailable;
+    return std::nullopt;
+}
+
+// A member equals its wire name, so code holding the contract's word compares directly.
+inline constexpr bool operator==(ActionEditOutcome value, std::string_view name) { return wire_name(value) == name; }
+inline constexpr bool operator!=(ActionEditOutcome value, std::string_view name) { return wire_name(value) != name; }
+inline constexpr bool operator==(std::string_view name, ActionEditOutcome value) { return wire_name(value) == name; }
+inline constexpr bool operator!=(std::string_view name, ActionEditOutcome value) { return wire_name(value) != name; }
 
 inline const std::vector<std::string> kActionEditOutcomeNames = {"applied", "conflict", "unknown", "invalid", "exhausted", "forbidden", "unavailable"};
-inline const std::string kActionEditOutcomeUnknown = "refuse";
+
+inline const std::vector<std::string> kServiceErrorCodeNames = {"handler_error", "invalid_result", "unknown_version", "unknown_service", "unknown_method", "wrong_mode"};
+inline constexpr std::string_view kServiceErrorCodeHandlerError = "handler_error";
+inline constexpr std::string_view kServiceErrorCodeInvalidResult = "invalid_result";
+inline constexpr std::string_view kServiceErrorCodeUnknownVersion = "unknown_version";
+inline constexpr std::string_view kServiceErrorCodeUnknownService = "unknown_service";
+inline constexpr std::string_view kServiceErrorCodeUnknownMethod = "unknown_method";
+inline constexpr std::string_view kServiceErrorCodeWrongMode = "wrong_mode";
 
 inline const std::vector<std::string> kOperations = {"register", "ask", "hold", "check", "apps", "grant", "revoke", "forget", "holds"};
 
@@ -248,7 +314,7 @@ struct Subject {
 // revision observed with that decision. Errors carry none. No lease, token,
 // cached permission lifetime or human consent is conveyed.
 struct Decision {
-    std::string outcome;
+    DecisionOutcome outcome{};
     std::string policy_revision;
 };
 
@@ -277,7 +343,7 @@ struct PolicyRule {
 // from empty cursor. No immutable multipage snapshot or historical change
 // replay is promised.
 struct PolicyPage {
-    std::string outcome;
+    PolicyPageOutcome outcome{};
     std::string revision;
     std::vector<std::string> catalog;
     std::vector<PolicyRule> rules;
@@ -295,7 +361,7 @@ struct PolicyPage {
 // state or fresh history before choosing another edit. This is optimistic
 // concurrency, not an exactly-once mutation journal.
 struct PolicyEdit {
-    std::string outcome;
+    PolicyEditOutcome outcome{};
     std::string revision;
     std::optional<PolicyRule> current;
 };
@@ -320,7 +386,7 @@ struct RuleRecord {
 // write removes it. unknown carries the revision and no record. invalid,
 // forbidden and unavailable carry neither.
 struct RuleRead {
-    std::string outcome;
+    RuleReadOutcome outcome{};
     std::string revision;
     std::optional<RuleRecord> record;
 };
@@ -344,10 +410,147 @@ struct CatalogEntry {
 // unavailable carry no revision or entry. A stale expected revision always
 // conflicts.
 struct ActionEdit {
-    std::string outcome;
+    ActionEditOutcome outcome{};
     std::string revision;
     std::optional<CatalogEntry> current;
 };
+
+// Codec machinery. Nothing here is API; it may change in any release.
+namespace detail {
+
+inline void esc(std::string& out, const std::string& s);
+
+inline void esc_byte(std::string& out, unsigned char c) {
+    static const char* kHex = "0123456789abcdef";
+    switch (c) {
+        case '"': out += "\\\""; return;
+        case '\\': out += "\\\\"; return;
+        case 0x08: out += "\\b"; return;
+        case 0x0c: out += "\\f"; return;
+        case '\n': out += "\\n"; return;
+        case '\r': out += "\\r"; return;
+        case '\t': out += "\\t"; return;
+        default: break;
+    }
+    if (c < 0x20) {
+        out += "\\u00";
+        out += kHex[c >> 4];
+        out += kHex[c & 0x0F];
+    } else {
+        out += static_cast<char>(c);
+    }
+}
+
+inline void num(std::string& out, std::int64_t n) { out += std::to_string(n); }
+
+inline void pad(std::string& out, int depth) {
+    out.append(static_cast<std::size_t>(depth) * 2, ' ');
+}
+
+inline void strs(std::string& out, const std::vector<std::string>& v, int depth) {
+    if (v.empty()) { out += "[]"; return; }
+    out += "[\n";
+    for (std::size_t i = 0; i < v.size(); ++i) {
+        pad(out, depth + 1);
+        esc(out, v[i]);
+        if (i + 1 < v.size()) out += ',';
+        out += '\n';
+    }
+    pad(out, depth);
+    out += ']';
+}
+
+
+
+inline bool ws(unsigned char c) { return c == ' ' || c == '\t' || c == '\n' || c == '\r'; }
+
+inline void raw(std::string& out, const std::string& s, int depth) {
+    const std::size_t n = s.size();
+    for (std::size_t i = 0; i < n;) {
+        const unsigned char c = static_cast<unsigned char>(s[i]);
+        if (ws(c)) {
+            ++i;
+        } else if (c == '"') {
+            std::size_t j = i + 1;
+            while (j < n) {
+                if (s[j] == '\\') { j += 2; continue; }
+                if (s[j] == '"') { ++j; break; }
+                ++j;
+            }
+            out.append(s, i, j - i);
+            i = j;
+        } else if (c == '{' || c == '[') {
+            out += static_cast<char>(c);
+            ++i;
+            std::size_t j = i;
+            while (j < n && ws(static_cast<unsigned char>(s[j]))) ++j;
+            if (j < n && (s[j] == '}' || s[j] == ']')) {
+                out += s[j];
+                i = j + 1;
+            } else {
+                ++depth;
+                out += '\n';
+                pad(out, depth);
+            }
+        } else if (c == '}' || c == ']') {
+            --depth;
+            out += '\n';
+            pad(out, depth);
+            out += static_cast<char>(c);
+            ++i;
+        } else if (c == ',') {
+            out += ",\n";
+            pad(out, depth);
+            ++i;
+        } else if (c == ':') {
+            out += ": ";
+            ++i;
+        } else {
+            out += static_cast<char>(c);
+            ++i;
+        }
+    }
+}
+
+// std::char_traits<char>::compare is specified to order by unsigned char, so a
+// std::map<std::string, ...> already walks its keys in UTF-8 byte order — which
+// is what the definition declares. Nothing sorts here because nothing needs to.
+inline void rawmap(std::string& out, const std::map<std::string, Raw>& m, int depth) {
+    if (m.empty()) { out += "{}"; return; }
+    out += "{\n";
+    std::size_t i = 0;
+    for (const auto& kv : m) {
+        pad(out, depth + 1);
+        esc(out, kv.first);
+        out += ": ";
+        raw(out, kv.second, depth + 1);
+        if (++i < m.size()) out += ',';
+        out += '\n';
+    }
+    pad(out, depth);
+    out += '}';
+}
+
+inline void esc(std::string& out, const std::string& s) {
+    out += '"';
+    for (unsigned char c : s) esc_byte(out, c);
+    out += '"';
+}
+
+template <typename T>
+inline void enc_list(std::string& out, const std::vector<T>& v, int depth,
+                     void (*enc)(std::string&, const T&, int)) {
+    if (v.empty()) { out += "[]"; return; }
+    out += "[\n";
+    for (std::size_t i = 0; i < v.size(); ++i) {
+        pad(out, depth + 1);
+        enc(out, v[i], depth + 1);
+        if (i + 1 < v.size()) out += ',';
+        out += '\n';
+    }
+    pad(out, depth);
+    out += ']';
+}
 
 struct OAAuthorizationDecideArguments {
     std::string action;
@@ -455,6 +658,40 @@ struct OAAuthorizationOperatorRegisterActionResult {
 struct OAAuthorizationOperatorRetireActionResult {
     ActionEdit value;
 };
+inline void enc_request(std::string&, const Request&, int);
+inline void enc_app_metadata(std::string&, const AppMetadata&, int);
+inline void enc_hold_metadata(std::string&, const HoldMetadata&, int);
+inline void enc_response_metadata(std::string&, const ResponseMetadata&, int);
+inline void enc_subject(std::string&, const Subject&, int);
+inline void enc_decision(std::string&, const Decision&, int);
+inline void enc_policy_rule(std::string&, const PolicyRule&, int);
+inline void enc_policy_page(std::string&, const PolicyPage&, int);
+inline void enc_policy_edit(std::string&, const PolicyEdit&, int);
+inline void enc_rule_record(std::string&, const RuleRecord&, int);
+inline void enc_rule_read(std::string&, const RuleRead&, int);
+inline void enc_catalog_entry(std::string&, const CatalogEntry&, int);
+inline void enc_action_edit(std::string&, const ActionEdit&, int);
+inline void enc_oa_authorization_decide_arguments(std::string&, const OAAuthorizationDecideArguments&, int);
+inline void enc_oa_authorization_decide_for_arguments(std::string&, const OAAuthorizationDecideForArguments&, int);
+inline void enc_oa_authorization_operator_list_policy_arguments(std::string&, const OAAuthorizationOperatorListPolicyArguments&, int);
+inline void enc_oa_authorization_operator_set_rule_arguments(std::string&, const OAAuthorizationOperatorSetRuleArguments&, int);
+inline void enc_oa_authorization_operator_revoke_rule_arguments(std::string&, const OAAuthorizationOperatorRevokeRuleArguments&, int);
+inline void enc_oa_authorization_operator_set_rule_for_arguments(std::string&, const OAAuthorizationOperatorSetRuleForArguments&, int);
+inline void enc_oa_authorization_operator_read_rule_arguments(std::string&, const OAAuthorizationOperatorReadRuleArguments&, int);
+inline void enc_oa_authorization_operator_register_action_arguments(std::string&, const OAAuthorizationOperatorRegisterActionArguments&, int);
+inline void enc_oa_authorization_operator_retire_action_arguments(std::string&, const OAAuthorizationOperatorRetireActionArguments&, int);
+inline void enc_oa_service_frame(std::string&, const OAServiceFrame&, int);
+inline void enc_oa_service_reply(std::string&, const OAServiceReply&, int);
+inline void enc_oa_service_error(std::string&, const OAServiceError&, int);
+inline void enc_oa_authorization_decide_result(std::string&, const OAAuthorizationDecideResult&, int);
+inline void enc_oa_authorization_decide_for_result(std::string&, const OAAuthorizationDecideForResult&, int);
+inline void enc_oa_authorization_operator_list_policy_result(std::string&, const OAAuthorizationOperatorListPolicyResult&, int);
+inline void enc_oa_authorization_operator_set_rule_result(std::string&, const OAAuthorizationOperatorSetRuleResult&, int);
+inline void enc_oa_authorization_operator_revoke_rule_result(std::string&, const OAAuthorizationOperatorRevokeRuleResult&, int);
+inline void enc_oa_authorization_operator_set_rule_for_result(std::string&, const OAAuthorizationOperatorSetRuleForResult&, int);
+inline void enc_oa_authorization_operator_read_rule_result(std::string&, const OAAuthorizationOperatorReadRuleResult&, int);
+inline void enc_oa_authorization_operator_register_action_result(std::string&, const OAAuthorizationOperatorRegisterActionResult&, int);
+inline void enc_oa_authorization_operator_retire_action_result(std::string&, const OAAuthorizationOperatorRetireActionResult&, int);
 
 inline void enc_request(std::string& out, const Request& v, int depth) {
     out += '{';
@@ -532,7 +769,7 @@ inline void enc_request(std::string& out, const Request& v, int depth) {
     out += '}';
 }
 
-inline void enc_appmetadata(std::string& out, const AppMetadata& v, int depth) {
+inline void enc_app_metadata(std::string& out, const AppMetadata& v, int depth) {
     out += '{';
     out += '\n';
     pad(out, depth + 1);
@@ -562,7 +799,7 @@ inline void enc_appmetadata(std::string& out, const AppMetadata& v, int depth) {
     out += '}';
 }
 
-inline void enc_holdmetadata(std::string& out, const HoldMetadata& v, int depth) {
+inline void enc_hold_metadata(std::string& out, const HoldMetadata& v, int depth) {
     out += '{';
     out += '\n';
     pad(out, depth + 1);
@@ -598,7 +835,7 @@ inline void enc_holdmetadata(std::string& out, const HoldMetadata& v, int depth)
     out += '}';
 }
 
-inline void enc_responsemetadata(std::string& out, const ResponseMetadata& v, int depth) {
+inline void enc_response_metadata(std::string& out, const ResponseMetadata& v, int depth) {
     out += '{';
     bool first = true;
     if (!v.code.empty()) {
@@ -652,7 +889,7 @@ inline void enc_responsemetadata(std::string& out, const ResponseMetadata& v, in
         pad(out, depth + 1);
         esc(out, "app");
         out += ": ";
-        enc_appmetadata(out, *v.app, depth + 1);
+        enc_app_metadata(out, *v.app, depth + 1);
     }
     if (!v.right.empty()) {
         if (!first) out += ',';
@@ -670,7 +907,7 @@ inline void enc_responsemetadata(std::string& out, const ResponseMetadata& v, in
         pad(out, depth + 1);
         esc(out, "apps");
         out += ": ";
-        enc_list<AppMetadata>(out, v.apps, depth + 1, enc_appmetadata);
+        enc_list<AppMetadata>(out, v.apps, depth + 1, enc_app_metadata);
     }
     if (!v.holds.empty()) {
         if (!first) out += ',';
@@ -679,7 +916,7 @@ inline void enc_responsemetadata(std::string& out, const ResponseMetadata& v, in
         pad(out, depth + 1);
         esc(out, "holds");
         out += ": ";
-        enc_list<HoldMetadata>(out, v.holds, depth + 1, enc_holdmetadata);
+        enc_list<HoldMetadata>(out, v.holds, depth + 1, enc_hold_metadata);
     }
     if (!first) { out += '\n'; pad(out, depth); }
     out += '}';
@@ -704,13 +941,13 @@ inline void enc_subject(std::string& out, const Subject& v, int depth) {
 }
 
 inline void enc_decision(std::string& out, const Decision& v, int depth) {
-    if (v.outcome != "permitted" && v.outcome != "denied" && v.outcome != "not_granted" && v.outcome != "unknown_action" && v.outcome != "invalid" && v.outcome != "forbidden" && v.outcome != "unavailable") { throw Refusal("bad_enum",0); }
+    if (wire_name(v.outcome).empty()) throw Refusal("bad_enum", 0);
     out += '{';
     out += '\n';
     pad(out, depth + 1);
     esc(out, "outcome");
     out += ": ";
-    esc(out, v.outcome);
+    esc(out, std::string(wire_name(v.outcome)));
     if (!v.policy_revision.empty()) {
         out += ',';
         out += '\n';
@@ -724,7 +961,7 @@ inline void enc_decision(std::string& out, const Decision& v, int depth) {
     out += '}';
 }
 
-inline void enc_policyrule(std::string& out, const PolicyRule& v, int depth) {
+inline void enc_policy_rule(std::string& out, const PolicyRule& v, int depth) {
     out += '{';
     out += '\n';
     pad(out, depth + 1);
@@ -754,14 +991,14 @@ inline void enc_policyrule(std::string& out, const PolicyRule& v, int depth) {
     out += '}';
 }
 
-inline void enc_policypage(std::string& out, const PolicyPage& v, int depth) {
-    if (v.outcome != "page" && v.outcome != "gap" && v.outcome != "invalid" && v.outcome != "forbidden" && v.outcome != "unavailable") { throw Refusal("bad_enum",0); }
+inline void enc_policy_page(std::string& out, const PolicyPage& v, int depth) {
+    if (wire_name(v.outcome).empty()) throw Refusal("bad_enum", 0);
     out += '{';
     out += '\n';
     pad(out, depth + 1);
     esc(out, "outcome");
     out += ": ";
-    esc(out, v.outcome);
+    esc(out, std::string(wire_name(v.outcome)));
     out += ',';
     out += '\n';
     pad(out, depth + 1);
@@ -779,7 +1016,7 @@ inline void enc_policypage(std::string& out, const PolicyPage& v, int depth) {
     pad(out, depth + 1);
     esc(out, "rules");
     out += ": ";
-    enc_list<PolicyRule>(out, v.rules, depth + 1, enc_policyrule);
+    enc_list<PolicyRule>(out, v.rules, depth + 1, enc_policy_rule);
     out += ',';
     out += '\n';
     pad(out, depth + 1);
@@ -797,14 +1034,14 @@ inline void enc_policypage(std::string& out, const PolicyPage& v, int depth) {
     out += '}';
 }
 
-inline void enc_policyedit(std::string& out, const PolicyEdit& v, int depth) {
-    if (v.outcome != "applied" && v.outcome != "conflict" && v.outcome != "invalid" && v.outcome != "forbidden" && v.outcome != "unavailable") { throw Refusal("bad_enum",0); }
+inline void enc_policy_edit(std::string& out, const PolicyEdit& v, int depth) {
+    if (wire_name(v.outcome).empty()) throw Refusal("bad_enum", 0);
     out += '{';
     out += '\n';
     pad(out, depth + 1);
     esc(out, "outcome");
     out += ": ";
-    esc(out, v.outcome);
+    esc(out, std::string(wire_name(v.outcome)));
     out += ',';
     out += '\n';
     pad(out, depth + 1);
@@ -817,20 +1054,20 @@ inline void enc_policyedit(std::string& out, const PolicyEdit& v, int depth) {
         pad(out, depth + 1);
         esc(out, "current");
         out += ": ";
-        enc_policyrule(out, *v.current, depth + 1);
+        enc_policy_rule(out, *v.current, depth + 1);
     }
     out += '\n';
     pad(out, depth);
     out += '}';
 }
 
-inline void enc_rulerecord(std::string& out, const RuleRecord& v, int depth) {
+inline void enc_rule_record(std::string& out, const RuleRecord& v, int depth) {
     out += '{';
     out += '\n';
     pad(out, depth + 1);
     esc(out, "rule");
     out += ": ";
-    enc_policyrule(out, v.rule, depth + 1);
+    enc_policy_rule(out, v.rule, depth + 1);
     out += ',';
     out += '\n';
     pad(out, depth + 1);
@@ -860,14 +1097,14 @@ inline void enc_rulerecord(std::string& out, const RuleRecord& v, int depth) {
     out += '}';
 }
 
-inline void enc_ruleread(std::string& out, const RuleRead& v, int depth) {
-    if (v.outcome != "found" && v.outcome != "expired" && v.outcome != "unknown" && v.outcome != "invalid" && v.outcome != "forbidden" && v.outcome != "unavailable") { throw Refusal("bad_enum",0); }
+inline void enc_rule_read(std::string& out, const RuleRead& v, int depth) {
+    if (wire_name(v.outcome).empty()) throw Refusal("bad_enum", 0);
     out += '{';
     out += '\n';
     pad(out, depth + 1);
     esc(out, "outcome");
     out += ": ";
-    esc(out, v.outcome);
+    esc(out, std::string(wire_name(v.outcome)));
     out += ',';
     out += '\n';
     pad(out, depth + 1);
@@ -880,14 +1117,14 @@ inline void enc_ruleread(std::string& out, const RuleRead& v, int depth) {
         pad(out, depth + 1);
         esc(out, "record");
         out += ": ";
-        enc_rulerecord(out, *v.record, depth + 1);
+        enc_rule_record(out, *v.record, depth + 1);
     }
     out += '\n';
     pad(out, depth);
     out += '}';
 }
 
-inline void enc_catalogentry(std::string& out, const CatalogEntry& v, int depth) {
+inline void enc_catalog_entry(std::string& out, const CatalogEntry& v, int depth) {
     out += '{';
     out += '\n';
     pad(out, depth + 1);
@@ -911,14 +1148,14 @@ inline void enc_catalogentry(std::string& out, const CatalogEntry& v, int depth)
     out += '}';
 }
 
-inline void enc_actionedit(std::string& out, const ActionEdit& v, int depth) {
-    if (v.outcome != "applied" && v.outcome != "conflict" && v.outcome != "unknown" && v.outcome != "invalid" && v.outcome != "exhausted" && v.outcome != "forbidden" && v.outcome != "unavailable") { throw Refusal("bad_enum",0); }
+inline void enc_action_edit(std::string& out, const ActionEdit& v, int depth) {
+    if (wire_name(v.outcome).empty()) throw Refusal("bad_enum", 0);
     out += '{';
     out += '\n';
     pad(out, depth + 1);
     esc(out, "outcome");
     out += ": ";
-    esc(out, v.outcome);
+    esc(out, std::string(wire_name(v.outcome)));
     out += ',';
     out += '\n';
     pad(out, depth + 1);
@@ -931,14 +1168,14 @@ inline void enc_actionedit(std::string& out, const ActionEdit& v, int depth) {
         pad(out, depth + 1);
         esc(out, "current");
         out += ": ";
-        enc_catalogentry(out, *v.current, depth + 1);
+        enc_catalog_entry(out, *v.current, depth + 1);
     }
     out += '\n';
     pad(out, depth);
     out += '}';
 }
 
-inline void enc_oaauthorizationdecidearguments(std::string& out, const OAAuthorizationDecideArguments& v, int depth) {
+inline void enc_oa_authorization_decide_arguments(std::string& out, const OAAuthorizationDecideArguments& v, int depth) {
     out += '{';
     out += '\n';
     pad(out, depth + 1);
@@ -956,7 +1193,7 @@ inline void enc_oaauthorizationdecidearguments(std::string& out, const OAAuthori
     out += '}';
 }
 
-inline void enc_oaauthorizationdecideforarguments(std::string& out, const OAAuthorizationDecideForArguments& v, int depth) {
+inline void enc_oa_authorization_decide_for_arguments(std::string& out, const OAAuthorizationDecideForArguments& v, int depth) {
     out += '{';
     out += '\n';
     pad(out, depth + 1);
@@ -980,7 +1217,7 @@ inline void enc_oaauthorizationdecideforarguments(std::string& out, const OAAuth
     out += '}';
 }
 
-inline void enc_oaauthorizationoperatorlistpolicyarguments(std::string& out, const OAAuthorizationOperatorListPolicyArguments& v, int depth) {
+inline void enc_oa_authorization_operator_list_policy_arguments(std::string& out, const OAAuthorizationOperatorListPolicyArguments& v, int depth) {
     out += '{';
     out += '\n';
     pad(out, depth + 1);
@@ -998,7 +1235,7 @@ inline void enc_oaauthorizationoperatorlistpolicyarguments(std::string& out, con
     out += '}';
 }
 
-inline void enc_oaauthorizationoperatorsetrulearguments(std::string& out, const OAAuthorizationOperatorSetRuleArguments& v, int depth) {
+inline void enc_oa_authorization_operator_set_rule_arguments(std::string& out, const OAAuthorizationOperatorSetRuleArguments& v, int depth) {
     out += '{';
     out += '\n';
     pad(out, depth + 1);
@@ -1010,13 +1247,13 @@ inline void enc_oaauthorizationoperatorsetrulearguments(std::string& out, const 
     pad(out, depth + 1);
     esc(out, "rule");
     out += ": ";
-    enc_policyrule(out, v.rule, depth + 1);
+    enc_policy_rule(out, v.rule, depth + 1);
     out += '\n';
     pad(out, depth);
     out += '}';
 }
 
-inline void enc_oaauthorizationoperatorrevokerulearguments(std::string& out, const OAAuthorizationOperatorRevokeRuleArguments& v, int depth) {
+inline void enc_oa_authorization_operator_revoke_rule_arguments(std::string& out, const OAAuthorizationOperatorRevokeRuleArguments& v, int depth) {
     out += '{';
     out += '\n';
     pad(out, depth + 1);
@@ -1046,7 +1283,7 @@ inline void enc_oaauthorizationoperatorrevokerulearguments(std::string& out, con
     out += '}';
 }
 
-inline void enc_oaauthorizationoperatorsetruleforarguments(std::string& out, const OAAuthorizationOperatorSetRuleForArguments& v, int depth) {
+inline void enc_oa_authorization_operator_set_rule_for_arguments(std::string& out, const OAAuthorizationOperatorSetRuleForArguments& v, int depth) {
     out += '{';
     out += '\n';
     pad(out, depth + 1);
@@ -1058,7 +1295,7 @@ inline void enc_oaauthorizationoperatorsetruleforarguments(std::string& out, con
     pad(out, depth + 1);
     esc(out, "rule");
     out += ": ";
-    enc_policyrule(out, v.rule, depth + 1);
+    enc_policy_rule(out, v.rule, depth + 1);
     out += ',';
     out += '\n';
     pad(out, depth + 1);
@@ -1076,7 +1313,7 @@ inline void enc_oaauthorizationoperatorsetruleforarguments(std::string& out, con
     out += '}';
 }
 
-inline void enc_oaauthorizationoperatorreadrulearguments(std::string& out, const OAAuthorizationOperatorReadRuleArguments& v, int depth) {
+inline void enc_oa_authorization_operator_read_rule_arguments(std::string& out, const OAAuthorizationOperatorReadRuleArguments& v, int depth) {
     out += '{';
     out += '\n';
     pad(out, depth + 1);
@@ -1100,7 +1337,7 @@ inline void enc_oaauthorizationoperatorreadrulearguments(std::string& out, const
     out += '}';
 }
 
-inline void enc_oaauthorizationoperatorregisteractionarguments(std::string& out, const OAAuthorizationOperatorRegisterActionArguments& v, int depth) {
+inline void enc_oa_authorization_operator_register_action_arguments(std::string& out, const OAAuthorizationOperatorRegisterActionArguments& v, int depth) {
     out += '{';
     out += '\n';
     pad(out, depth + 1);
@@ -1118,7 +1355,7 @@ inline void enc_oaauthorizationoperatorregisteractionarguments(std::string& out,
     out += '}';
 }
 
-inline void enc_oaauthorizationoperatorretireactionarguments(std::string& out, const OAAuthorizationOperatorRetireActionArguments& v, int depth) {
+inline void enc_oa_authorization_operator_retire_action_arguments(std::string& out, const OAAuthorizationOperatorRetireActionArguments& v, int depth) {
     out += '{';
     out += '\n';
     pad(out, depth + 1);
@@ -1136,7 +1373,7 @@ inline void enc_oaauthorizationoperatorretireactionarguments(std::string& out, c
     out += '}';
 }
 
-inline void enc_oaserviceframe(std::string& out, const OAServiceFrame& v, int depth) {
+inline void enc_oa_service_frame(std::string& out, const OAServiceFrame& v, int depth) {
     out += '{';
     out += '\n';
     pad(out, depth + 1);
@@ -1166,7 +1403,7 @@ inline void enc_oaserviceframe(std::string& out, const OAServiceFrame& v, int de
     out += '}';
 }
 
-inline void enc_oaservicereply(std::string& out, const OAServiceReply& v, int depth) {
+inline void enc_oa_service_reply(std::string& out, const OAServiceReply& v, int depth) {
     out += '{';
     out += '\n';
     pad(out, depth + 1);
@@ -1202,7 +1439,7 @@ inline void enc_oaservicereply(std::string& out, const OAServiceReply& v, int de
     out += '}';
 }
 
-inline void enc_oaserviceerror(std::string& out, const OAServiceError& v, int depth) {
+inline void enc_oa_service_error(std::string& out, const OAServiceError& v, int depth) {
     out += '{';
     out += '\n';
     pad(out, depth + 1);
@@ -1220,7 +1457,7 @@ inline void enc_oaserviceerror(std::string& out, const OAServiceError& v, int de
     out += '}';
 }
 
-inline void enc_oaauthorizationdecideresult(std::string& out, const OAAuthorizationDecideResult& v, int depth) {
+inline void enc_oa_authorization_decide_result(std::string& out, const OAAuthorizationDecideResult& v, int depth) {
     out += '{';
     out += '\n';
     pad(out, depth + 1);
@@ -1232,7 +1469,7 @@ inline void enc_oaauthorizationdecideresult(std::string& out, const OAAuthorizat
     out += '}';
 }
 
-inline void enc_oaauthorizationdecideforresult(std::string& out, const OAAuthorizationDecideForResult& v, int depth) {
+inline void enc_oa_authorization_decide_for_result(std::string& out, const OAAuthorizationDecideForResult& v, int depth) {
     out += '{';
     out += '\n';
     pad(out, depth + 1);
@@ -1244,101 +1481,92 @@ inline void enc_oaauthorizationdecideforresult(std::string& out, const OAAuthori
     out += '}';
 }
 
-inline void enc_oaauthorizationoperatorlistpolicyresult(std::string& out, const OAAuthorizationOperatorListPolicyResult& v, int depth) {
+inline void enc_oa_authorization_operator_list_policy_result(std::string& out, const OAAuthorizationOperatorListPolicyResult& v, int depth) {
     out += '{';
     out += '\n';
     pad(out, depth + 1);
     esc(out, "value");
     out += ": ";
-    enc_policypage(out, v.value, depth + 1);
+    enc_policy_page(out, v.value, depth + 1);
     out += '\n';
     pad(out, depth);
     out += '}';
 }
 
-inline void enc_oaauthorizationoperatorsetruleresult(std::string& out, const OAAuthorizationOperatorSetRuleResult& v, int depth) {
+inline void enc_oa_authorization_operator_set_rule_result(std::string& out, const OAAuthorizationOperatorSetRuleResult& v, int depth) {
     out += '{';
     out += '\n';
     pad(out, depth + 1);
     esc(out, "value");
     out += ": ";
-    enc_policyedit(out, v.value, depth + 1);
+    enc_policy_edit(out, v.value, depth + 1);
     out += '\n';
     pad(out, depth);
     out += '}';
 }
 
-inline void enc_oaauthorizationoperatorrevokeruleresult(std::string& out, const OAAuthorizationOperatorRevokeRuleResult& v, int depth) {
+inline void enc_oa_authorization_operator_revoke_rule_result(std::string& out, const OAAuthorizationOperatorRevokeRuleResult& v, int depth) {
     out += '{';
     out += '\n';
     pad(out, depth + 1);
     esc(out, "value");
     out += ": ";
-    enc_policyedit(out, v.value, depth + 1);
+    enc_policy_edit(out, v.value, depth + 1);
     out += '\n';
     pad(out, depth);
     out += '}';
 }
 
-inline void enc_oaauthorizationoperatorsetruleforresult(std::string& out, const OAAuthorizationOperatorSetRuleForResult& v, int depth) {
+inline void enc_oa_authorization_operator_set_rule_for_result(std::string& out, const OAAuthorizationOperatorSetRuleForResult& v, int depth) {
     out += '{';
     out += '\n';
     pad(out, depth + 1);
     esc(out, "value");
     out += ": ";
-    enc_policyedit(out, v.value, depth + 1);
+    enc_policy_edit(out, v.value, depth + 1);
     out += '\n';
     pad(out, depth);
     out += '}';
 }
 
-inline void enc_oaauthorizationoperatorreadruleresult(std::string& out, const OAAuthorizationOperatorReadRuleResult& v, int depth) {
+inline void enc_oa_authorization_operator_read_rule_result(std::string& out, const OAAuthorizationOperatorReadRuleResult& v, int depth) {
     out += '{';
     out += '\n';
     pad(out, depth + 1);
     esc(out, "value");
     out += ": ";
-    enc_ruleread(out, v.value, depth + 1);
+    enc_rule_read(out, v.value, depth + 1);
     out += '\n';
     pad(out, depth);
     out += '}';
 }
 
-inline void enc_oaauthorizationoperatorregisteractionresult(std::string& out, const OAAuthorizationOperatorRegisterActionResult& v, int depth) {
+inline void enc_oa_authorization_operator_register_action_result(std::string& out, const OAAuthorizationOperatorRegisterActionResult& v, int depth) {
     out += '{';
     out += '\n';
     pad(out, depth + 1);
     esc(out, "value");
     out += ": ";
-    enc_actionedit(out, v.value, depth + 1);
+    enc_action_edit(out, v.value, depth + 1);
     out += '\n';
     pad(out, depth);
     out += '}';
 }
 
-inline void enc_oaauthorizationoperatorretireactionresult(std::string& out, const OAAuthorizationOperatorRetireActionResult& v, int depth) {
+inline void enc_oa_authorization_operator_retire_action_result(std::string& out, const OAAuthorizationOperatorRetireActionResult& v, int depth) {
     out += '{';
     out += '\n';
     pad(out, depth + 1);
     esc(out, "value");
     out += ": ";
-    enc_actionedit(out, v.value, depth + 1);
+    enc_action_edit(out, v.value, depth + 1);
     out += '\n';
     pad(out, depth);
     out += '}';
-}
-
-inline std::string encode(const Request& v) {
-    std::string out;
-    enc_request(out, v, 0);
-    out += '\n';
-    return out;
 }
 
 inline constexpr int kDepthLimit = 64;
 inline constexpr std::size_t kI64Digits = 19;
-
-
 
 inline void append_rune(std::string& out, std::uint32_t cp) {
     if (cp < 0x80) {
@@ -1655,39 +1883,39 @@ inline std::vector<T> decode_list(Reader& r, T (*elem)(Reader&)) {
 }
 
 inline Request decode_request(Reader& r);
-inline AppMetadata decode_appmetadata(Reader& r);
-inline HoldMetadata decode_holdmetadata(Reader& r);
-inline ResponseMetadata decode_responsemetadata(Reader& r);
+inline AppMetadata decode_app_metadata(Reader& r);
+inline HoldMetadata decode_hold_metadata(Reader& r);
+inline ResponseMetadata decode_response_metadata(Reader& r);
 inline Subject decode_subject(Reader& r);
 inline Decision decode_decision(Reader& r);
-inline PolicyRule decode_policyrule(Reader& r);
-inline PolicyPage decode_policypage(Reader& r);
-inline PolicyEdit decode_policyedit(Reader& r);
-inline RuleRecord decode_rulerecord(Reader& r);
-inline RuleRead decode_ruleread(Reader& r);
-inline CatalogEntry decode_catalogentry(Reader& r);
-inline ActionEdit decode_actionedit(Reader& r);
-inline OAAuthorizationDecideArguments decode_oaauthorizationdecidearguments(Reader& r);
-inline OAAuthorizationDecideForArguments decode_oaauthorizationdecideforarguments(Reader& r);
-inline OAAuthorizationOperatorListPolicyArguments decode_oaauthorizationoperatorlistpolicyarguments(Reader& r);
-inline OAAuthorizationOperatorSetRuleArguments decode_oaauthorizationoperatorsetrulearguments(Reader& r);
-inline OAAuthorizationOperatorRevokeRuleArguments decode_oaauthorizationoperatorrevokerulearguments(Reader& r);
-inline OAAuthorizationOperatorSetRuleForArguments decode_oaauthorizationoperatorsetruleforarguments(Reader& r);
-inline OAAuthorizationOperatorReadRuleArguments decode_oaauthorizationoperatorreadrulearguments(Reader& r);
-inline OAAuthorizationOperatorRegisterActionArguments decode_oaauthorizationoperatorregisteractionarguments(Reader& r);
-inline OAAuthorizationOperatorRetireActionArguments decode_oaauthorizationoperatorretireactionarguments(Reader& r);
-inline OAServiceFrame decode_oaserviceframe(Reader& r);
-inline OAServiceReply decode_oaservicereply(Reader& r);
-inline OAServiceError decode_oaserviceerror(Reader& r);
-inline OAAuthorizationDecideResult decode_oaauthorizationdecideresult(Reader& r);
-inline OAAuthorizationDecideForResult decode_oaauthorizationdecideforresult(Reader& r);
-inline OAAuthorizationOperatorListPolicyResult decode_oaauthorizationoperatorlistpolicyresult(Reader& r);
-inline OAAuthorizationOperatorSetRuleResult decode_oaauthorizationoperatorsetruleresult(Reader& r);
-inline OAAuthorizationOperatorRevokeRuleResult decode_oaauthorizationoperatorrevokeruleresult(Reader& r);
-inline OAAuthorizationOperatorSetRuleForResult decode_oaauthorizationoperatorsetruleforresult(Reader& r);
-inline OAAuthorizationOperatorReadRuleResult decode_oaauthorizationoperatorreadruleresult(Reader& r);
-inline OAAuthorizationOperatorRegisterActionResult decode_oaauthorizationoperatorregisteractionresult(Reader& r);
-inline OAAuthorizationOperatorRetireActionResult decode_oaauthorizationoperatorretireactionresult(Reader& r);
+inline PolicyRule decode_policy_rule(Reader& r);
+inline PolicyPage decode_policy_page(Reader& r);
+inline PolicyEdit decode_policy_edit(Reader& r);
+inline RuleRecord decode_rule_record(Reader& r);
+inline RuleRead decode_rule_read(Reader& r);
+inline CatalogEntry decode_catalog_entry(Reader& r);
+inline ActionEdit decode_action_edit(Reader& r);
+inline OAAuthorizationDecideArguments decode_oa_authorization_decide_arguments(Reader& r);
+inline OAAuthorizationDecideForArguments decode_oa_authorization_decide_for_arguments(Reader& r);
+inline OAAuthorizationOperatorListPolicyArguments decode_oa_authorization_operator_list_policy_arguments(Reader& r);
+inline OAAuthorizationOperatorSetRuleArguments decode_oa_authorization_operator_set_rule_arguments(Reader& r);
+inline OAAuthorizationOperatorRevokeRuleArguments decode_oa_authorization_operator_revoke_rule_arguments(Reader& r);
+inline OAAuthorizationOperatorSetRuleForArguments decode_oa_authorization_operator_set_rule_for_arguments(Reader& r);
+inline OAAuthorizationOperatorReadRuleArguments decode_oa_authorization_operator_read_rule_arguments(Reader& r);
+inline OAAuthorizationOperatorRegisterActionArguments decode_oa_authorization_operator_register_action_arguments(Reader& r);
+inline OAAuthorizationOperatorRetireActionArguments decode_oa_authorization_operator_retire_action_arguments(Reader& r);
+inline OAServiceFrame decode_oa_service_frame(Reader& r);
+inline OAServiceReply decode_oa_service_reply(Reader& r);
+inline OAServiceError decode_oa_service_error(Reader& r);
+inline OAAuthorizationDecideResult decode_oa_authorization_decide_result(Reader& r);
+inline OAAuthorizationDecideForResult decode_oa_authorization_decide_for_result(Reader& r);
+inline OAAuthorizationOperatorListPolicyResult decode_oa_authorization_operator_list_policy_result(Reader& r);
+inline OAAuthorizationOperatorSetRuleResult decode_oa_authorization_operator_set_rule_result(Reader& r);
+inline OAAuthorizationOperatorRevokeRuleResult decode_oa_authorization_operator_revoke_rule_result(Reader& r);
+inline OAAuthorizationOperatorSetRuleForResult decode_oa_authorization_operator_set_rule_for_result(Reader& r);
+inline OAAuthorizationOperatorReadRuleResult decode_oa_authorization_operator_read_rule_result(Reader& r);
+inline OAAuthorizationOperatorRegisterActionResult decode_oa_authorization_operator_register_action_result(Reader& r);
+inline OAAuthorizationOperatorRetireActionResult decode_oa_authorization_operator_retire_action_result(Reader& r);
 
 inline Request decode_request(Reader& r) {
     if (r.at() != '{') r.refuse("wrong_type");
@@ -1756,7 +1984,7 @@ inline Request decode_request(Reader& r) {
     return v;
 }
 
-inline AppMetadata decode_appmetadata(Reader& r) {
+inline AppMetadata decode_app_metadata(Reader& r) {
     if (r.at() != '{') r.refuse("wrong_type");
     r.enter();
     ++r.pos;
@@ -1803,7 +2031,7 @@ inline AppMetadata decode_appmetadata(Reader& r) {
     return v;
 }
 
-inline HoldMetadata decode_holdmetadata(Reader& r) {
+inline HoldMetadata decode_hold_metadata(Reader& r) {
     if (r.at() != '{') r.refuse("wrong_type");
     r.enter();
     ++r.pos;
@@ -1854,7 +2082,7 @@ inline HoldMetadata decode_holdmetadata(Reader& r) {
     return v;
 }
 
-inline ResponseMetadata decode_responsemetadata(Reader& r) {
+inline ResponseMetadata decode_response_metadata(Reader& r) {
     if (r.at() != '{') r.refuse("wrong_type");
     r.enter();
     ++r.pos;
@@ -1893,7 +2121,7 @@ inline ResponseMetadata decode_responsemetadata(Reader& r) {
             } else if (key == "app") {
                 if (seen & 32u) r.refuse("duplicate_field");
                 seen |= 32u;
-                v.app = decode_appmetadata(r);
+                v.app = decode_app_metadata(r);
             } else if (key == "right") {
                 if (seen & 64u) r.refuse("duplicate_field");
                 seen |= 64u;
@@ -1901,11 +2129,11 @@ inline ResponseMetadata decode_responsemetadata(Reader& r) {
             } else if (key == "apps") {
                 if (seen & 128u) r.refuse("duplicate_field");
                 seen |= 128u;
-                v.apps = decode_list<AppMetadata>(r, decode_appmetadata);
+                v.apps = decode_list<AppMetadata>(r, decode_app_metadata);
             } else if (key == "holds") {
                 if (seen & 256u) r.refuse("duplicate_field");
                 seen |= 256u;
-                v.holds = decode_list<HoldMetadata>(r, decode_holdmetadata);
+                v.holds = decode_list<HoldMetadata>(r, decode_hold_metadata);
             } else {
                 r.refuse("unknown_field");
             }
@@ -1964,6 +2192,7 @@ inline Decision decode_decision(Reader& r) {
     r.enter();
     ++r.pos;
     Decision v;
+    std::optional<std::string> wire_outcome;
     std::uint32_t seen = 0;
     r.skip_ws();
     if (r.at() != '}') {
@@ -1978,7 +2207,7 @@ inline Decision decode_decision(Reader& r) {
             if (key == "outcome") {
                 if (seen & 1u) r.refuse("duplicate_field");
                 seen |= 1u;
-                v.outcome = r.str();
+                wire_outcome = r.str();
             } else if (key == "policy_revision") {
                 if (seen & 2u) r.refuse("duplicate_field");
                 seen |= 2u;
@@ -1995,11 +2224,15 @@ inline Decision decode_decision(Reader& r) {
     ++r.pos;
     --r.depth;
     if ((seen & 1u) != 1u) r.refuse("missing_field");
-    if (v.outcome != "permitted" && v.outcome != "denied" && v.outcome != "not_granted" && v.outcome != "unknown_action" && v.outcome != "invalid" && v.outcome != "forbidden" && v.outcome != "unavailable") { r.refuse("bad_enum"); }
+    if (wire_outcome) {
+        const auto parsed = parse_decision_outcome(*wire_outcome);
+        if (!parsed) r.refuse("bad_enum");
+        v.outcome = *parsed;
+    }
     return v;
 }
 
-inline PolicyRule decode_policyrule(Reader& r) {
+inline PolicyRule decode_policy_rule(Reader& r) {
     if (r.at() != '{') r.refuse("wrong_type");
     r.enter();
     ++r.pos;
@@ -2046,11 +2279,12 @@ inline PolicyRule decode_policyrule(Reader& r) {
     return v;
 }
 
-inline PolicyPage decode_policypage(Reader& r) {
+inline PolicyPage decode_policy_page(Reader& r) {
     if (r.at() != '{') r.refuse("wrong_type");
     r.enter();
     ++r.pos;
     PolicyPage v;
+    std::optional<std::string> wire_outcome;
     std::uint32_t seen = 0;
     r.skip_ws();
     if (r.at() != '}') {
@@ -2065,7 +2299,7 @@ inline PolicyPage decode_policypage(Reader& r) {
             if (key == "outcome") {
                 if (seen & 1u) r.refuse("duplicate_field");
                 seen |= 1u;
-                v.outcome = r.str();
+                wire_outcome = r.str();
             } else if (key == "revision") {
                 if (seen & 2u) r.refuse("duplicate_field");
                 seen |= 2u;
@@ -2077,7 +2311,7 @@ inline PolicyPage decode_policypage(Reader& r) {
             } else if (key == "rules") {
                 if (seen & 8u) r.refuse("duplicate_field");
                 seen |= 8u;
-                v.rules = decode_list<PolicyRule>(r, decode_policyrule);
+                v.rules = decode_list<PolicyRule>(r, decode_policy_rule);
             } else if (key == "next") {
                 if (seen & 16u) r.refuse("duplicate_field");
                 seen |= 16u;
@@ -2098,15 +2332,20 @@ inline PolicyPage decode_policypage(Reader& r) {
     ++r.pos;
     --r.depth;
     if ((seen & 63u) != 63u) r.refuse("missing_field");
-    if (v.outcome != "page" && v.outcome != "gap" && v.outcome != "invalid" && v.outcome != "forbidden" && v.outcome != "unavailable") { r.refuse("bad_enum"); }
+    if (wire_outcome) {
+        const auto parsed = parse_policy_page_outcome(*wire_outcome);
+        if (!parsed) r.refuse("bad_enum");
+        v.outcome = *parsed;
+    }
     return v;
 }
 
-inline PolicyEdit decode_policyedit(Reader& r) {
+inline PolicyEdit decode_policy_edit(Reader& r) {
     if (r.at() != '{') r.refuse("wrong_type");
     r.enter();
     ++r.pos;
     PolicyEdit v;
+    std::optional<std::string> wire_outcome;
     std::uint32_t seen = 0;
     r.skip_ws();
     if (r.at() != '}') {
@@ -2121,7 +2360,7 @@ inline PolicyEdit decode_policyedit(Reader& r) {
             if (key == "outcome") {
                 if (seen & 1u) r.refuse("duplicate_field");
                 seen |= 1u;
-                v.outcome = r.str();
+                wire_outcome = r.str();
             } else if (key == "revision") {
                 if (seen & 2u) r.refuse("duplicate_field");
                 seen |= 2u;
@@ -2129,7 +2368,7 @@ inline PolicyEdit decode_policyedit(Reader& r) {
             } else if (key == "current") {
                 if (seen & 4u) r.refuse("duplicate_field");
                 seen |= 4u;
-                v.current = decode_policyrule(r);
+                v.current = decode_policy_rule(r);
             } else {
                 r.refuse("unknown_field");
             }
@@ -2142,11 +2381,15 @@ inline PolicyEdit decode_policyedit(Reader& r) {
     ++r.pos;
     --r.depth;
     if ((seen & 3u) != 3u) r.refuse("missing_field");
-    if (v.outcome != "applied" && v.outcome != "conflict" && v.outcome != "invalid" && v.outcome != "forbidden" && v.outcome != "unavailable") { r.refuse("bad_enum"); }
+    if (wire_outcome) {
+        const auto parsed = parse_policy_edit_outcome(*wire_outcome);
+        if (!parsed) r.refuse("bad_enum");
+        v.outcome = *parsed;
+    }
     return v;
 }
 
-inline RuleRecord decode_rulerecord(Reader& r) {
+inline RuleRecord decode_rule_record(Reader& r) {
     if (r.at() != '{') r.refuse("wrong_type");
     r.enter();
     ++r.pos;
@@ -2165,7 +2408,7 @@ inline RuleRecord decode_rulerecord(Reader& r) {
             if (key == "rule") {
                 if (seen & 1u) r.refuse("duplicate_field");
                 seen |= 1u;
-                v.rule = decode_policyrule(r);
+                v.rule = decode_policy_rule(r);
             } else if (key == "set_by") {
                 if (seen & 2u) r.refuse("duplicate_field");
                 seen |= 2u;
@@ -2197,11 +2440,12 @@ inline RuleRecord decode_rulerecord(Reader& r) {
     return v;
 }
 
-inline RuleRead decode_ruleread(Reader& r) {
+inline RuleRead decode_rule_read(Reader& r) {
     if (r.at() != '{') r.refuse("wrong_type");
     r.enter();
     ++r.pos;
     RuleRead v;
+    std::optional<std::string> wire_outcome;
     std::uint32_t seen = 0;
     r.skip_ws();
     if (r.at() != '}') {
@@ -2216,7 +2460,7 @@ inline RuleRead decode_ruleread(Reader& r) {
             if (key == "outcome") {
                 if (seen & 1u) r.refuse("duplicate_field");
                 seen |= 1u;
-                v.outcome = r.str();
+                wire_outcome = r.str();
             } else if (key == "revision") {
                 if (seen & 2u) r.refuse("duplicate_field");
                 seen |= 2u;
@@ -2224,7 +2468,7 @@ inline RuleRead decode_ruleread(Reader& r) {
             } else if (key == "record") {
                 if (seen & 4u) r.refuse("duplicate_field");
                 seen |= 4u;
-                v.record = decode_rulerecord(r);
+                v.record = decode_rule_record(r);
             } else {
                 r.refuse("unknown_field");
             }
@@ -2237,11 +2481,15 @@ inline RuleRead decode_ruleread(Reader& r) {
     ++r.pos;
     --r.depth;
     if ((seen & 3u) != 3u) r.refuse("missing_field");
-    if (v.outcome != "found" && v.outcome != "expired" && v.outcome != "unknown" && v.outcome != "invalid" && v.outcome != "forbidden" && v.outcome != "unavailable") { r.refuse("bad_enum"); }
+    if (wire_outcome) {
+        const auto parsed = parse_rule_read_outcome(*wire_outcome);
+        if (!parsed) r.refuse("bad_enum");
+        v.outcome = *parsed;
+    }
     return v;
 }
 
-inline CatalogEntry decode_catalogentry(Reader& r) {
+inline CatalogEntry decode_catalog_entry(Reader& r) {
     if (r.at() != '{') r.refuse("wrong_type");
     r.enter();
     ++r.pos;
@@ -2284,11 +2532,12 @@ inline CatalogEntry decode_catalogentry(Reader& r) {
     return v;
 }
 
-inline ActionEdit decode_actionedit(Reader& r) {
+inline ActionEdit decode_action_edit(Reader& r) {
     if (r.at() != '{') r.refuse("wrong_type");
     r.enter();
     ++r.pos;
     ActionEdit v;
+    std::optional<std::string> wire_outcome;
     std::uint32_t seen = 0;
     r.skip_ws();
     if (r.at() != '}') {
@@ -2303,7 +2552,7 @@ inline ActionEdit decode_actionedit(Reader& r) {
             if (key == "outcome") {
                 if (seen & 1u) r.refuse("duplicate_field");
                 seen |= 1u;
-                v.outcome = r.str();
+                wire_outcome = r.str();
             } else if (key == "revision") {
                 if (seen & 2u) r.refuse("duplicate_field");
                 seen |= 2u;
@@ -2311,7 +2560,7 @@ inline ActionEdit decode_actionedit(Reader& r) {
             } else if (key == "current") {
                 if (seen & 4u) r.refuse("duplicate_field");
                 seen |= 4u;
-                v.current = decode_catalogentry(r);
+                v.current = decode_catalog_entry(r);
             } else {
                 r.refuse("unknown_field");
             }
@@ -2324,11 +2573,15 @@ inline ActionEdit decode_actionedit(Reader& r) {
     ++r.pos;
     --r.depth;
     if ((seen & 3u) != 3u) r.refuse("missing_field");
-    if (v.outcome != "applied" && v.outcome != "conflict" && v.outcome != "unknown" && v.outcome != "invalid" && v.outcome != "exhausted" && v.outcome != "forbidden" && v.outcome != "unavailable") { r.refuse("bad_enum"); }
+    if (wire_outcome) {
+        const auto parsed = parse_action_edit_outcome(*wire_outcome);
+        if (!parsed) r.refuse("bad_enum");
+        v.outcome = *parsed;
+    }
     return v;
 }
 
-inline OAAuthorizationDecideArguments decode_oaauthorizationdecidearguments(Reader& r) {
+inline OAAuthorizationDecideArguments decode_oa_authorization_decide_arguments(Reader& r) {
     if (r.at() != '{') r.refuse("wrong_type");
     r.enter();
     ++r.pos;
@@ -2367,7 +2620,7 @@ inline OAAuthorizationDecideArguments decode_oaauthorizationdecidearguments(Read
     return v;
 }
 
-inline OAAuthorizationDecideForArguments decode_oaauthorizationdecideforarguments(Reader& r) {
+inline OAAuthorizationDecideForArguments decode_oa_authorization_decide_for_arguments(Reader& r) {
     if (r.at() != '{') r.refuse("wrong_type");
     r.enter();
     ++r.pos;
@@ -2410,7 +2663,7 @@ inline OAAuthorizationDecideForArguments decode_oaauthorizationdecideforargument
     return v;
 }
 
-inline OAAuthorizationOperatorListPolicyArguments decode_oaauthorizationoperatorlistpolicyarguments(Reader& r) {
+inline OAAuthorizationOperatorListPolicyArguments decode_oa_authorization_operator_list_policy_arguments(Reader& r) {
     if (r.at() != '{') r.refuse("wrong_type");
     r.enter();
     ++r.pos;
@@ -2449,7 +2702,7 @@ inline OAAuthorizationOperatorListPolicyArguments decode_oaauthorizationoperator
     return v;
 }
 
-inline OAAuthorizationOperatorSetRuleArguments decode_oaauthorizationoperatorsetrulearguments(Reader& r) {
+inline OAAuthorizationOperatorSetRuleArguments decode_oa_authorization_operator_set_rule_arguments(Reader& r) {
     if (r.at() != '{') r.refuse("wrong_type");
     r.enter();
     ++r.pos;
@@ -2472,7 +2725,7 @@ inline OAAuthorizationOperatorSetRuleArguments decode_oaauthorizationoperatorset
             } else if (key == "rule") {
                 if (seen & 2u) r.refuse("duplicate_field");
                 seen |= 2u;
-                v.rule = decode_policyrule(r);
+                v.rule = decode_policy_rule(r);
             } else {
                 r.refuse("unknown_field");
             }
@@ -2488,7 +2741,7 @@ inline OAAuthorizationOperatorSetRuleArguments decode_oaauthorizationoperatorset
     return v;
 }
 
-inline OAAuthorizationOperatorRevokeRuleArguments decode_oaauthorizationoperatorrevokerulearguments(Reader& r) {
+inline OAAuthorizationOperatorRevokeRuleArguments decode_oa_authorization_operator_revoke_rule_arguments(Reader& r) {
     if (r.at() != '{') r.refuse("wrong_type");
     r.enter();
     ++r.pos;
@@ -2535,7 +2788,7 @@ inline OAAuthorizationOperatorRevokeRuleArguments decode_oaauthorizationoperator
     return v;
 }
 
-inline OAAuthorizationOperatorSetRuleForArguments decode_oaauthorizationoperatorsetruleforarguments(Reader& r) {
+inline OAAuthorizationOperatorSetRuleForArguments decode_oa_authorization_operator_set_rule_for_arguments(Reader& r) {
     if (r.at() != '{') r.refuse("wrong_type");
     r.enter();
     ++r.pos;
@@ -2558,7 +2811,7 @@ inline OAAuthorizationOperatorSetRuleForArguments decode_oaauthorizationoperator
             } else if (key == "rule") {
                 if (seen & 2u) r.refuse("duplicate_field");
                 seen |= 2u;
-                v.rule = decode_policyrule(r);
+                v.rule = decode_policy_rule(r);
             } else if (key == "ttl_ms") {
                 if (seen & 4u) r.refuse("duplicate_field");
                 seen |= 4u;
@@ -2582,7 +2835,7 @@ inline OAAuthorizationOperatorSetRuleForArguments decode_oaauthorizationoperator
     return v;
 }
 
-inline OAAuthorizationOperatorReadRuleArguments decode_oaauthorizationoperatorreadrulearguments(Reader& r) {
+inline OAAuthorizationOperatorReadRuleArguments decode_oa_authorization_operator_read_rule_arguments(Reader& r) {
     if (r.at() != '{') r.refuse("wrong_type");
     r.enter();
     ++r.pos;
@@ -2625,7 +2878,7 @@ inline OAAuthorizationOperatorReadRuleArguments decode_oaauthorizationoperatorre
     return v;
 }
 
-inline OAAuthorizationOperatorRegisterActionArguments decode_oaauthorizationoperatorregisteractionarguments(Reader& r) {
+inline OAAuthorizationOperatorRegisterActionArguments decode_oa_authorization_operator_register_action_arguments(Reader& r) {
     if (r.at() != '{') r.refuse("wrong_type");
     r.enter();
     ++r.pos;
@@ -2664,7 +2917,7 @@ inline OAAuthorizationOperatorRegisterActionArguments decode_oaauthorizationoper
     return v;
 }
 
-inline OAAuthorizationOperatorRetireActionArguments decode_oaauthorizationoperatorretireactionarguments(Reader& r) {
+inline OAAuthorizationOperatorRetireActionArguments decode_oa_authorization_operator_retire_action_arguments(Reader& r) {
     if (r.at() != '{') r.refuse("wrong_type");
     r.enter();
     ++r.pos;
@@ -2703,7 +2956,7 @@ inline OAAuthorizationOperatorRetireActionArguments decode_oaauthorizationoperat
     return v;
 }
 
-inline OAServiceFrame decode_oaserviceframe(Reader& r) {
+inline OAServiceFrame decode_oa_service_frame(Reader& r) {
     if (r.at() != '{') r.refuse("wrong_type");
     r.enter();
     ++r.pos;
@@ -2750,7 +3003,7 @@ inline OAServiceFrame decode_oaserviceframe(Reader& r) {
     return v;
 }
 
-inline OAServiceReply decode_oaservicereply(Reader& r) {
+inline OAServiceReply decode_oa_service_reply(Reader& r) {
     if (r.at() != '{') r.refuse("wrong_type");
     r.enter();
     ++r.pos;
@@ -2801,7 +3054,7 @@ inline OAServiceReply decode_oaservicereply(Reader& r) {
     return v;
 }
 
-inline OAServiceError decode_oaserviceerror(Reader& r) {
+inline OAServiceError decode_oa_service_error(Reader& r) {
     if (r.at() != '{') r.refuse("wrong_type");
     r.enter();
     ++r.pos;
@@ -2840,7 +3093,7 @@ inline OAServiceError decode_oaserviceerror(Reader& r) {
     return v;
 }
 
-inline OAAuthorizationDecideResult decode_oaauthorizationdecideresult(Reader& r) {
+inline OAAuthorizationDecideResult decode_oa_authorization_decide_result(Reader& r) {
     if (r.at() != '{') r.refuse("wrong_type");
     r.enter();
     ++r.pos;
@@ -2875,7 +3128,7 @@ inline OAAuthorizationDecideResult decode_oaauthorizationdecideresult(Reader& r)
     return v;
 }
 
-inline OAAuthorizationDecideForResult decode_oaauthorizationdecideforresult(Reader& r) {
+inline OAAuthorizationDecideForResult decode_oa_authorization_decide_for_result(Reader& r) {
     if (r.at() != '{') r.refuse("wrong_type");
     r.enter();
     ++r.pos;
@@ -2910,7 +3163,7 @@ inline OAAuthorizationDecideForResult decode_oaauthorizationdecideforresult(Read
     return v;
 }
 
-inline OAAuthorizationOperatorListPolicyResult decode_oaauthorizationoperatorlistpolicyresult(Reader& r) {
+inline OAAuthorizationOperatorListPolicyResult decode_oa_authorization_operator_list_policy_result(Reader& r) {
     if (r.at() != '{') r.refuse("wrong_type");
     r.enter();
     ++r.pos;
@@ -2929,7 +3182,7 @@ inline OAAuthorizationOperatorListPolicyResult decode_oaauthorizationoperatorlis
             if (key == "value") {
                 if (seen & 1u) r.refuse("duplicate_field");
                 seen |= 1u;
-                v.value = decode_policypage(r);
+                v.value = decode_policy_page(r);
             } else {
                 r.refuse("unknown_field");
             }
@@ -2945,7 +3198,7 @@ inline OAAuthorizationOperatorListPolicyResult decode_oaauthorizationoperatorlis
     return v;
 }
 
-inline OAAuthorizationOperatorSetRuleResult decode_oaauthorizationoperatorsetruleresult(Reader& r) {
+inline OAAuthorizationOperatorSetRuleResult decode_oa_authorization_operator_set_rule_result(Reader& r) {
     if (r.at() != '{') r.refuse("wrong_type");
     r.enter();
     ++r.pos;
@@ -2964,7 +3217,7 @@ inline OAAuthorizationOperatorSetRuleResult decode_oaauthorizationoperatorsetrul
             if (key == "value") {
                 if (seen & 1u) r.refuse("duplicate_field");
                 seen |= 1u;
-                v.value = decode_policyedit(r);
+                v.value = decode_policy_edit(r);
             } else {
                 r.refuse("unknown_field");
             }
@@ -2980,7 +3233,7 @@ inline OAAuthorizationOperatorSetRuleResult decode_oaauthorizationoperatorsetrul
     return v;
 }
 
-inline OAAuthorizationOperatorRevokeRuleResult decode_oaauthorizationoperatorrevokeruleresult(Reader& r) {
+inline OAAuthorizationOperatorRevokeRuleResult decode_oa_authorization_operator_revoke_rule_result(Reader& r) {
     if (r.at() != '{') r.refuse("wrong_type");
     r.enter();
     ++r.pos;
@@ -2999,7 +3252,7 @@ inline OAAuthorizationOperatorRevokeRuleResult decode_oaauthorizationoperatorrev
             if (key == "value") {
                 if (seen & 1u) r.refuse("duplicate_field");
                 seen |= 1u;
-                v.value = decode_policyedit(r);
+                v.value = decode_policy_edit(r);
             } else {
                 r.refuse("unknown_field");
             }
@@ -3015,7 +3268,7 @@ inline OAAuthorizationOperatorRevokeRuleResult decode_oaauthorizationoperatorrev
     return v;
 }
 
-inline OAAuthorizationOperatorSetRuleForResult decode_oaauthorizationoperatorsetruleforresult(Reader& r) {
+inline OAAuthorizationOperatorSetRuleForResult decode_oa_authorization_operator_set_rule_for_result(Reader& r) {
     if (r.at() != '{') r.refuse("wrong_type");
     r.enter();
     ++r.pos;
@@ -3034,7 +3287,7 @@ inline OAAuthorizationOperatorSetRuleForResult decode_oaauthorizationoperatorset
             if (key == "value") {
                 if (seen & 1u) r.refuse("duplicate_field");
                 seen |= 1u;
-                v.value = decode_policyedit(r);
+                v.value = decode_policy_edit(r);
             } else {
                 r.refuse("unknown_field");
             }
@@ -3050,7 +3303,7 @@ inline OAAuthorizationOperatorSetRuleForResult decode_oaauthorizationoperatorset
     return v;
 }
 
-inline OAAuthorizationOperatorReadRuleResult decode_oaauthorizationoperatorreadruleresult(Reader& r) {
+inline OAAuthorizationOperatorReadRuleResult decode_oa_authorization_operator_read_rule_result(Reader& r) {
     if (r.at() != '{') r.refuse("wrong_type");
     r.enter();
     ++r.pos;
@@ -3069,7 +3322,7 @@ inline OAAuthorizationOperatorReadRuleResult decode_oaauthorizationoperatorreadr
             if (key == "value") {
                 if (seen & 1u) r.refuse("duplicate_field");
                 seen |= 1u;
-                v.value = decode_ruleread(r);
+                v.value = decode_rule_read(r);
             } else {
                 r.refuse("unknown_field");
             }
@@ -3085,7 +3338,7 @@ inline OAAuthorizationOperatorReadRuleResult decode_oaauthorizationoperatorreadr
     return v;
 }
 
-inline OAAuthorizationOperatorRegisterActionResult decode_oaauthorizationoperatorregisteractionresult(Reader& r) {
+inline OAAuthorizationOperatorRegisterActionResult decode_oa_authorization_operator_register_action_result(Reader& r) {
     if (r.at() != '{') r.refuse("wrong_type");
     r.enter();
     ++r.pos;
@@ -3104,7 +3357,7 @@ inline OAAuthorizationOperatorRegisterActionResult decode_oaauthorizationoperato
             if (key == "value") {
                 if (seen & 1u) r.refuse("duplicate_field");
                 seen |= 1u;
-                v.value = decode_actionedit(r);
+                v.value = decode_action_edit(r);
             } else {
                 r.refuse("unknown_field");
             }
@@ -3120,7 +3373,7 @@ inline OAAuthorizationOperatorRegisterActionResult decode_oaauthorizationoperato
     return v;
 }
 
-inline OAAuthorizationOperatorRetireActionResult decode_oaauthorizationoperatorretireactionresult(Reader& r) {
+inline OAAuthorizationOperatorRetireActionResult decode_oa_authorization_operator_retire_action_result(Reader& r) {
     if (r.at() != '{') r.refuse("wrong_type");
     r.enter();
     ++r.pos;
@@ -3139,7 +3392,7 @@ inline OAAuthorizationOperatorRetireActionResult decode_oaauthorizationoperatorr
             if (key == "value") {
                 if (seen & 1u) r.refuse("duplicate_field");
                 seen |= 1u;
-                v.value = decode_actionedit(r);
+                v.value = decode_action_edit(r);
             } else {
                 r.refuse("unknown_field");
             }
@@ -3155,15 +3408,25 @@ inline OAAuthorizationOperatorRetireActionResult decode_oaauthorizationoperatorr
     return v;
 }
 
+}  // namespace detail
+
+inline std::string encode(const Request& v) {
+    std::string out;
+    detail::enc_request(out, v, 0);
+    out += '\n';
+    return out;
+}
+
 inline Request decode(std::string_view data) {
-    Reader r{data};
+    detail::Reader r{data};
     r.skip_ws();
-    Request v = decode_request(r);
+    Request v = detail::decode_request(r);
     r.skip_ws();
     if (r.pos < r.buf.size()) r.refuse("trailing_bytes");
     return v;
 }
 
+namespace detail {
 // kRefusals is in the order two of them are chosen between.
 inline const std::vector<std::string> kRefusals = {"malformed", "bad_string", "number_spelling", "wrong_type", "depth_exceeded", "duplicate_key", "duplicate_field", "unknown_field", "missing_field", "bad_enum", "trailing_bytes"};
 
@@ -3172,152 +3435,200 @@ inline int refusal_rank(std::string_view word) {
         if (kRefusals[i] == word) return static_cast<int>(i);
     return -1;
 }
+}  // namespace detail
 
-struct FrameWriter{virtual ~FrameWriter()=default;virtual void WriteFrame(std::string_view)=0;};
+struct FrameWriter{virtual ~FrameWriter()=default;virtual void write_frame(std::string_view frame)=0;};
 struct DispatchError:std::runtime_error{using std::runtime_error::runtime_error;};
-inline OAServiceFrame service_payload(std::string_view frame){Reader r{frame};r.skip_ws();auto v=decode_oaserviceframe(r);r.skip_ws();if(r.pos!=r.buf.size())r.refuse("trailing_bytes");if(v.version!=1)throw DispatchError("unknown_version");return v;}
+namespace detail {
+inline OAServiceFrame service_payload(std::string_view frame){Reader r{frame};r.skip_ws();auto v=decode_oa_service_frame(r);r.skip_ws();if(r.pos!=r.buf.size())r.refuse("trailing_bytes");if(v.version!=1)throw DispatchError("unknown_version");return v;}
+}  // namespace detail
 // Validates the request envelope and version; dispatchers validate typed arguments.
-inline std::string service_name(std::string_view frame){return service_payload(frame).service;}
+inline std::string service_name(std::string_view frame){return detail::service_payload(frame).service;}
 
-struct FrameExchanger{virtual ~FrameExchanger()=default;virtual std::string ExchangeFrame(std::string_view)=0;};
+struct FrameExchanger{virtual ~FrameExchanger()=default;virtual std::string exchange_frame(std::string_view frame)=0;};
 struct ServiceError:std::runtime_error{std::string code,message;ServiceError(std::string c,std::string m):std::runtime_error(m.empty()?c:m),code(c),message(m){}};
+namespace detail {
 inline Raw service_response(std::string_view frame,std::string_view service,std::string_view method){
- Reader r{frame};r.skip_ws();auto v=decode_oaservicereply(r);r.skip_ws();if(r.pos!=r.buf.size())r.refuse("trailing_bytes");if(v.version!=1)throw DispatchError("unknown_version");if(v.service!=service||v.method!=method)throw DispatchError("mismatched_response");
- if(!v.ok){Reader e{v.payload};e.depth=1;e.skip_ws();auto error=decode_oaserviceerror(e);e.skip_ws();if(e.pos!=e.buf.size())e.refuse("trailing_bytes");if(error.code.empty())throw DispatchError("invalid_error");throw ServiceError(error.code,error.message);}return v.payload;
+ Reader r{frame};r.skip_ws();auto v=decode_oa_service_reply(r);r.skip_ws();if(r.pos!=r.buf.size())r.refuse("trailing_bytes");if(v.version!=1)throw DispatchError("unknown_version");if(v.service!=service||v.method!=method)throw DispatchError("mismatched_response");
+ if(!v.ok){Reader e{v.payload};e.depth=1;e.skip_ws();auto error=decode_oa_service_error(e);e.skip_ws();if(e.pos!=e.buf.size())e.refuse("trailing_bytes");if(error.code.empty())throw DispatchError("invalid_error");throw ServiceError(error.code,error.message);}return v.payload;
 }
 inline std::string service_reply(const OAServiceFrame& request,const Raw& payload,const ServiceError* error=nullptr){
  OAServiceReply reply;reply.version=1;reply.service=request.service;reply.method=request.method;reply.ok=error==nullptr;reply.payload=payload;
- if(error){OAServiceError e;e.code=error->code.empty()?"handler_error":error->code;e.message=error->message;reply.payload.clear();enc_oaserviceerror(reply.payload,e,1);}
- std::string frame;enc_oaservicereply(frame,reply,0);Reader r{frame};r.skip_ws();decode_oaservicereply(r);return frame;
+ if(error){OAServiceError e;e.code=error->code.empty()?"handler_error":error->code;e.message=error->message;reply.payload.clear();enc_oa_service_error(reply.payload,e,1);}
+ std::string frame;enc_oa_service_reply(frame,reply,0);Reader r{frame};r.skip_ws();decode_oa_service_reply(r);return frame;
+}
+}  // namespace detail
+
+// The base-protocol service every dispatcher answers beside its own.
+inline constexpr std::string_view kEndpointContract="abstraction.facade/endpoint@1";
+// One service an endpoint hosts, as a dispatcher of any generated namespace
+// reports it to describe_endpoint.
+struct DescribedService{std::string contract;bool ready;std::string why;};
+namespace detail {
+template<class H>auto ready_hook(int)->decltype((void)static_cast<H*>(nullptr)->ready(),static_cast<bool(*)(void*,std::string&)>(nullptr)){return [](void* h,std::string& why)->bool{auto r=static_cast<H*>(h)->ready();why=r.second;return r.first;};}
+template<class H>bool(*ready_hook(long))(void*,std::string&){return nullptr;}
+}  // namespace detail
+// Answers an abstraction.facade/endpoint@1 Describe frame for an endpoint
+// hosting services, in that order: each is a dispatcher of any generated
+// namespace. program and version are the provider's own display name and
+// version, never authority. A frame for another service reads unknown_service.
+template<class... Services>std::string describe_endpoint(std::string_view frame,const std::string& program,const std::string& version,const Services&... services){
+ auto v=detail::service_payload(frame);
+ if(v.service!=kEndpointContract){ServiceError e("unknown_service","");return detail::service_reply(v,"",&e);}
+ if(v.method!="Describe"){ServiceError e("unknown_method","");return detail::service_reply(v,"",&e);}
+ detail::Reader r{v.arguments};r.skip_ws();bool empty=false;
+ if(r.pos<r.buf.size()&&r.buf[r.pos]=='{'){r.pos++;r.skip_ws();if(r.pos<r.buf.size()&&r.buf[r.pos]=='}'){r.pos++;r.skip_ws();empty=r.pos==r.buf.size();}}
+ if(!empty){ServiceError e("unknown_field","");return detail::service_reply(v,"",&e);}
+ try{
+  Raw out="{\"value\":{\"outcome\":\"described\",\"program\":";detail::esc(out,program);out+=",\"version\":";detail::esc(out,version);out+=",\"services\":[";
+  bool first=true;
+  auto add=[&](const auto& s){if(!first)out+=',';first=false;out+="{\"contract\":";detail::esc(out,s.contract);out+=",\"readiness\":\"";out+=s.ready?"ready":"not_ready";out+="\",\"why\":";detail::esc(out,s.why);out+=",\"guarantees\":[],\"capabilities\":{}}";};
+  (void)add;
+  (add(services.describe_service()),...);
+  out+="]}}";
+  return detail::service_reply(v,out);
+ }catch(const Refusal&e){ServiceError error(e.word,"");return detail::service_reply(v,"",&error);}
 }
 struct Authorization{virtual ~Authorization()=default;
-virtual Decision Decide(const std::string& arg0,const std::string& arg1)=0;
-virtual Decision DecideFor(const Subject& arg0,const std::string& arg1,const std::string& arg2)=0;
+virtual Decision decide(const std::string& action,const std::string& resource)=0;
+virtual Decision decide_for(const Subject& subject,const std::string& action,const std::string& resource)=0;
 };
 template<class Transport>struct AuthorizationClient:Authorization{Transport& transport_;explicit AuthorizationClient(Transport&t):transport_(t){}
-Decision Decide(const std::string& arg0,const std::string& arg1)override{OAAuthorizationDecideArguments args;
-args.action=arg0;
-args.resource=arg1;
-OAServiceFrame v;v.version=1;v.service="abstraction.rights/authorization@1";v.method="Decide";enc_oaauthorizationdecidearguments(v.arguments,args,1);std::string frame;enc_oaserviceframe(frame,v,0);service_payload(frame);
-auto response=transport_.ExchangeFrame(frame);auto payload=service_response(response,v.service,v.method);Reader r{payload};r.depth=1;r.skip_ws();auto result=decode_oaauthorizationdecideresult(r);r.skip_ws();if(r.pos!=r.buf.size())r.refuse("trailing_bytes");
+Decision decide(const std::string& action,const std::string& resource)override{detail::OAAuthorizationDecideArguments args;
+args.action=action;
+args.resource=resource;
+detail::OAServiceFrame v;v.version=1;v.service="abstraction.rights/authorization@1";v.method="Decide";detail::enc_oa_authorization_decide_arguments(v.arguments,args,1);std::string frame;detail::enc_oa_service_frame(frame,v,0);detail::service_payload(frame);
+auto response=transport_.exchange_frame(frame);auto payload=detail::service_response(response,v.service,v.method);detail::Reader r{payload};r.depth=1;r.skip_ws();auto result=detail::decode_oa_authorization_decide_result(r);r.skip_ws();if(r.pos!=r.buf.size())r.refuse("trailing_bytes");
 return result.value;
 }
-Decision DecideFor(const Subject& arg0,const std::string& arg1,const std::string& arg2)override{OAAuthorizationDecideForArguments args;
-args.subject=arg0;
-args.action=arg1;
-args.resource=arg2;
-OAServiceFrame v;v.version=1;v.service="abstraction.rights/authorization@1";v.method="DecideFor";enc_oaauthorizationdecideforarguments(v.arguments,args,1);std::string frame;enc_oaserviceframe(frame,v,0);service_payload(frame);
-auto response=transport_.ExchangeFrame(frame);auto payload=service_response(response,v.service,v.method);Reader r{payload};r.depth=1;r.skip_ws();auto result=decode_oaauthorizationdecideforresult(r);r.skip_ws();if(r.pos!=r.buf.size())r.refuse("trailing_bytes");
+Decision decide_for(const Subject& subject,const std::string& action,const std::string& resource)override{detail::OAAuthorizationDecideForArguments args;
+args.subject=subject;
+args.action=action;
+args.resource=resource;
+detail::OAServiceFrame v;v.version=1;v.service="abstraction.rights/authorization@1";v.method="DecideFor";detail::enc_oa_authorization_decide_for_arguments(v.arguments,args,1);std::string frame;detail::enc_oa_service_frame(frame,v,0);detail::service_payload(frame);
+auto response=transport_.exchange_frame(frame);auto payload=detail::service_response(response,v.service,v.method);detail::Reader r{payload};r.depth=1;r.skip_ws();auto result=detail::decode_oa_authorization_decide_for_result(r);r.skip_ws();if(r.pos!=r.buf.size())r.refuse("trailing_bytes");
 return result.value;
 }
 };
-struct AuthorizationService{inline static constexpr std::string_view wire_name="abstraction.rights/authorization@1";inline static constexpr std::string_view capability="abstraction.rights";template<class Transport>using Client=AuthorizationClient<Transport>;};
+struct AuthorizationService{inline static constexpr std::string_view kWireName="abstraction.rights/authorization@1";inline static constexpr std::string_view kCapability="abstraction.rights";template<class Transport>using Client=AuthorizationClient<Transport>;};
 struct AuthorizationDispatcher:FrameWriter,FrameExchanger{Authorization&handler;explicit AuthorizationDispatcher(Authorization&h):handler(h){}
-void WriteFrame(std::string_view frame)override{auto v=service_payload(frame);if(v.service!="abstraction.rights/authorization@1")throw DispatchError("unknown_service");
+// A handler whose own type has ready(), returning a pair of bool and std::string, reports its readiness through describe_service.
+template<class H,class=decltype(static_cast<Authorization&>(*static_cast<H*>(nullptr)))>explicit AuthorizationDispatcher(H&h):handler(h),ready_self_(&h),ready_hook_(detail::ready_hook<H>(0)){}
+// This dispatcher's service as abstraction.facade/endpoint@1 Describe lists it.
+DescribedService describe_service()const{DescribedService s{"abstraction.rights/authorization@1",true,std::string()};if(ready_hook_){s.ready=ready_hook_(ready_self_,s.why);if(s.ready)s.why.clear();}return s;}
+void write_frame(std::string_view frame)override{auto v=detail::service_payload(frame);if(v.service!="abstraction.rights/authorization@1")throw DispatchError("unknown_service");
 if(v.method=="Decide"){
 throw DispatchError("wrong_mode");}
 if(v.method=="DecideFor"){
 throw DispatchError("wrong_mode");}
 throw DispatchError("unknown_method");}
-std::string ExchangeFrame(std::string_view frame)override{auto v=service_payload(frame);if(v.service!="abstraction.rights/authorization@1"){ServiceError e("unknown_service","");return service_reply(v,"",&e);}
+std::string exchange_frame(std::string_view frame)override{auto v=detail::service_payload(frame);if(v.service==kEndpointContract)return describe_endpoint(frame,std::string(),std::string(),*this);if(v.service!="abstraction.rights/authorization@1"){ServiceError e("unknown_service","");return detail::service_reply(v,"",&e);}
 try{
 if(v.method=="Decide"){
-Reader r{v.arguments};r.depth=1;r.skip_ws();auto args=decode_oaauthorizationdecidearguments(r);r.skip_ws();if(r.pos!=r.buf.size())r.refuse("trailing_bytes");auto payload=invoke_Decide(args);return service_reply(v,payload);}
+detail::Reader r{v.arguments};r.depth=1;r.skip_ws();auto args=detail::decode_oa_authorization_decide_arguments(r);r.skip_ws();if(r.pos!=r.buf.size())r.refuse("trailing_bytes");auto payload=invoke_decide(args);return detail::service_reply(v,payload);}
 if(v.method=="DecideFor"){
-Reader r{v.arguments};r.depth=1;r.skip_ws();auto args=decode_oaauthorizationdecideforarguments(r);r.skip_ws();if(r.pos!=r.buf.size())r.refuse("trailing_bytes");auto payload=invoke_DecideFor(args);return service_reply(v,payload);}
-throw ServiceError("unknown_method","");}catch(const ServiceError&e){return service_reply(v,"",&e);}catch(const Refusal&e){ServiceError error(e.word,"");return service_reply(v,"",&error);}
+detail::Reader r{v.arguments};r.depth=1;r.skip_ws();auto args=detail::decode_oa_authorization_decide_for_arguments(r);r.skip_ws();if(r.pos!=r.buf.size())r.refuse("trailing_bytes");auto payload=invoke_decide_for(args);return detail::service_reply(v,payload);}
+throw ServiceError("unknown_method","");}catch(const ServiceError&e){return detail::service_reply(v,"",&e);}catch(const Refusal&e){ServiceError error(e.word,"");return detail::service_reply(v,"",&error);}
 }
-Raw invoke_Decide(const OAAuthorizationDecideArguments&args){
+private:
+Raw invoke_decide(const detail::OAAuthorizationDecideArguments&args){
 Decision result{};
 try{
-result=handler.Decide(args.action,args.resource);
+result=handler.decide(args.action,args.resource);
 }catch(const ServiceError&){throw;}catch(...){throw ServiceError("handler_error","handler failed");}
 try{
-OAAuthorizationDecideResult value;
+detail::OAAuthorizationDecideResult value;
 value.value=result;
-Raw payload;enc_oaauthorizationdecideresult(payload,value,1);Reader r{payload};r.depth=1;r.skip_ws();decode_oaauthorizationdecideresult(r);r.skip_ws();if(r.pos!=r.buf.size())r.refuse("trailing_bytes");return payload;
+Raw payload;detail::enc_oa_authorization_decide_result(payload,value,1);detail::Reader r{payload};r.depth=1;r.skip_ws();detail::decode_oa_authorization_decide_result(r);r.skip_ws();if(r.pos!=r.buf.size())r.refuse("trailing_bytes");return payload;
 }catch(...){throw ServiceError("invalid_result","");}
 }
-Raw invoke_DecideFor(const OAAuthorizationDecideForArguments&args){
+Raw invoke_decide_for(const detail::OAAuthorizationDecideForArguments&args){
 Decision result{};
 try{
-result=handler.DecideFor(args.subject,args.action,args.resource);
+result=handler.decide_for(args.subject,args.action,args.resource);
 }catch(const ServiceError&){throw;}catch(...){throw ServiceError("handler_error","handler failed");}
 try{
-OAAuthorizationDecideForResult value;
+detail::OAAuthorizationDecideForResult value;
 value.value=result;
-Raw payload;enc_oaauthorizationdecideforresult(payload,value,1);Reader r{payload};r.depth=1;r.skip_ws();decode_oaauthorizationdecideforresult(r);r.skip_ws();if(r.pos!=r.buf.size())r.refuse("trailing_bytes");return payload;
+Raw payload;detail::enc_oa_authorization_decide_for_result(payload,value,1);detail::Reader r{payload};r.depth=1;r.skip_ws();detail::decode_oa_authorization_decide_for_result(r);r.skip_ws();if(r.pos!=r.buf.size())r.refuse("trailing_bytes");return payload;
 }catch(...){throw ServiceError("invalid_result","");}
 }
+private:
+void* ready_self_=nullptr;
+bool(*ready_hook_)(void*,std::string&)=nullptr;
 };
 struct AuthorizationOperator{virtual ~AuthorizationOperator()=default;
-virtual PolicyPage ListPolicy(const std::string& arg0,const std::int64_t& arg1)=0;
-virtual PolicyEdit SetRule(const std::string& arg0,const PolicyRule& arg1)=0;
-virtual PolicyEdit RevokeRule(const std::string& arg0,const Subject& arg1,const std::string& arg2,const std::string& arg3)=0;
-virtual PolicyEdit SetRuleFor(const std::string& arg0,const PolicyRule& arg1,const std::int64_t& arg2,const std::string& arg3)=0;
-virtual RuleRead ReadRule(const Subject& arg0,const std::string& arg1,const std::string& arg2)=0;
-virtual ActionEdit RegisterAction(const std::string& arg0,const std::string& arg1)=0;
-virtual ActionEdit RetireAction(const std::string& arg0,const std::string& arg1)=0;
+virtual PolicyPage list_policy(const std::string& cursor,const std::int64_t& limit)=0;
+virtual PolicyEdit set_rule(const std::string& expected_revision,const PolicyRule& rule)=0;
+virtual PolicyEdit revoke_rule(const std::string& expected_revision,const Subject& subject,const std::string& action,const std::string& resource)=0;
+virtual PolicyEdit set_rule_for(const std::string& expected_revision,const PolicyRule& rule,const std::int64_t& ttl_ms,const std::string& why)=0;
+virtual RuleRead read_rule(const Subject& subject,const std::string& action,const std::string& resource)=0;
+virtual ActionEdit register_action(const std::string& expected_revision,const std::string& action)=0;
+virtual ActionEdit retire_action(const std::string& expected_revision,const std::string& action)=0;
 };
 template<class Transport>struct AuthorizationOperatorClient:AuthorizationOperator{Transport& transport_;explicit AuthorizationOperatorClient(Transport&t):transport_(t){}
-PolicyPage ListPolicy(const std::string& arg0,const std::int64_t& arg1)override{OAAuthorizationOperatorListPolicyArguments args;
-args.cursor=arg0;
-args.limit=arg1;
-OAServiceFrame v;v.version=1;v.service="abstraction.rights/operator@1";v.method="ListPolicy";enc_oaauthorizationoperatorlistpolicyarguments(v.arguments,args,1);std::string frame;enc_oaserviceframe(frame,v,0);service_payload(frame);
-auto response=transport_.ExchangeFrame(frame);auto payload=service_response(response,v.service,v.method);Reader r{payload};r.depth=1;r.skip_ws();auto result=decode_oaauthorizationoperatorlistpolicyresult(r);r.skip_ws();if(r.pos!=r.buf.size())r.refuse("trailing_bytes");
+PolicyPage list_policy(const std::string& cursor,const std::int64_t& limit)override{detail::OAAuthorizationOperatorListPolicyArguments args;
+args.cursor=cursor;
+args.limit=limit;
+detail::OAServiceFrame v;v.version=1;v.service="abstraction.rights/operator@1";v.method="ListPolicy";detail::enc_oa_authorization_operator_list_policy_arguments(v.arguments,args,1);std::string frame;detail::enc_oa_service_frame(frame,v,0);detail::service_payload(frame);
+auto response=transport_.exchange_frame(frame);auto payload=detail::service_response(response,v.service,v.method);detail::Reader r{payload};r.depth=1;r.skip_ws();auto result=detail::decode_oa_authorization_operator_list_policy_result(r);r.skip_ws();if(r.pos!=r.buf.size())r.refuse("trailing_bytes");
 return result.value;
 }
-PolicyEdit SetRule(const std::string& arg0,const PolicyRule& arg1)override{OAAuthorizationOperatorSetRuleArguments args;
-args.expected_revision=arg0;
-args.rule=arg1;
-OAServiceFrame v;v.version=1;v.service="abstraction.rights/operator@1";v.method="SetRule";enc_oaauthorizationoperatorsetrulearguments(v.arguments,args,1);std::string frame;enc_oaserviceframe(frame,v,0);service_payload(frame);
-auto response=transport_.ExchangeFrame(frame);auto payload=service_response(response,v.service,v.method);Reader r{payload};r.depth=1;r.skip_ws();auto result=decode_oaauthorizationoperatorsetruleresult(r);r.skip_ws();if(r.pos!=r.buf.size())r.refuse("trailing_bytes");
+PolicyEdit set_rule(const std::string& expected_revision,const PolicyRule& rule)override{detail::OAAuthorizationOperatorSetRuleArguments args;
+args.expected_revision=expected_revision;
+args.rule=rule;
+detail::OAServiceFrame v;v.version=1;v.service="abstraction.rights/operator@1";v.method="SetRule";detail::enc_oa_authorization_operator_set_rule_arguments(v.arguments,args,1);std::string frame;detail::enc_oa_service_frame(frame,v,0);detail::service_payload(frame);
+auto response=transport_.exchange_frame(frame);auto payload=detail::service_response(response,v.service,v.method);detail::Reader r{payload};r.depth=1;r.skip_ws();auto result=detail::decode_oa_authorization_operator_set_rule_result(r);r.skip_ws();if(r.pos!=r.buf.size())r.refuse("trailing_bytes");
 return result.value;
 }
-PolicyEdit RevokeRule(const std::string& arg0,const Subject& arg1,const std::string& arg2,const std::string& arg3)override{OAAuthorizationOperatorRevokeRuleArguments args;
-args.expected_revision=arg0;
-args.subject=arg1;
-args.action=arg2;
-args.resource=arg3;
-OAServiceFrame v;v.version=1;v.service="abstraction.rights/operator@1";v.method="RevokeRule";enc_oaauthorizationoperatorrevokerulearguments(v.arguments,args,1);std::string frame;enc_oaserviceframe(frame,v,0);service_payload(frame);
-auto response=transport_.ExchangeFrame(frame);auto payload=service_response(response,v.service,v.method);Reader r{payload};r.depth=1;r.skip_ws();auto result=decode_oaauthorizationoperatorrevokeruleresult(r);r.skip_ws();if(r.pos!=r.buf.size())r.refuse("trailing_bytes");
+PolicyEdit revoke_rule(const std::string& expected_revision,const Subject& subject,const std::string& action,const std::string& resource)override{detail::OAAuthorizationOperatorRevokeRuleArguments args;
+args.expected_revision=expected_revision;
+args.subject=subject;
+args.action=action;
+args.resource=resource;
+detail::OAServiceFrame v;v.version=1;v.service="abstraction.rights/operator@1";v.method="RevokeRule";detail::enc_oa_authorization_operator_revoke_rule_arguments(v.arguments,args,1);std::string frame;detail::enc_oa_service_frame(frame,v,0);detail::service_payload(frame);
+auto response=transport_.exchange_frame(frame);auto payload=detail::service_response(response,v.service,v.method);detail::Reader r{payload};r.depth=1;r.skip_ws();auto result=detail::decode_oa_authorization_operator_revoke_rule_result(r);r.skip_ws();if(r.pos!=r.buf.size())r.refuse("trailing_bytes");
 return result.value;
 }
-PolicyEdit SetRuleFor(const std::string& arg0,const PolicyRule& arg1,const std::int64_t& arg2,const std::string& arg3)override{OAAuthorizationOperatorSetRuleForArguments args;
-args.expected_revision=arg0;
-args.rule=arg1;
-args.ttl_ms=arg2;
-args.why=arg3;
-OAServiceFrame v;v.version=1;v.service="abstraction.rights/operator@1";v.method="SetRuleFor";enc_oaauthorizationoperatorsetruleforarguments(v.arguments,args,1);std::string frame;enc_oaserviceframe(frame,v,0);service_payload(frame);
-auto response=transport_.ExchangeFrame(frame);auto payload=service_response(response,v.service,v.method);Reader r{payload};r.depth=1;r.skip_ws();auto result=decode_oaauthorizationoperatorsetruleforresult(r);r.skip_ws();if(r.pos!=r.buf.size())r.refuse("trailing_bytes");
+PolicyEdit set_rule_for(const std::string& expected_revision,const PolicyRule& rule,const std::int64_t& ttl_ms,const std::string& why)override{detail::OAAuthorizationOperatorSetRuleForArguments args;
+args.expected_revision=expected_revision;
+args.rule=rule;
+args.ttl_ms=ttl_ms;
+args.why=why;
+detail::OAServiceFrame v;v.version=1;v.service="abstraction.rights/operator@1";v.method="SetRuleFor";detail::enc_oa_authorization_operator_set_rule_for_arguments(v.arguments,args,1);std::string frame;detail::enc_oa_service_frame(frame,v,0);detail::service_payload(frame);
+auto response=transport_.exchange_frame(frame);auto payload=detail::service_response(response,v.service,v.method);detail::Reader r{payload};r.depth=1;r.skip_ws();auto result=detail::decode_oa_authorization_operator_set_rule_for_result(r);r.skip_ws();if(r.pos!=r.buf.size())r.refuse("trailing_bytes");
 return result.value;
 }
-RuleRead ReadRule(const Subject& arg0,const std::string& arg1,const std::string& arg2)override{OAAuthorizationOperatorReadRuleArguments args;
-args.subject=arg0;
-args.action=arg1;
-args.resource=arg2;
-OAServiceFrame v;v.version=1;v.service="abstraction.rights/operator@1";v.method="ReadRule";enc_oaauthorizationoperatorreadrulearguments(v.arguments,args,1);std::string frame;enc_oaserviceframe(frame,v,0);service_payload(frame);
-auto response=transport_.ExchangeFrame(frame);auto payload=service_response(response,v.service,v.method);Reader r{payload};r.depth=1;r.skip_ws();auto result=decode_oaauthorizationoperatorreadruleresult(r);r.skip_ws();if(r.pos!=r.buf.size())r.refuse("trailing_bytes");
+RuleRead read_rule(const Subject& subject,const std::string& action,const std::string& resource)override{detail::OAAuthorizationOperatorReadRuleArguments args;
+args.subject=subject;
+args.action=action;
+args.resource=resource;
+detail::OAServiceFrame v;v.version=1;v.service="abstraction.rights/operator@1";v.method="ReadRule";detail::enc_oa_authorization_operator_read_rule_arguments(v.arguments,args,1);std::string frame;detail::enc_oa_service_frame(frame,v,0);detail::service_payload(frame);
+auto response=transport_.exchange_frame(frame);auto payload=detail::service_response(response,v.service,v.method);detail::Reader r{payload};r.depth=1;r.skip_ws();auto result=detail::decode_oa_authorization_operator_read_rule_result(r);r.skip_ws();if(r.pos!=r.buf.size())r.refuse("trailing_bytes");
 return result.value;
 }
-ActionEdit RegisterAction(const std::string& arg0,const std::string& arg1)override{OAAuthorizationOperatorRegisterActionArguments args;
-args.expected_revision=arg0;
-args.action=arg1;
-OAServiceFrame v;v.version=1;v.service="abstraction.rights/operator@1";v.method="RegisterAction";enc_oaauthorizationoperatorregisteractionarguments(v.arguments,args,1);std::string frame;enc_oaserviceframe(frame,v,0);service_payload(frame);
-auto response=transport_.ExchangeFrame(frame);auto payload=service_response(response,v.service,v.method);Reader r{payload};r.depth=1;r.skip_ws();auto result=decode_oaauthorizationoperatorregisteractionresult(r);r.skip_ws();if(r.pos!=r.buf.size())r.refuse("trailing_bytes");
+ActionEdit register_action(const std::string& expected_revision,const std::string& action)override{detail::OAAuthorizationOperatorRegisterActionArguments args;
+args.expected_revision=expected_revision;
+args.action=action;
+detail::OAServiceFrame v;v.version=1;v.service="abstraction.rights/operator@1";v.method="RegisterAction";detail::enc_oa_authorization_operator_register_action_arguments(v.arguments,args,1);std::string frame;detail::enc_oa_service_frame(frame,v,0);detail::service_payload(frame);
+auto response=transport_.exchange_frame(frame);auto payload=detail::service_response(response,v.service,v.method);detail::Reader r{payload};r.depth=1;r.skip_ws();auto result=detail::decode_oa_authorization_operator_register_action_result(r);r.skip_ws();if(r.pos!=r.buf.size())r.refuse("trailing_bytes");
 return result.value;
 }
-ActionEdit RetireAction(const std::string& arg0,const std::string& arg1)override{OAAuthorizationOperatorRetireActionArguments args;
-args.expected_revision=arg0;
-args.action=arg1;
-OAServiceFrame v;v.version=1;v.service="abstraction.rights/operator@1";v.method="RetireAction";enc_oaauthorizationoperatorretireactionarguments(v.arguments,args,1);std::string frame;enc_oaserviceframe(frame,v,0);service_payload(frame);
-auto response=transport_.ExchangeFrame(frame);auto payload=service_response(response,v.service,v.method);Reader r{payload};r.depth=1;r.skip_ws();auto result=decode_oaauthorizationoperatorretireactionresult(r);r.skip_ws();if(r.pos!=r.buf.size())r.refuse("trailing_bytes");
+ActionEdit retire_action(const std::string& expected_revision,const std::string& action)override{detail::OAAuthorizationOperatorRetireActionArguments args;
+args.expected_revision=expected_revision;
+args.action=action;
+detail::OAServiceFrame v;v.version=1;v.service="abstraction.rights/operator@1";v.method="RetireAction";detail::enc_oa_authorization_operator_retire_action_arguments(v.arguments,args,1);std::string frame;detail::enc_oa_service_frame(frame,v,0);detail::service_payload(frame);
+auto response=transport_.exchange_frame(frame);auto payload=detail::service_response(response,v.service,v.method);detail::Reader r{payload};r.depth=1;r.skip_ws();auto result=detail::decode_oa_authorization_operator_retire_action_result(r);r.skip_ws();if(r.pos!=r.buf.size())r.refuse("trailing_bytes");
 return result.value;
 }
 };
-struct AuthorizationOperatorService{inline static constexpr std::string_view wire_name="abstraction.rights/operator@1";inline static constexpr std::string_view capability="abstraction.rights";template<class Transport>using Client=AuthorizationOperatorClient<Transport>;};
+struct AuthorizationOperatorService{inline static constexpr std::string_view kWireName="abstraction.rights/operator@1";inline static constexpr std::string_view kCapability="abstraction.rights";template<class Transport>using Client=AuthorizationOperatorClient<Transport>;};
 struct AuthorizationOperatorDispatcher:FrameWriter,FrameExchanger{AuthorizationOperator&handler;explicit AuthorizationOperatorDispatcher(AuthorizationOperator&h):handler(h){}
-void WriteFrame(std::string_view frame)override{auto v=service_payload(frame);if(v.service!="abstraction.rights/operator@1")throw DispatchError("unknown_service");
+// A handler whose own type has ready(), returning a pair of bool and std::string, reports its readiness through describe_service.
+template<class H,class=decltype(static_cast<AuthorizationOperator&>(*static_cast<H*>(nullptr)))>explicit AuthorizationOperatorDispatcher(H&h):handler(h),ready_self_(&h),ready_hook_(detail::ready_hook<H>(0)){}
+// This dispatcher's service as abstraction.facade/endpoint@1 Describe lists it.
+DescribedService describe_service()const{DescribedService s{"abstraction.rights/operator@1",true,std::string()};if(ready_hook_){s.ready=ready_hook_(ready_self_,s.why);if(s.ready)s.why.clear();}return s;}
+void write_frame(std::string_view frame)override{auto v=detail::service_payload(frame);if(v.service!="abstraction.rights/operator@1")throw DispatchError("unknown_service");
 if(v.method=="ListPolicy"){
 throw DispatchError("wrong_mode");}
 if(v.method=="SetRule"){
@@ -3333,101 +3644,105 @@ throw DispatchError("wrong_mode");}
 if(v.method=="RetireAction"){
 throw DispatchError("wrong_mode");}
 throw DispatchError("unknown_method");}
-std::string ExchangeFrame(std::string_view frame)override{auto v=service_payload(frame);if(v.service!="abstraction.rights/operator@1"){ServiceError e("unknown_service","");return service_reply(v,"",&e);}
+std::string exchange_frame(std::string_view frame)override{auto v=detail::service_payload(frame);if(v.service==kEndpointContract)return describe_endpoint(frame,std::string(),std::string(),*this);if(v.service!="abstraction.rights/operator@1"){ServiceError e("unknown_service","");return detail::service_reply(v,"",&e);}
 try{
 if(v.method=="ListPolicy"){
-Reader r{v.arguments};r.depth=1;r.skip_ws();auto args=decode_oaauthorizationoperatorlistpolicyarguments(r);r.skip_ws();if(r.pos!=r.buf.size())r.refuse("trailing_bytes");auto payload=invoke_ListPolicy(args);return service_reply(v,payload);}
+detail::Reader r{v.arguments};r.depth=1;r.skip_ws();auto args=detail::decode_oa_authorization_operator_list_policy_arguments(r);r.skip_ws();if(r.pos!=r.buf.size())r.refuse("trailing_bytes");auto payload=invoke_list_policy(args);return detail::service_reply(v,payload);}
 if(v.method=="SetRule"){
-Reader r{v.arguments};r.depth=1;r.skip_ws();auto args=decode_oaauthorizationoperatorsetrulearguments(r);r.skip_ws();if(r.pos!=r.buf.size())r.refuse("trailing_bytes");auto payload=invoke_SetRule(args);return service_reply(v,payload);}
+detail::Reader r{v.arguments};r.depth=1;r.skip_ws();auto args=detail::decode_oa_authorization_operator_set_rule_arguments(r);r.skip_ws();if(r.pos!=r.buf.size())r.refuse("trailing_bytes");auto payload=invoke_set_rule(args);return detail::service_reply(v,payload);}
 if(v.method=="RevokeRule"){
-Reader r{v.arguments};r.depth=1;r.skip_ws();auto args=decode_oaauthorizationoperatorrevokerulearguments(r);r.skip_ws();if(r.pos!=r.buf.size())r.refuse("trailing_bytes");auto payload=invoke_RevokeRule(args);return service_reply(v,payload);}
+detail::Reader r{v.arguments};r.depth=1;r.skip_ws();auto args=detail::decode_oa_authorization_operator_revoke_rule_arguments(r);r.skip_ws();if(r.pos!=r.buf.size())r.refuse("trailing_bytes");auto payload=invoke_revoke_rule(args);return detail::service_reply(v,payload);}
 if(v.method=="SetRuleFor"){
-Reader r{v.arguments};r.depth=1;r.skip_ws();auto args=decode_oaauthorizationoperatorsetruleforarguments(r);r.skip_ws();if(r.pos!=r.buf.size())r.refuse("trailing_bytes");auto payload=invoke_SetRuleFor(args);return service_reply(v,payload);}
+detail::Reader r{v.arguments};r.depth=1;r.skip_ws();auto args=detail::decode_oa_authorization_operator_set_rule_for_arguments(r);r.skip_ws();if(r.pos!=r.buf.size())r.refuse("trailing_bytes");auto payload=invoke_set_rule_for(args);return detail::service_reply(v,payload);}
 if(v.method=="ReadRule"){
-Reader r{v.arguments};r.depth=1;r.skip_ws();auto args=decode_oaauthorizationoperatorreadrulearguments(r);r.skip_ws();if(r.pos!=r.buf.size())r.refuse("trailing_bytes");auto payload=invoke_ReadRule(args);return service_reply(v,payload);}
+detail::Reader r{v.arguments};r.depth=1;r.skip_ws();auto args=detail::decode_oa_authorization_operator_read_rule_arguments(r);r.skip_ws();if(r.pos!=r.buf.size())r.refuse("trailing_bytes");auto payload=invoke_read_rule(args);return detail::service_reply(v,payload);}
 if(v.method=="RegisterAction"){
-Reader r{v.arguments};r.depth=1;r.skip_ws();auto args=decode_oaauthorizationoperatorregisteractionarguments(r);r.skip_ws();if(r.pos!=r.buf.size())r.refuse("trailing_bytes");auto payload=invoke_RegisterAction(args);return service_reply(v,payload);}
+detail::Reader r{v.arguments};r.depth=1;r.skip_ws();auto args=detail::decode_oa_authorization_operator_register_action_arguments(r);r.skip_ws();if(r.pos!=r.buf.size())r.refuse("trailing_bytes");auto payload=invoke_register_action(args);return detail::service_reply(v,payload);}
 if(v.method=="RetireAction"){
-Reader r{v.arguments};r.depth=1;r.skip_ws();auto args=decode_oaauthorizationoperatorretireactionarguments(r);r.skip_ws();if(r.pos!=r.buf.size())r.refuse("trailing_bytes");auto payload=invoke_RetireAction(args);return service_reply(v,payload);}
-throw ServiceError("unknown_method","");}catch(const ServiceError&e){return service_reply(v,"",&e);}catch(const Refusal&e){ServiceError error(e.word,"");return service_reply(v,"",&error);}
+detail::Reader r{v.arguments};r.depth=1;r.skip_ws();auto args=detail::decode_oa_authorization_operator_retire_action_arguments(r);r.skip_ws();if(r.pos!=r.buf.size())r.refuse("trailing_bytes");auto payload=invoke_retire_action(args);return detail::service_reply(v,payload);}
+throw ServiceError("unknown_method","");}catch(const ServiceError&e){return detail::service_reply(v,"",&e);}catch(const Refusal&e){ServiceError error(e.word,"");return detail::service_reply(v,"",&error);}
 }
-Raw invoke_ListPolicy(const OAAuthorizationOperatorListPolicyArguments&args){
+private:
+Raw invoke_list_policy(const detail::OAAuthorizationOperatorListPolicyArguments&args){
 PolicyPage result{};
 try{
-result=handler.ListPolicy(args.cursor,args.limit);
+result=handler.list_policy(args.cursor,args.limit);
 }catch(const ServiceError&){throw;}catch(...){throw ServiceError("handler_error","handler failed");}
 try{
-OAAuthorizationOperatorListPolicyResult value;
+detail::OAAuthorizationOperatorListPolicyResult value;
 value.value=result;
-Raw payload;enc_oaauthorizationoperatorlistpolicyresult(payload,value,1);Reader r{payload};r.depth=1;r.skip_ws();decode_oaauthorizationoperatorlistpolicyresult(r);r.skip_ws();if(r.pos!=r.buf.size())r.refuse("trailing_bytes");return payload;
+Raw payload;detail::enc_oa_authorization_operator_list_policy_result(payload,value,1);detail::Reader r{payload};r.depth=1;r.skip_ws();detail::decode_oa_authorization_operator_list_policy_result(r);r.skip_ws();if(r.pos!=r.buf.size())r.refuse("trailing_bytes");return payload;
 }catch(...){throw ServiceError("invalid_result","");}
 }
-Raw invoke_SetRule(const OAAuthorizationOperatorSetRuleArguments&args){
+Raw invoke_set_rule(const detail::OAAuthorizationOperatorSetRuleArguments&args){
 PolicyEdit result{};
 try{
-result=handler.SetRule(args.expected_revision,args.rule);
+result=handler.set_rule(args.expected_revision,args.rule);
 }catch(const ServiceError&){throw;}catch(...){throw ServiceError("handler_error","handler failed");}
 try{
-OAAuthorizationOperatorSetRuleResult value;
+detail::OAAuthorizationOperatorSetRuleResult value;
 value.value=result;
-Raw payload;enc_oaauthorizationoperatorsetruleresult(payload,value,1);Reader r{payload};r.depth=1;r.skip_ws();decode_oaauthorizationoperatorsetruleresult(r);r.skip_ws();if(r.pos!=r.buf.size())r.refuse("trailing_bytes");return payload;
+Raw payload;detail::enc_oa_authorization_operator_set_rule_result(payload,value,1);detail::Reader r{payload};r.depth=1;r.skip_ws();detail::decode_oa_authorization_operator_set_rule_result(r);r.skip_ws();if(r.pos!=r.buf.size())r.refuse("trailing_bytes");return payload;
 }catch(...){throw ServiceError("invalid_result","");}
 }
-Raw invoke_RevokeRule(const OAAuthorizationOperatorRevokeRuleArguments&args){
+Raw invoke_revoke_rule(const detail::OAAuthorizationOperatorRevokeRuleArguments&args){
 PolicyEdit result{};
 try{
-result=handler.RevokeRule(args.expected_revision,args.subject,args.action,args.resource);
+result=handler.revoke_rule(args.expected_revision,args.subject,args.action,args.resource);
 }catch(const ServiceError&){throw;}catch(...){throw ServiceError("handler_error","handler failed");}
 try{
-OAAuthorizationOperatorRevokeRuleResult value;
+detail::OAAuthorizationOperatorRevokeRuleResult value;
 value.value=result;
-Raw payload;enc_oaauthorizationoperatorrevokeruleresult(payload,value,1);Reader r{payload};r.depth=1;r.skip_ws();decode_oaauthorizationoperatorrevokeruleresult(r);r.skip_ws();if(r.pos!=r.buf.size())r.refuse("trailing_bytes");return payload;
+Raw payload;detail::enc_oa_authorization_operator_revoke_rule_result(payload,value,1);detail::Reader r{payload};r.depth=1;r.skip_ws();detail::decode_oa_authorization_operator_revoke_rule_result(r);r.skip_ws();if(r.pos!=r.buf.size())r.refuse("trailing_bytes");return payload;
 }catch(...){throw ServiceError("invalid_result","");}
 }
-Raw invoke_SetRuleFor(const OAAuthorizationOperatorSetRuleForArguments&args){
+Raw invoke_set_rule_for(const detail::OAAuthorizationOperatorSetRuleForArguments&args){
 PolicyEdit result{};
 try{
-result=handler.SetRuleFor(args.expected_revision,args.rule,args.ttl_ms,args.why);
+result=handler.set_rule_for(args.expected_revision,args.rule,args.ttl_ms,args.why);
 }catch(const ServiceError&){throw;}catch(...){throw ServiceError("handler_error","handler failed");}
 try{
-OAAuthorizationOperatorSetRuleForResult value;
+detail::OAAuthorizationOperatorSetRuleForResult value;
 value.value=result;
-Raw payload;enc_oaauthorizationoperatorsetruleforresult(payload,value,1);Reader r{payload};r.depth=1;r.skip_ws();decode_oaauthorizationoperatorsetruleforresult(r);r.skip_ws();if(r.pos!=r.buf.size())r.refuse("trailing_bytes");return payload;
+Raw payload;detail::enc_oa_authorization_operator_set_rule_for_result(payload,value,1);detail::Reader r{payload};r.depth=1;r.skip_ws();detail::decode_oa_authorization_operator_set_rule_for_result(r);r.skip_ws();if(r.pos!=r.buf.size())r.refuse("trailing_bytes");return payload;
 }catch(...){throw ServiceError("invalid_result","");}
 }
-Raw invoke_ReadRule(const OAAuthorizationOperatorReadRuleArguments&args){
+Raw invoke_read_rule(const detail::OAAuthorizationOperatorReadRuleArguments&args){
 RuleRead result{};
 try{
-result=handler.ReadRule(args.subject,args.action,args.resource);
+result=handler.read_rule(args.subject,args.action,args.resource);
 }catch(const ServiceError&){throw;}catch(...){throw ServiceError("handler_error","handler failed");}
 try{
-OAAuthorizationOperatorReadRuleResult value;
+detail::OAAuthorizationOperatorReadRuleResult value;
 value.value=result;
-Raw payload;enc_oaauthorizationoperatorreadruleresult(payload,value,1);Reader r{payload};r.depth=1;r.skip_ws();decode_oaauthorizationoperatorreadruleresult(r);r.skip_ws();if(r.pos!=r.buf.size())r.refuse("trailing_bytes");return payload;
+Raw payload;detail::enc_oa_authorization_operator_read_rule_result(payload,value,1);detail::Reader r{payload};r.depth=1;r.skip_ws();detail::decode_oa_authorization_operator_read_rule_result(r);r.skip_ws();if(r.pos!=r.buf.size())r.refuse("trailing_bytes");return payload;
 }catch(...){throw ServiceError("invalid_result","");}
 }
-Raw invoke_RegisterAction(const OAAuthorizationOperatorRegisterActionArguments&args){
+Raw invoke_register_action(const detail::OAAuthorizationOperatorRegisterActionArguments&args){
 ActionEdit result{};
 try{
-result=handler.RegisterAction(args.expected_revision,args.action);
+result=handler.register_action(args.expected_revision,args.action);
 }catch(const ServiceError&){throw;}catch(...){throw ServiceError("handler_error","handler failed");}
 try{
-OAAuthorizationOperatorRegisterActionResult value;
+detail::OAAuthorizationOperatorRegisterActionResult value;
 value.value=result;
-Raw payload;enc_oaauthorizationoperatorregisteractionresult(payload,value,1);Reader r{payload};r.depth=1;r.skip_ws();decode_oaauthorizationoperatorregisteractionresult(r);r.skip_ws();if(r.pos!=r.buf.size())r.refuse("trailing_bytes");return payload;
+Raw payload;detail::enc_oa_authorization_operator_register_action_result(payload,value,1);detail::Reader r{payload};r.depth=1;r.skip_ws();detail::decode_oa_authorization_operator_register_action_result(r);r.skip_ws();if(r.pos!=r.buf.size())r.refuse("trailing_bytes");return payload;
 }catch(...){throw ServiceError("invalid_result","");}
 }
-Raw invoke_RetireAction(const OAAuthorizationOperatorRetireActionArguments&args){
+Raw invoke_retire_action(const detail::OAAuthorizationOperatorRetireActionArguments&args){
 ActionEdit result{};
 try{
-result=handler.RetireAction(args.expected_revision,args.action);
+result=handler.retire_action(args.expected_revision,args.action);
 }catch(const ServiceError&){throw;}catch(...){throw ServiceError("handler_error","handler failed");}
 try{
-OAAuthorizationOperatorRetireActionResult value;
+detail::OAAuthorizationOperatorRetireActionResult value;
 value.value=result;
-Raw payload;enc_oaauthorizationoperatorretireactionresult(payload,value,1);Reader r{payload};r.depth=1;r.skip_ws();decode_oaauthorizationoperatorretireactionresult(r);r.skip_ws();if(r.pos!=r.buf.size())r.refuse("trailing_bytes");return payload;
+Raw payload;detail::enc_oa_authorization_operator_retire_action_result(payload,value,1);detail::Reader r{payload};r.depth=1;r.skip_ws();detail::decode_oa_authorization_operator_retire_action_result(r);r.skip_ws();if(r.pos!=r.buf.size())r.refuse("trailing_bytes");return payload;
 }catch(...){throw ServiceError("invalid_result","");}
 }
+private:
+void* ready_self_=nullptr;
+bool(*ready_hook_)(void*,std::string&)=nullptr;
 };
 
 }  // namespace abstraction::rights::api

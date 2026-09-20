@@ -2,9 +2,11 @@ package rights
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	cas "github.com/openabstractions/abstraction-cas/go"
+	identity "github.com/openabstractions/abstraction-identity"
 	wire "github.com/openabstractions/abstraction-rights/go/abstraction/rights/api"
 	"io"
 	"os"
@@ -67,7 +69,15 @@ type DecisionPolicy struct {
 	// Clock supplies service time for provenance and expiry. Nil uses time.Now.
 	// Assign before the policy is shared.
 	Clock func() time.Time
+	// StateRequired makes an absent state file an outage: decisions read
+	// unavailable, and edits and registrations refuse. A host sets it once its
+	// installation has created the file, so a removed file never reads as an
+	// empty policy. Assign before the policy is shared.
+	StateRequired bool
 }
+
+// ErrDecisionStateMissing reports an absent state file under StateRequired.
+var ErrDecisionStateMissing = errors.New("rights: decision state is missing")
 
 func boundedDecisionString(v string, max int) bool {
 	return len(v) > 0 && len(v) <= max && utf8.ValidString(v) && strings.IndexFunc(v, unicode.IsControl) < 0
@@ -76,6 +86,12 @@ func validWhy(v string) bool {
 	return v == "" || boundedDecisionString(v, MaxRuleWhy)
 }
 func NormalizeDecisionSubject(s wire.Subject) (wire.Subject, error) {
+	if strings.HasPrefix(s.Program, identity.PackagedProgramPrefix) {
+		if !boundedDecisionString(s.Account, 128) || !identity.ValidSubjectProgram(s.Program) {
+			return wire.Subject{}, errors.New("rights: invalid subject")
+		}
+		return s, nil
+	}
 	if !boundedDecisionString(s.Account, 128) || !boundedDecisionString(s.Program, 4096) || !filepath.IsAbs(s.Program) {
 		return wire.Subject{}, errors.New("rights: invalid subject")
 	}
@@ -152,6 +168,9 @@ func (p *DecisionPolicy) now() time.Time {
 func (p *DecisionPolicy) regular() error {
 	info, e := os.Lstat(p.path)
 	if errors.Is(e, os.ErrNotExist) {
+		if p.StateRequired {
+			return ErrDecisionStateMissing
+		}
 		return nil
 	}
 	if e != nil {
@@ -226,11 +245,34 @@ func (p *DecisionPolicy) decodeDecision(data []byte) (decisionFile, error) {
 	}
 	return f, nil
 }
+
+// DecisionReadBudget bounds one read of the decision state. A readable file
+// reads in milliseconds. The file store retries a denied open, because a
+// writer's replace denies it for an instant, and a file denied for good ends
+// that retry at this budget: the decision, rule read or listing is unavailable.
+const DecisionReadBudget = 500 * time.Millisecond
+
 func (p *DecisionPolicy) readDecision() (decisionFile, string, error) {
+	return p.readDecisionContext(context.Background())
+}
+
+// CheckState reads the decision state within ctx and DecisionReadBudget and
+// returns why it cannot decide: a missing file under StateRequired, an
+// unreadable, oversize or malformed file. Nil means decisions read the file.
+// A host reports its decision point not ready while this fails.
+func (p *DecisionPolicy) CheckState(ctx context.Context) error {
+	_, _, e := p.readDecisionContext(ctx)
+	return e
+}
+
+// readDecisionContext reads the state within ctx and DecisionReadBudget.
+func (p *DecisionPolicy) readDecisionContext(ctx context.Context) (decisionFile, string, error) {
 	if e := p.regular(); e != nil {
 		return decisionFile{}, "", e
 	}
-	data, e := cas.ReadLimit(p.path, MaxDecisionBytes)
+	ctx, cancel := context.WithTimeout(ctx, DecisionReadBudget)
+	defer cancel()
+	data, e := cas.ReadLimitContext(ctx, p.path, MaxDecisionBytes)
 	if e != nil {
 		return decisionFile{}, "", e
 	}
@@ -326,11 +368,17 @@ func addAction(f *decisionFile, entry registeredAction) {
 	slices.SortFunc(f.Actions, func(a, b registeredAction) int { return strings.Compare(a.Action, b.Action) })
 }
 func (p *DecisionPolicy) Decide(subject wire.Subject, action, resource string) wire.Decision {
+	return p.DecideContext(context.Background(), subject, action, resource)
+}
+
+// DecideContext is Decide with its state read bounded by ctx as well as
+// DecisionReadBudget. A read that does not finish in time is unavailable.
+func (p *DecisionPolicy) DecideContext(ctx context.Context, subject wire.Subject, action, resource string) wire.Decision {
 	s, e := NormalizeDecisionSubject(subject)
 	if e != nil || !ValidDecisionQuery(action, resource) {
 		return wire.Decision{Outcome: wire.DecisionOutcomeInvalid}
 	}
-	f, revision, e := p.readDecision()
+	f, revision, e := p.readDecisionContext(ctx)
 	if e != nil {
 		return wire.Decision{Outcome: wire.DecisionOutcomeUnavailable}
 	}

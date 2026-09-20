@@ -13,10 +13,10 @@ class Client {
 public:
  explicit Client(std::string endpoint):transport_(std::move(endpoint),5000,1u<<20){}
  Client(std::string endpoint,ipc::Deadline deadline):transport_(std::move(endpoint),deadline,1u<<20){}
- Client WithServerExpectation(std::optional<ipc::ServerExpectation> server) const {auto copy=*this;copy.transport_=transport_.WithServerExpectation(std::move(server));return copy;}
- Client WithCancellation(ipc::CancellationToken token)const{auto copy=*this;copy.transport_=transport_.WithCancellation(std::move(token));return copy;}
- api::Decision Decide(const std::string& action,const std::string& resource)const{
-  auto transport=transport_;api::AuthorizationClient<ipc::FrameTransport> client(transport);auto result=client.Decide(action,resource);validate(result);return result;
+ Client with_server_expectation(std::optional<ipc::ServerExpectation> server) const {auto copy=*this;copy.transport_=transport_.with_server_expectation(std::move(server));return copy;}
+ Client with_cancellation(ipc::CancellationToken token)const{auto copy=*this;copy.transport_=transport_.with_cancellation(std::move(token));return copy;}
+ api::Decision decide(const std::string& action,const std::string& resource)const{
+  auto transport=transport_;api::AuthorizationClient<ipc::FrameTransport> client(transport);auto result=client.decide(action,resource);validate(result);return result;
  }
 private:
  friend class TrustedEnforcerClient;
@@ -27,8 +27,8 @@ private:
 class TrustedEnforcerClient {
 public:
  explicit TrustedEnforcerClient(Client client):client_(std::move(client)){}
- api::Decision DecideFor(const api::Subject& subject,const std::string& action,const std::string& resource)const{
-  auto transport=client_.transport_;api::AuthorizationClient<ipc::FrameTransport> client(transport);auto result=client.DecideFor(subject,action,resource);validate(result);return result;
+ api::Decision decide_for(const api::Subject& subject,const std::string& action,const std::string& resource)const{
+  auto transport=client_.transport_;api::AuthorizationClient<ipc::FrameTransport> client(transport);auto result=client.decide_for(subject,action,resource);validate(result);return result;
  }
 private: Client client_;
 };

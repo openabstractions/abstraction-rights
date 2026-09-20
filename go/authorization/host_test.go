@@ -78,22 +78,22 @@ func TestAuthorizationDirectDoesNotGrantRelay(t *testing.T) {
 	}
 	c, _ := live(t, p, nil)
 	r, e := c.DecideContext(context.Background(), action, "content")
-	if e != nil || r.Outcome != "permitted" {
+	if e != nil || r.Outcome != wire.DecisionOutcomePermitted {
 		t.Fatal(r, e)
 	}
 	r, e = c.DecideForContext(context.Background(), s, action, "content")
-	if e != nil || r.Outcome != "forbidden" {
+	if e != nil || r.Outcome != wire.DecisionOutcomeForbidden {
 		t.Fatal(r, e)
 	}
 	if e = os.WriteFile(path, []byte("corrupt"), 0600); e != nil {
 		t.Fatal(e)
 	}
 	r, e = c.DecideForContext(context.Background(), s, action, "content")
-	if e != nil || r.Outcome != "forbidden" {
+	if e != nil || r.Outcome != wire.DecisionOutcomeForbidden {
 		t.Fatal("relay authorization must precede storage", r, e)
 	}
 	r, e = c.DecideContext(context.Background(), action, "content")
-	if e != nil || r.Outcome != "unavailable" {
+	if e != nil || r.Outcome != wire.DecisionOutcomeUnavailable {
 		t.Fatal(r, e)
 	}
 }
@@ -110,7 +110,7 @@ func TestAuthorizationTrustedEnforcerAndFreshRevocation(t *testing.T) {
 		return e == nil && actual == s && a == action && r == "content"
 	})
 	r, e := c.DecideForContext(context.Background(), s, action, "content")
-	if e != nil || r.Outcome != "permitted" {
+	if e != nil || r.Outcome != wire.DecisionOutcomePermitted {
 		t.Fatal(r, e)
 	}
 	peer := <-captured
@@ -137,7 +137,7 @@ func TestAuthorizationTrustedEnforcerAndFreshRevocation(t *testing.T) {
 		t.Fatal(e)
 	}
 	r, e = c.DecideForContext(context.Background(), s, "different.action", "content")
-	if e != nil || r.Outcome != "forbidden" {
+	if e != nil || r.Outcome != wire.DecisionOutcomeForbidden {
 		t.Fatal(r, e)
 	}
 	<-captured
@@ -184,11 +184,11 @@ func TestAuthorizationChild(t *testing.T) {
 	}
 	c := client.New(endpoint)
 	r, e := c.DecideForContext(context.Background(), s, action, "content")
-	if e != nil || r.Outcome != "forbidden" {
+	if e != nil || r.Outcome != wire.DecisionOutcomeForbidden {
 		os.Exit(4)
 	}
 	r, e = c.DecideContext(context.Background(), action, "content")
-	if e != nil || r.Outcome != "not_granted" {
+	if e != nil || r.Outcome != wire.DecisionOutcomeNotGranted {
 		os.Exit(5)
 	}
 	os.Exit(0)

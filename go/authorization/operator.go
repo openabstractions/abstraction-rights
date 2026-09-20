@@ -22,11 +22,29 @@ type AuthorizeOperator func(context.Context, *identity.Peer) error
 
 var ErrOperatorForbidden = errors.New("rights: operator forbidden")
 
-func operatorError(err error) string {
+func operatorPageError(err error) wire.PolicyPageOutcome {
 	if errors.Is(err, ErrOperatorForbidden) {
-		return "forbidden"
+		return wire.PolicyPageOutcomeForbidden
 	}
-	return "unavailable"
+	return wire.PolicyPageOutcomeUnavailable
+}
+func operatorPolicyError(err error) wire.PolicyEditOutcome {
+	if errors.Is(err, ErrOperatorForbidden) {
+		return wire.PolicyEditOutcomeForbidden
+	}
+	return wire.PolicyEditOutcomeUnavailable
+}
+func operatorRuleError(err error) wire.RuleReadOutcome {
+	if errors.Is(err, ErrOperatorForbidden) {
+		return wire.RuleReadOutcomeForbidden
+	}
+	return wire.RuleReadOutcomeUnavailable
+}
+func operatorActionError(err error) wire.ActionEditOutcome {
+	if errors.Is(err, ErrOperatorForbidden) {
+		return wire.ActionEditOutcomeForbidden
+	}
+	return wire.ActionEditOutcomeUnavailable
 }
 func (h *Host) EnableOperator(authorize AuthorizeOperator) error {
 	h.lifecycle.Lock()
@@ -40,6 +58,14 @@ func (h *Host) EnableOperator(authorize AuthorizeOperator) error {
 	h.operator = authorize
 	return nil
 }
+
+// Available reports whether the host has not been closed.
+func (h *Host) Available() bool {
+	h.lifecycle.Lock()
+	defer h.lifecycle.Unlock()
+	return h.ctx.Err() == nil
+}
+
 func (h *Host) OperatorAvailable() bool {
 	h.lifecycle.Lock()
 	defer h.lifecycle.Unlock()
@@ -61,20 +87,20 @@ func (r *operatorReceiver) authorize() (wire.Subject, error) {
 	}
 	return subject, r.ctx.Err()
 }
-func policyPageRefusal(outcome string) wire.PolicyPage {
+func policyPageRefusal(outcome wire.PolicyPageOutcome) wire.PolicyPage {
 	return wire.PolicyPage{Outcome: outcome, Catalog: []string{}, Rules: []wire.PolicyRule{}}
 }
 func (r *operatorReceiver) ListPolicy(cursor string, limit int64) (wire.PolicyPage, error) {
 	subject, err := r.authorize()
 	if err != nil {
-		return policyPageRefusal(operatorError(err)), nil
+		return policyPageRefusal(operatorPageError(err)), nil
 	}
 	if limit < 1 || limit > 64 || len(cursor) > 256 || !utf8.ValidString(cursor) {
-		return policyPageRefusal("invalid"), nil
+		return policyPageRefusal(wire.PolicyPageOutcomeInvalid), nil
 	}
 	snapshot, err := r.host.policy.OperatorSnapshot()
 	if err != nil {
-		return policyPageRefusal("unavailable"), nil
+		return policyPageRefusal(wire.PolicyPageOutcomeUnavailable), nil
 	}
 	scope, _ := json.Marshal(subject)
 	sum := sha256.Sum256(scope)
@@ -84,25 +110,25 @@ func (r *operatorReceiver) ListPolicy(cursor string, limit int64) (wire.PolicyPa
 		word, ok := strings.CutPrefix(cursor, prefix)
 		n, e := strconv.Atoi(word)
 		if !ok || e != nil || n < 0 || n > len(snapshot.Rules) || strconv.Itoa(n) != word {
-			return policyPageRefusal("gap"), nil
+			return policyPageRefusal(wire.PolicyPageOutcomeGap), nil
 		}
 		offset = n
 	}
 	catalog, err := json.Marshal(snapshot.Catalog)
 	if err != nil {
-		return policyPageRefusal("unavailable"), nil
+		return policyPageRefusal(wire.PolicyPageOutcomeUnavailable), nil
 	}
 	used := 2048 + len(catalog) + 32*len(snapshot.Catalog)
 	if used > 256<<10 {
-		return policyPageRefusal("unavailable"), nil
+		return policyPageRefusal(wire.PolicyPageOutcomeUnavailable), nil
 	}
-	page := wire.PolicyPage{Outcome: "page", Revision: snapshot.Revision, Catalog: snapshot.Catalog, Rules: []wire.PolicyRule{}}
+	page := wire.PolicyPage{Outcome: wire.PolicyPageOutcomePage, Revision: snapshot.Revision, Catalog: snapshot.Catalog, Rules: []wire.PolicyRule{}}
 	for offset < len(snapshot.Rules) && int64(len(page.Rules)) < limit {
 		rule := snapshot.Rules[offset]
 		data, e := json.Marshal(rule)
 		cost := len(data) + 1024
 		if e != nil || cost > (256<<10)-used && len(page.Rules) == 0 {
-			return policyPageRefusal("unavailable"), nil
+			return policyPageRefusal(wire.PolicyPageOutcomeUnavailable), nil
 		}
 		if used+cost > 256<<10 {
 			break
@@ -116,7 +142,7 @@ func (r *operatorReceiver) ListPolicy(cursor string, limit int64) (wire.PolicyPa
 		page.Next = prefix + strconv.Itoa(offset)
 	}
 	if _, err = r.authorize(); err != nil {
-		return policyPageRefusal(operatorError(err)), nil
+		return policyPageRefusal(operatorPageError(err)), nil
 	}
 	return page, nil
 }
@@ -139,22 +165,22 @@ func (r *operatorReceiver) SetRuleFor(expected string, rule wire.PolicyRule, ttl
 func (r *operatorReceiver) edit(expected string, subject wire.Subject, action, resource string, edit rights.RuleEdit) (wire.PolicyEdit, error) {
 	by, err := r.authorize()
 	if err != nil {
-		return wire.PolicyEdit{Outcome: operatorError(err)}, nil
+		return wire.PolicyEdit{Outcome: operatorPolicyError(err)}, nil
 	}
 	edit.By = by
 	result, err := r.host.policy.ChangeRule(expected, subject, action, resource, edit, func() error { _, err := r.authorize(); return err })
 	if err != nil {
-		return wire.PolicyEdit{Outcome: operatorError(err)}, nil
+		return wire.PolicyEdit{Outcome: operatorPolicyError(err)}, nil
 	}
 	return result, nil
 }
 func (r *operatorReceiver) ReadRule(subject wire.Subject, action, resource string) (wire.RuleRead, error) {
 	if _, err := r.authorize(); err != nil {
-		return wire.RuleRead{Outcome: operatorError(err)}, nil
+		return wire.RuleRead{Outcome: operatorRuleError(err)}, nil
 	}
 	result := r.host.policy.ReadRule(subject, action, resource)
 	if _, err := r.authorize(); err != nil {
-		return wire.RuleRead{Outcome: operatorError(err)}, nil
+		return wire.RuleRead{Outcome: operatorRuleError(err)}, nil
 	}
 	return result, nil
 }
@@ -167,11 +193,11 @@ func (r *operatorReceiver) RetireAction(expected, action string) (wire.ActionEdi
 func (r *operatorReceiver) editAction(expected, action string, register bool) (wire.ActionEdit, error) {
 	by, err := r.authorize()
 	if err != nil {
-		return wire.ActionEdit{Outcome: operatorError(err)}, nil
+		return wire.ActionEdit{Outcome: operatorActionError(err)}, nil
 	}
 	result, err := r.host.policy.EditAction(expected, action, register, by, func() error { _, err := r.authorize(); return err })
 	if err != nil {
-		return wire.ActionEdit{Outcome: operatorError(err)}, nil
+		return wire.ActionEdit{Outcome: operatorActionError(err)}, nil
 	}
 	return result, nil
 }

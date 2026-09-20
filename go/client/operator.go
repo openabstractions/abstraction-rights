@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	identity "github.com/openabstractions/abstraction-identity"
 	"github.com/openabstractions/abstraction-identity/listen"
 	wire "github.com/openabstractions/abstraction-rights/go/abstraction/rights/api"
 	"path/filepath"
@@ -29,7 +30,7 @@ func boundedOperatorString(s string, max int) bool {
 	return len(s) > 0 && len(s) <= max && utf8.ValidString(s) && strings.IndexFunc(s, unicode.IsControl) < 0
 }
 func validPolicyRule(r PolicyRule) bool {
-	return boundedOperatorString(r.Subject.Account, 128) && boundedOperatorString(r.Subject.Program, 4096) && filepath.IsAbs(r.Subject.Program) && filepath.Clean(r.Subject.Program) == r.Subject.Program && boundedOperatorString(r.Action, 128) && boundedOperatorString(r.Resource, 1024)
+	return boundedOperatorString(r.Subject.Account, 128) && boundedOperatorString(r.Subject.Program, 4096) && identity.ValidSubjectProgram(r.Subject.Program) && boundedOperatorString(r.Action, 128) && boundedOperatorString(r.Resource, 1024)
 }
 func (c *Operator) ListPolicyContext(ctx context.Context, cursor string, limit int64) (wire.PolicyPage, error) {
 	if err := ctx.Err(); err != nil {
@@ -42,7 +43,7 @@ func (c *Operator) ListPolicyContext(ctx context.Context, cursor string, limit i
 	if err != nil {
 		return wire.PolicyPage{}, err
 	}
-	if page.Outcome != "page" {
+	if page.Outcome != wire.PolicyPageOutcomePage {
 		if page.Revision != "" || len(page.Catalog) != 0 || len(page.Rules) != 0 || page.Next != "" || page.Complete {
 			return wire.PolicyPage{}, errors.New("rights: malformed policy refusal")
 		}
@@ -107,7 +108,7 @@ func validStamp(s string) bool {
 	return err == nil && t.UTC().Format(stampFormat) == s
 }
 func validSubject(s Subject) bool {
-	return boundedOperatorString(s.Account, 128) && boundedOperatorString(s.Program, 4096) && filepath.IsAbs(s.Program) && filepath.Clean(s.Program) == s.Program
+	return boundedOperatorString(s.Account, 128) && boundedOperatorString(s.Program, 4096) && identity.ValidSubjectProgram(s.Program)
 }
 func validActionName(action string) bool {
 	owner, name, ok := strings.Cut(action, "/")
@@ -154,15 +155,15 @@ func (c *Operator) ReadRuleContext(ctx context.Context, subject Subject, action,
 		return wire.RuleRead{}, err
 	}
 	switch result.Outcome {
-	case "found", "expired":
+	case wire.RuleReadOutcomeFound, wire.RuleReadOutcomeExpired:
 		r := result.Record
 		if !boundedOperatorString(result.Revision, 128) || r == nil || !validPolicyRule(r.Rule) || r.Rule.Subject != subject ||
 			r.Rule.Action != action || r.Rule.Resource != resource || !validSubject(r.SetBy) || !validStamp(r.SetAt) ||
 			!(r.Why == "" || boundedOperatorString(r.Why, 256)) || (r.Expires != "" && !validStamp(r.Expires)) ||
-			(result.Outcome == "expired" && r.Expires == "") {
+			(result.Outcome == wire.RuleReadOutcomeExpired && r.Expires == "") {
 			return wire.RuleRead{}, errors.New("rights: malformed rule record")
 		}
-	case "unknown":
+	case wire.RuleReadOutcomeUnknown:
 		if !boundedOperatorString(result.Revision, 128) || result.Record != nil {
 			return wire.RuleRead{}, errors.New("rights: malformed unknown rule")
 		}
@@ -201,8 +202,8 @@ func checkedActionEdit(result wire.ActionEdit, err error, action string) (wire.A
 	if err != nil {
 		return wire.ActionEdit{}, err
 	}
-	observed := result.Outcome == "applied" || result.Outcome == "conflict" || result.Outcome == "unknown"
-	if observed != boundedOperatorString(result.Revision, 128) || (result.Current != nil && (result.Outcome == "unknown" || !observed)) {
+	observed := result.Outcome == wire.ActionEditOutcomeApplied || result.Outcome == wire.ActionEditOutcomeConflict || result.Outcome == wire.ActionEditOutcomeUnknown
+	if observed != boundedOperatorString(result.Revision, 128) || (result.Current != nil && (result.Outcome == wire.ActionEditOutcomeUnknown || !observed)) {
 		return wire.ActionEdit{}, errors.New("rights: malformed action edit")
 	}
 	if e := result.Current; e != nil && (e.Action != action || !validSubject(e.RegisteredBy) || !validStamp(e.RegisteredAt)) {
@@ -216,7 +217,7 @@ func checkedPolicyEdit(result wire.PolicyEdit, err error, subject Subject, actio
 	if err != nil {
 		return wire.PolicyEdit{}, err
 	}
-	observed := result.Outcome == "applied" || result.Outcome == "conflict"
+	observed := result.Outcome == wire.PolicyEditOutcomeApplied || result.Outcome == wire.PolicyEditOutcomeConflict
 	if observed != boundedOperatorString(result.Revision, 128) || (!observed && (result.Revision != "" || result.Current != nil)) {
 		return wire.PolicyEdit{}, errors.New("rights: malformed edit revision")
 	}
@@ -225,7 +226,7 @@ func checkedPolicyEdit(result wire.PolicyEdit, err error, subject Subject, actio
 			return wire.PolicyEdit{}, errors.New("rights: mismatched current rule")
 		}
 	}
-	if result.Outcome == "applied" {
+	if result.Outcome == wire.PolicyEditOutcomeApplied {
 		if (permit != nil) != (result.Current != nil) || (permit != nil && result.Current.Permit != *permit) {
 			return wire.PolicyEdit{}, errors.New("rights: malformed applied state")
 		}

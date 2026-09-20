@@ -1,33 +1,90 @@
 # abstraction-rights
 
-Resource services use the generated `abstraction.rights/authorization@1`
-decision service through `go/client`. `Require(ctx, peer, action, resource)`
-queries an explicitly selected decision point and refuses every non-permitted
-result. [General decision contract](CONTRACT.md) defines trusted enforcement
-points, exact rules, revision and revocation semantics. The existing native
-registration/token/awake workflows below remain separately selected interfaces.
+Give one program permission to perform one named action on one resource, inspect
+that decision, and revoke it without changing the application. Every protected
+service checks rights at the resource boundary. A rule identifies the account,
+the OS-bound program, the action and the resource; a registered action grants
+nothing by itself.
 
-The installed runtime enforces these catalogue actions before each call. A
-policy grants the action on the named resource. The runtime registers them into
-its decision policy at composition (`runtime.ResourceRightsActions`), and an
-operator registers further `<owner>/<name>` actions with `RegisterAction`:
+Services call the generated `abstraction.rights/authorization@1` decision
+service. `Require(ctx, peer, action, resource)` permits only an explicit
+`permitted` result. [General decision contract](CONTRACT.md) defines trusted
+enforcement points, exact rules, revision and revocation semantics. The native
+registration/token/awake workflows below are separately selected interfaces.
 
-| service call | action | resource |
-| --- | --- | --- |
-| storage Open | `abstraction.storage/content.read` | content digest |
-| storage Begin, Append, Commit | `abstraction.storage/content.write` | content digest |
-| storage change Observe, List | `abstraction.storage/content.observe` | `abstraction.storage/changes` |
-| job Submit | `abstraction.job/acceptance.submit` | `abstraction.job/acceptance@1` |
-| job CancelWork | `abstraction.job/acceptance.cancel` | `abstraction.job/acceptance@1` |
-| config ReplaceUser | `abstraction.config/user.replace` | `abstraction.config/editor@1` |
-| logging history read and observe | `abstraction.logging/history.read` | `abstraction.logging/history` |
-| model lookup | `abstraction.model/lookup` | requested registry name |
-| router inventory | `abstraction.router/inventory.read` | `abstraction.router/inventory` |
-| router route | `abstraction.router/route` | requested model |
+Rights covers every protected OA action, including configuration edits, log
+history, model lookup, routes, durable job submission and cancellation,
+credential use, inference, application discovery and activation, storage, asks
+and keep-awake holds.
 
-An evaluated refusal reaches the caller as that service's `forbidden` outcome.
-A decision the service cannot obtain reaches it as `unavailable`, with no state
-changed. Other job methods keep same-owner Program authorization.
+Operators inspect and change exact rules with the generated operator client or
+CLI:
+
+```console
+openabstractions rights list --json
+openabstractions rights decide --action <action> --resource <resource>
+openabstractions rights grant --program /absolute/path/to/app \
+  --action <action> --resource <resource> --why "operator choice"
+```
+
+`grant --for downloads` and `grant --for inference` expand documented bundles
+into exact rules and report every rule that landed. Resource services remain the
+enforcement points and return their own typed `forbidden` or `unavailable`
+outcomes.
+
+The table says which host enforces each action. **Installed** is
+`openabstractions serve runtime`: it decides in its own process against
+`rights/decisions.json` in its state directory, through
+`DecisionPolicy.Require`, and designates no enforcer. **Library** is the facade
+runtime's `*FromRights` helper, which a host composing that service configures
+with any `Decider`: the IPC client or an in-process policy. The runtime
+registers each action into its policy at composition; the job, asks,
+credentials and inference definitions declare their own `resource_actions`.
+
+| service call | action | resource | host |
+| --- | --- | --- | --- |
+| config ReplaceUser | `abstraction.config/user.replace` | `abstraction.config/editor@1` | installed |
+| logging history read and observe | `abstraction.logging/history.read` | `abstraction.logging/history` | installed |
+| model lookup | `abstraction.model/lookup` | requested registry name | installed |
+| router Models, Hosts | `abstraction.router/inventory.read` | `abstraction.router/inventory` | installed |
+| router Pick | `abstraction.router/route` | `abstraction.router/routes` | installed |
+| job Submit | `abstraction.job/acceptance.submit` | `abstraction.job/acceptance@1` | installed |
+| job operator ListAccountWork | `abstraction.job/inventory.read` | `abstraction.job/acceptance@1` | installed |
+| job operator CancelOperation | `abstraction.job/acceptance.cancel` | `abstraction.job/acceptance@1` | installed |
+| credentials manage, read, apply | `abstraction.credentials/holder.manage`, `holder.read`, `apply` | `account`, `credential:<name>` | installed |
+| inference complete, host management, key issue, audit read | `abstraction.inference/complete`, `host.manage`, `key.issue`, `audit.read` | `host:<name>`, `account` | installed |
+| asks application Ask | `abstraction.asks/question.ask` | `account` | installed |
+| applications Register, Remove | `abstraction.facade/application.manage` | `account` | installed |
+| applications Announce, Withdraw | `abstraction.facade/application.announce` | `app:<descriptor>` | installed |
+| applications Observe | `abstraction.facade/application.read` | `app:<descriptor>` | installed |
+| applications Activate | `abstraction.facade/application.activate` | `app:<descriptor>` | installed |
+| provider registry changes | `abstraction.facade/provider.manage` | `account` | installed |
+| storage inventory source registration | `abstraction.storage/inventory.provide` | `store:<name>` | installed |
+| storage Open | `abstraction.storage/content.read` | content digest | library |
+| storage Begin, Append, Commit | `abstraction.storage/content.write` | content digest | library |
+| storage change Observe, List | `abstraction.storage/content.observe` | `abstraction.storage/changes` | library |
+| storage Remove | `abstraction.storage/content.remove` | `store:<name>` | library |
+
+Config reads, log writes, a program's own work (cancellation included), its own
+questions and its own `Decide` need no rule. An evaluated refusal reaches the
+caller as that service's `forbidden` outcome. A decision the service cannot
+obtain, including an unreadable or removed policy file, reaches it as
+`unavailable` within half a second, with no state changed. While the file
+cannot be read, the runtime's resolver reports `abstraction.rights/authorization@1`
+and `abstraction.rights/operator@1` not ready, checked once a second.
+
+**Installation rules.** When the runtime first composes a capability it writes,
+for each operator program (the runtime, `openabstractions`, `openabstractionsw`
+and `Abstraction Panel` beside it), a permit rule with why `installation` for
+config edit, history, model lookup on each registry, router inventory and
+routes, job submit, cancel and account inventory, credentials `holder.manage`
+and `holder.read`, and inference `host.manage` and `key.issue`, and records each
+in `rights/defaults-applied`. A rule the person revoked is never written again.
+Applications hold no rule by installation. A person grants one with
+`openabstractions rights grant`, `rights grant --for downloads|inference`, the
+Panel's Rights and Explore sections, or by answering the question the runtime
+asks when a job submit, model lookup or inference complete first decides
+`not_granted`.
 
 **In development.** No tagged release; `rightsd`, `rights` and `keepawake` run
 end to end on Windows today.

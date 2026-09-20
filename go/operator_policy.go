@@ -70,13 +70,13 @@ func (p *DecisionPolicy) ChangeRule(expected string, subject wire.Subject, actio
 	by, byErr := NormalizeDecisionSubject(edit.By)
 	if err != nil || byErr != nil || !ValidDecisionQuery(action, resource) || !boundedDecisionString(expected, 128) ||
 		edit.TTL < 0 || edit.TTL > MaxRuleTTL || edit.TTL%time.Millisecond != 0 || !validWhy(edit.Why) || (edit.Permit == nil && (edit.TTL != 0 || edit.Why != "")) {
-		return wire.PolicyEdit{Outcome: "invalid"}, nil
+		return wire.PolicyEdit{Outcome: wire.PolicyEditOutcomeInvalid}, nil
 	}
 	if authorize == nil {
-		return wire.PolicyEdit{Outcome: "unavailable"}, errors.New("rights: operator admission required")
+		return wire.PolicyEdit{Outcome: wire.PolicyEditOutcomeUnavailable}, errors.New("rights: operator admission required")
 	}
 	if err = p.regular(); err != nil {
-		return wire.PolicyEdit{Outcome: "unavailable"}, err
+		return wire.PolicyEdit{Outcome: wire.PolicyEditOutcomeUnavailable}, err
 	}
 	result := wire.PolicyEdit{}
 	noWrite := errors.New("rights: policy edit without write")
@@ -101,11 +101,11 @@ func (p *DecisionPolicy) ChangeRule(expected string, subject wire.Subject, actio
 			return nil, err
 		}
 		if !slices.Contains(p.catalogue(f), action) {
-			result = wire.PolicyEdit{Outcome: "invalid"}
+			result = wire.PolicyEdit{Outcome: wire.PolicyEditOutcomeInvalid}
 			return nil, noWrite
 		}
 		if p.revision(f) != expected {
-			result.Outcome = "conflict"
+			result.Outcome = wire.PolicyEditOutcomeConflict
 			capture(f)
 			return nil, noWrite
 		}
@@ -113,7 +113,7 @@ func (p *DecisionPolicy) ChangeRule(expected string, subject wire.Subject, actio
 		if err != nil {
 			return nil, err
 		}
-		result.Outcome = "applied"
+		result.Outcome = wire.PolicyEditOutcomeApplied
 		capture(f)
 		if !changed {
 			return nil, noWrite
@@ -124,7 +124,7 @@ func (p *DecisionPolicy) ChangeRule(expected string, subject wire.Subject, actio
 		return result, nil
 	}
 	if err != nil {
-		return wire.PolicyEdit{Outcome: "unavailable"}, err
+		return wire.PolicyEdit{Outcome: wire.PolicyEditOutcomeUnavailable}, err
 	}
 	return result, nil
 }

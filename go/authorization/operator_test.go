@@ -75,21 +75,21 @@ func TestOperatorGrantRevokeScopeHistoryAndRestart(t *testing.T) {
 	originalRevision := page.Revision
 	rule := wire.PolicyRule{Subject: subject, Action: action, Resource: "x", Permit: true}
 	applied, err := op.SetRuleContext(context.Background(), page.Revision, rule)
-	if err != nil || applied.Outcome != "applied" {
+	if err != nil || applied.Outcome != wire.PolicyEditOutcomeApplied {
 		t.Fatal(applied, err)
 	}
 	decision, err := decisions.DecideContext(context.Background(), action, "x")
-	if err != nil || decision.Outcome != "permitted" {
+	if err != nil || decision.Outcome != wire.DecisionOutcomePermitted {
 		t.Fatal(decision, err)
 	}
 	replay, err := op.SetRuleContext(context.Background(), originalRevision, rule)
-	if err != nil || replay.Outcome != "conflict" || replay.Revision != applied.Revision || replay.Current == nil || !replay.Current.Permit {
+	if err != nil || replay.Outcome != wire.PolicyEditOutcomeConflict || replay.Revision != applied.Revision || replay.Current == nil || !replay.Current.Permit {
 		t.Fatal(replay, err)
 	}
 	rule.Resource = "y"
 	rule.Permit = false
 	second, err := op.SetRuleContext(context.Background(), applied.Revision, rule)
-	if err != nil || second.Outcome != "applied" {
+	if err != nil || second.Outcome != wire.PolicyEditOutcomeApplied {
 		t.Fatal(second, err)
 	}
 	page, err = op.ListPolicyContext(context.Background(), "", 1)
@@ -122,28 +122,28 @@ func TestOperatorGrantRevokeScopeHistoryAndRestart(t *testing.T) {
 	all.Store(false)
 	denied.Store(true)
 	refused, err := op.RevokeRuleContext(context.Background(), page.Revision, subject, action, "x")
-	if err != nil || refused.Outcome != "forbidden" {
+	if err != nil || refused.Outcome != wire.PolicyEditOutcomeForbidden {
 		t.Fatal(refused, err)
 	}
 	denied.Store(false)
 	outage.Store(true)
 	unavailable, err := op.ListPolicyContext(context.Background(), "", 1)
-	if err != nil || unavailable.Outcome != "unavailable" {
+	if err != nil || unavailable.Outcome != wire.PolicyPageOutcomeUnavailable {
 		t.Fatal(unavailable, err)
 	}
 	outage.Store(false)
-	if d, _ := decisions.DecideContext(context.Background(), action, "x"); d.Outcome != "permitted" {
+	if d, _ := decisions.DecideContext(context.Background(), action, "x"); d.Outcome != wire.DecisionOutcomePermitted {
 		t.Fatal("denied operator changed rule", d)
 	}
 	revoked, err := op.RevokeRuleContext(context.Background(), page.Revision, subject, action, "x")
-	if err != nil || revoked.Outcome != "applied" || revoked.Current != nil {
+	if err != nil || revoked.Outcome != wire.PolicyEditOutcomeApplied || revoked.Current != nil {
 		t.Fatal(revoked, err)
 	}
-	if d, _ := decisions.DecideContext(context.Background(), action, "x"); d.Outcome != "not_granted" {
+	if d, _ := decisions.DecideContext(context.Background(), action, "x"); d.Outcome != wire.DecisionOutcomeNotGranted {
 		t.Fatal("revocation stale", d)
 	}
 	gap, err := op.ListPolicyContext(context.Background(), page.Next, 1)
-	if err != nil || gap.Outcome != "gap" {
+	if err != nil || gap.Outcome != wire.PolicyPageOutcomeGap {
 		t.Fatal(gap, err)
 	}
 	h.Close()
@@ -157,7 +157,7 @@ func TestOperatorGrantRevokeScopeHistoryAndRestart(t *testing.T) {
 		t.Fatal("durable revision changed", restarted, err)
 	}
 	gap, err = fresh.ListPolicyContext(context.Background(), page.Next, 1)
-	if err != nil || gap.Outcome != "gap" {
+	if err != nil || gap.Outcome != wire.PolicyPageOutcomeGap {
 		t.Fatal(gap, err)
 	}
 }
@@ -168,12 +168,12 @@ func TestOperatorCallerProcess(t *testing.T) {
 	}
 	op := client.NewOperator(endpoint)
 	page, err := op.ListPolicyContext(context.Background(), os.Getenv("OA_RIGHTS_CURSOR"), 1)
-	if err != nil || page.Outcome != os.Getenv("OA_RIGHTS_WANT") {
+	if err != nil || page.Outcome.String() != os.Getenv("OA_RIGHTS_WANT") {
 		os.Exit(3)
 	}
-	if page.Outcome == "forbidden" {
+	if page.Outcome == wire.PolicyPageOutcomeForbidden {
 		r, err := op.SetRuleContext(context.Background(), os.Getenv("OA_RIGHTS_REVISION"), wire.PolicyRule{Subject: nativeSubject(t), Action: action, Resource: "x", Permit: true})
-		if err != nil || r.Outcome != "forbidden" {
+		if err != nil || r.Outcome != wire.PolicyEditOutcomeForbidden {
 			os.Exit(4)
 		}
 	}
@@ -236,22 +236,22 @@ func TestOperatorCancelledEditAndWireBounds(t *testing.T) {
 		}
 		runtime.Gosched()
 	}
-	if d := p.Decide(subject, action, "x"); d.Outcome != "not_granted" {
+	if d := p.Decide(subject, action, "x"); d.Outcome != wire.DecisionOutcomeNotGranted {
 		t.Fatal("canceled wait granted", d)
 	}
 	wireClient := wire.NewAuthorizationOperatorClient(listen.FrameClient{Endpoint: endpoint, Timeout: time.Second, MaxFrame: MaxFrameBytes})
 	for _, n := range []int64{0, 65} {
 		v, err := wireClient.ListPolicy("", n)
-		if err != nil || v.Outcome != "invalid" {
+		if err != nil || v.Outcome != wire.PolicyPageOutcomeInvalid {
 			t.Fatal(v, err)
 		}
 	}
 	v, err := wireClient.ListPolicy(strings.Repeat("x", 257), 1)
-	if err != nil || v.Outcome != "invalid" {
+	if err != nil || v.Outcome != wire.PolicyPageOutcomeInvalid {
 		t.Fatal(v, err)
 	}
 	result, err := wireClient.SetRule(strings.Repeat("x", 129), wire.PolicyRule{Subject: subject, Action: action, Resource: "x", Permit: true})
-	if err != nil || result.Outcome != "invalid" {
+	if err != nil || result.Outcome != wire.PolicyEditOutcomeInvalid {
 		t.Fatal(result, err)
 	}
 }
@@ -259,7 +259,7 @@ func TestOperatorUnconfiguredRefuses(t *testing.T) {
 	p, _ := policy(t)
 	h, _, op, _ := liveOperator(t, p, nil)
 	v, err := op.ListPolicyContext(context.Background(), "", 1)
-	if err != nil || v.Outcome != "forbidden" || h.OperatorAvailable() {
+	if err != nil || v.Outcome != wire.PolicyPageOutcomeForbidden || h.OperatorAvailable() {
 		t.Fatal(v, err)
 	}
 }
@@ -297,7 +297,7 @@ func TestOperatorPolicyCatalogueAndLargeRulesStayBounded(t *testing.T) {
 	seen := 0
 	for pages := 0; pages < 4; pages++ {
 		page, err := c.ListPolicy(cursor, 64)
-		if err != nil || page.Outcome != "page" || len(page.Catalog) != 64 || len(page.Rules) == 0 || len(page.Rules) > 64 || transport.replyBytes > 256<<10 {
+		if err != nil || page.Outcome != wire.PolicyPageOutcomePage || len(page.Catalog) != 64 || len(page.Rules) == 0 || len(page.Rules) > 64 || transport.replyBytes > 256<<10 {
 			t.Fatal("policy budget", page.Outcome, len(page.Rules), transport.replyBytes, err)
 		}
 		seen += len(page.Rules)

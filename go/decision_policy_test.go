@@ -29,7 +29,7 @@ func TestDecisionPolicyPersistenceRevocationAndNoop(t *testing.T) {
 	}
 	s := subject(t)
 	empty := p.Decide(s, decisionAction, "content")
-	if empty.Outcome != "not_granted" || empty.PolicyRevision == "" {
+	if empty.Outcome != wire.DecisionOutcomeNotGranted || empty.PolicyRevision == "" {
 		t.Fatal(empty)
 	}
 	if e = p.Revoke(s, decisionAction, "content"); e != nil {
@@ -49,7 +49,7 @@ func TestDecisionPolicyPersistenceRevocationAndNoop(t *testing.T) {
 	if _, _, e := legacy.Add("name", []string{RightAwake}, Seen{}); e == nil {
 		t.Fatal("legacy edit overwrote decision profile")
 	}
-	if permit.Outcome != "permitted" || permit.PolicyRevision == empty.PolicyRevision {
+	if permit.Outcome != wire.DecisionOutcomePermitted || permit.PolicyRevision == empty.PolicyRevision {
 		t.Fatal(permit)
 	}
 	before, _ := os.ReadFile(path)
@@ -70,16 +70,16 @@ func TestDecisionPolicyPersistenceRevocationAndNoop(t *testing.T) {
 	if e = p.Revoke(s, decisionAction, "content"); e != nil {
 		t.Fatal(e)
 	}
-	if got := reopened.Decide(s, decisionAction, "content"); got.Outcome != "not_granted" || got.PolicyRevision == permit.PolicyRevision {
+	if got := reopened.Decide(s, decisionAction, "content"); got.Outcome != wire.DecisionOutcomeNotGranted || got.PolicyRevision == permit.PolicyRevision {
 		t.Fatal(got)
 	}
 	if e = p.Set(s, decisionAction, "content", false); e != nil {
 		t.Fatal(e)
 	}
-	if p.Decide(s, decisionAction, "content").Outcome != "denied" {
+	if p.Decide(s, decisionAction, "content").Outcome != wire.DecisionOutcomeDenied {
 		t.Fatal("deny lost")
 	}
-	if p.Decide(s, "other.action", "content").Outcome != "unknown_action" || p.Decide(s, decisionAction, "different").Outcome != "not_granted" {
+	if p.Decide(s, "other.action", "content").Outcome != wire.DecisionOutcomeUnknownAction || p.Decide(s, decisionAction, "different").Outcome != wire.DecisionOutcomeNotGranted {
 		t.Fatal("implied grant")
 	}
 	if _, e = LoadDecisionPolicy(path, []string{"different.catalog"}); e == nil {
@@ -128,7 +128,7 @@ func TestDecisionPolicyCorruptionRefusesAndPreserves(t *testing.T) {
 					t.Fatal(e)
 				}
 			}
-			if got := p.Decide(s, decisionAction, "content"); got.Outcome != "unavailable" || got.PolicyRevision != "" {
+			if got := p.Decide(s, decisionAction, "content"); got.Outcome != wire.DecisionOutcomeUnavailable || got.PolicyRevision != "" {
 				t.Fatal(got)
 			}
 			if e = p.Revoke(s, decisionAction, "content"); e == nil {
@@ -171,8 +171,30 @@ func TestDecisionPolicyCapacityAndBounds(t *testing.T) {
 		t.Fatal(e)
 	}
 	for _, resource := range []string{"", strings.Repeat("a", 1025), "bad\n", "\xff"} {
-		if p.Decide(s, decisionAction, resource).Outcome != "invalid" {
+		if p.Decide(s, decisionAction, resource).Outcome != wire.DecisionOutcomeInvalid {
 			t.Fatal("bad resource accepted")
 		}
+	}
+}
+
+// A packaged caller's subject, msix:<package family>, is stored and decided
+// like a path subject, and a malformed family is refused.
+func TestDecisionPolicyDecidesAPackageFamilySubject(t *testing.T) {
+	p, e := LoadDecisionPolicy(filepath.Join(t.TempDir(), "decisions.json"), []string{decisionAction})
+	if e != nil {
+		t.Fatal(e)
+	}
+	packaged := wire.Subject{Account: "test-account", Program: "msix:Claude_pzs8sxrjxfjjc"}
+	if e = p.Set(packaged, decisionAction, "content", true); e != nil {
+		t.Fatal(e)
+	}
+	if d := p.Decide(packaged, decisionAction, "content"); d.Outcome != wire.DecisionOutcomePermitted {
+		t.Fatal(d)
+	}
+	if d := p.Decide(subject(t), decisionAction, "content"); d.Outcome != wire.DecisionOutcomeNotGranted {
+		t.Fatalf("a path subject matched the family rule: %+v", d)
+	}
+	if e = p.Set(wire.Subject{Account: "test-account", Program: "msix:Claude"}, decisionAction, "content", true); e == nil {
+		t.Fatal("a malformed package family was stored")
 	}
 }

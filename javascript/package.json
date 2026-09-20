@@ -13,7 +13,8 @@
     "url": "https://github.com/openabstractions/abstraction-rights/issues"
   },
   "type": "module",
-  "exports": "./js/abstraction/rights/api/rec.mjs",
+  "types": "./js/abstraction/rights/api/index.d.mts",
+  "exports": {".": {"types": "./js/abstraction/rights/api/index.d.mts", "default": "./js/abstraction/rights/api/index.mjs"}},
   "files": [
     "js"
   ],

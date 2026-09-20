@@ -8,7 +8,6 @@ import (
 	identity "github.com/openabstractions/abstraction-identity"
 	"github.com/openabstractions/abstraction-identity/listen"
 	wire "github.com/openabstractions/abstraction-rights/go/abstraction/rights/api"
-	"path/filepath"
 	"strconv"
 	"time"
 )
@@ -45,11 +44,11 @@ func SubjectFromPeer(peer *identity.Peer) (Subject, error) {
 	} else if u.Kind == "posix" && u.UID >= 0 {
 		account = strconv.Itoa(u.UID)
 	}
-	program, e := peer.Path.AtLeast(listen.Program.Path)
-	if e != nil || account == "" || !filepath.IsAbs(program) {
+	program, e := identity.SubjectProgram(peer, listen.Program.Path)
+	if e != nil || account == "" {
 		return Subject{}, errors.New("rights: native subject account/program unavailable")
 	}
-	return Subject{Account: account, Program: filepath.Clean(program)}, nil
+	return Subject{Account: account, Program: program}, nil
 }
 func (c *Client) DecideContext(ctx context.Context, action, resource string) (Decision, error) {
 	if e := ctx.Err(); e != nil {
@@ -107,7 +106,7 @@ func (c *Client) Require(ctx context.Context, peer *identity.Peer, action, resou
 		return e
 	}
 	if v.Outcome != wire.DecisionOutcomePermitted {
-		return &DecisionError{v.Outcome, v.PolicyRevision}
+		return &DecisionError{v.Outcome.String(), v.PolicyRevision}
 	}
 	return nil
 }

@@ -4,7 +4,7 @@ const HEX = "0123456789abcdef";
 const ENC = new TextEncoder();
 const SHORT = { 0x22: '\\"', 0x5c: "\\\\", 0x08: "\\b", 0x0c: "\\f", 0x0a: "\\n", 0x0d: "\\r", 0x09: "\\t" };
 
-export class Out {
+class Out {
   constructor() { this.b = []; }
   byte(c) { this.b.push(c); }
   ascii(s) { for (let i = 0; i < s.length; i++) this.b.push(s.charCodeAt(i)); }
@@ -20,11 +20,11 @@ function escByte(out, c) {
 
 // Every integer the definition calls i64 is a BigInt here, because Number
 // rounds above 2^53 and two values in the conformance record are i64 extremes.
-export function num(out, n) { out.ascii(BigInt(n).toString()); }
+function num(out, n) { out.ascii(BigInt(n).toString()); }
 
-export function pad(out, depth) { for (let i = 0; i < depth * 2; i++) out.byte(0x20); }
+function pad(out, depth) { for (let i = 0; i < depth * 2; i++) out.byte(0x20); }
 
-export function strs(out, v, depth) {
+function strs(out, v, depth) {
   if (v.length === 0) { out.ascii("[]"); return; }
   out.ascii("[\n");
   for (let i = 0; i < v.length; i++) {
@@ -39,7 +39,7 @@ export function strs(out, v, depth) {
 
 const isWs = (c) => c === 0x20 || c === 0x09 || c === 0x0a || c === 0x0d;
 
-export function raw(out, s, depth) {
+function raw(out, s, depth) {
   const b = typeof s === "string" ? ENC.encode(s) : s;
   let i = 0;
   while (i < b.length) {
@@ -91,7 +91,7 @@ function byteLess(a, b) {
   return x.length - y.length;
 }
 
-export function rawmap(out, m, depth) {
+function rawmap(out, m, depth) {
   const keys = Object.keys(m).sort(byteLess);
   if (keys.length === 0) { out.ascii("{}"); return; }
   out.ascii("{\n");
@@ -107,13 +107,13 @@ export function rawmap(out, m, depth) {
   out.byte(0x7d);
 }
 
-export function esc(out, s) {
+function esc(out, s) {
   out.byte(0x22);
   for (const c of ENC.encode(s)) escByte(out, c);
   out.byte(0x22);
 }
 
-export function encList(out, v, depth, enc) {
+function writeList(out, v, depth, enc) {
   if (v.length === 0) { out.ascii("[]"); return; }
   out.ascii("[\n");
   for (let i = 0; i < v.length; i++) {
@@ -126,20 +126,59 @@ export function encList(out, v, depth, enc) {
   out.byte(0x5d);
 }
 
-export const DecisionOutcomeNames = ["permitted", "denied", "not_granted", "unknown_action", "invalid", "forbidden", "unavailable"];
-export const DecisionOutcomeUnknown = "refuse";
+export const DecisionOutcome = Object.freeze({
+  Permitted: "permitted",
+  Denied: "denied",
+  NotGranted: "not_granted",
+  UnknownAction: "unknown_action",
+  Invalid: "invalid",
+  Forbidden: "forbidden",
+  Unavailable: "unavailable",
+});
 
-export const PolicyPageOutcomeNames = ["page", "gap", "invalid", "forbidden", "unavailable"];
-export const PolicyPageOutcomeUnknown = "refuse";
+export const PolicyPageOutcome = Object.freeze({
+  Page: "page",
+  Gap: "gap",
+  Invalid: "invalid",
+  Forbidden: "forbidden",
+  Unavailable: "unavailable",
+});
 
-export const PolicyEditOutcomeNames = ["applied", "conflict", "invalid", "forbidden", "unavailable"];
-export const PolicyEditOutcomeUnknown = "refuse";
+export const PolicyEditOutcome = Object.freeze({
+  Applied: "applied",
+  Conflict: "conflict",
+  Invalid: "invalid",
+  Forbidden: "forbidden",
+  Unavailable: "unavailable",
+});
 
-export const RuleReadOutcomeNames = ["found", "expired", "unknown", "invalid", "forbidden", "unavailable"];
-export const RuleReadOutcomeUnknown = "refuse";
+export const RuleReadOutcome = Object.freeze({
+  Found: "found",
+  Expired: "expired",
+  Unknown: "unknown",
+  Invalid: "invalid",
+  Forbidden: "forbidden",
+  Unavailable: "unavailable",
+});
 
-export const ActionEditOutcomeNames = ["applied", "conflict", "unknown", "invalid", "exhausted", "forbidden", "unavailable"];
-export const ActionEditOutcomeUnknown = "refuse";
+export const ActionEditOutcome = Object.freeze({
+  Applied: "applied",
+  Conflict: "conflict",
+  Unknown: "unknown",
+  Invalid: "invalid",
+  Exhausted: "exhausted",
+  Forbidden: "forbidden",
+  Unavailable: "unavailable",
+});
+
+export const ServiceErrorCode = Object.freeze({
+  HandlerError: "handler_error",
+  InvalidResult: "invalid_result",
+  UnknownVersion: "unknown_version",
+  UnknownService: "unknown_service",
+  UnknownMethod: "unknown_method",
+  WrongMode: "wrong_mode",
+});
 
 export const operations = ["register", "ask", "hold", "check", "apps", "grant", "revoke", "forget", "holds"];
 
@@ -149,7 +188,7 @@ export const refusalCodes = ["internal", "invalid_request", "caller_refused", "u
 
 export const resourceActions = ["abstraction.storage/content.read", "abstraction.storage/content.write", "abstraction.job/acceptance.submit", "abstraction.job/acceptance.cancel", "abstraction.config/user.replace", "abstraction.logging/history.read", "abstraction.model/lookup", "abstraction.router/inventory.read", "abstraction.router/route", "abstraction.storage/content.observe", "abstraction.storage/content.remove"];
 
-export function enc_request(out, v, depth) {
+function writeRequest(out, v, depth) {
   out.byte(0x7b);
   out.byte(0x0a);
   pad(out, depth + 1);
@@ -225,7 +264,7 @@ export function enc_request(out, v, depth) {
   out.byte(0x7d);
 }
 
-export function enc_appmetadata(out, v, depth) {
+function writeAppMetadata(out, v, depth) {
   out.byte(0x7b);
   out.byte(0x0a);
   pad(out, depth + 1);
@@ -255,7 +294,7 @@ export function enc_appmetadata(out, v, depth) {
   out.byte(0x7d);
 }
 
-export function enc_holdmetadata(out, v, depth) {
+function writeHoldMetadata(out, v, depth) {
   out.byte(0x7b);
   out.byte(0x0a);
   pad(out, depth + 1);
@@ -291,7 +330,7 @@ export function enc_holdmetadata(out, v, depth) {
   out.byte(0x7d);
 }
 
-export function enc_responsemetadata(out, v, depth) {
+function writeResponseMetadata(out, v, depth) {
   out.byte(0x7b);
   let first = true;
   if (v.code !== "") {
@@ -345,7 +384,7 @@ export function enc_responsemetadata(out, v, depth) {
     pad(out, depth + 1);
     esc(out, "app");
     out.ascii(": ");
-    enc_appmetadata(out, v.app, depth + 1);
+    writeAppMetadata(out, v.app, depth + 1);
   }
   if (v.right !== "") {
     if (!first) out.byte(0x2c);
@@ -363,7 +402,7 @@ export function enc_responsemetadata(out, v, depth) {
     pad(out, depth + 1);
     esc(out, "apps");
     out.ascii(": ");
-    encList(out, v.apps, depth + 1, enc_appmetadata);
+    writeList(out, v.apps, depth + 1, writeAppMetadata);
   }
   if (v.holds.length !== 0) {
     if (!first) out.byte(0x2c);
@@ -372,13 +411,13 @@ export function enc_responsemetadata(out, v, depth) {
     pad(out, depth + 1);
     esc(out, "holds");
     out.ascii(": ");
-    encList(out, v.holds, depth + 1, enc_holdmetadata);
+    writeList(out, v.holds, depth + 1, writeHoldMetadata);
   }
   if (!first) { out.byte(0x0a); pad(out, depth); }
   out.byte(0x7d);
 }
 
-export function enc_subject(out, v, depth) {
+function writeSubject(out, v, depth) {
   out.byte(0x7b);
   out.byte(0x0a);
   pad(out, depth + 1);
@@ -396,7 +435,7 @@ export function enc_subject(out, v, depth) {
   out.byte(0x7d);
 }
 
-export function enc_decision(out, v, depth) {
+function writeDecision(out, v, depth) {
     if (typeof v.outcome !== "string") throw new Refusal("wrong_type",0);
     if (v.outcome !== "permitted" && v.outcome !== "denied" && v.outcome !== "not_granted" && v.outcome !== "unknown_action" && v.outcome !== "invalid" && v.outcome !== "forbidden" && v.outcome !== "unavailable") { throw new Refusal("bad_enum",0); }
   out.byte(0x7b);
@@ -405,26 +444,26 @@ export function enc_decision(out, v, depth) {
   esc(out, "outcome");
   out.ascii(": ");
   esc(out, v.outcome);
-  if (v.policy_revision !== "") {
+  if (v.policyRevision !== "") {
     out.byte(0x2c);
     out.byte(0x0a);
     pad(out, depth + 1);
     esc(out, "policy_revision");
     out.ascii(": ");
-    esc(out, v.policy_revision);
+    esc(out, v.policyRevision);
   }
   out.byte(0x0a);
   pad(out, depth);
   out.byte(0x7d);
 }
 
-export function enc_policyrule(out, v, depth) {
+function writePolicyRule(out, v, depth) {
   out.byte(0x7b);
   out.byte(0x0a);
   pad(out, depth + 1);
   esc(out, "subject");
   out.ascii(": ");
-  enc_subject(out, v.subject, depth + 1);
+  writeSubject(out, v.subject, depth + 1);
   out.byte(0x2c);
   out.byte(0x0a);
   pad(out, depth + 1);
@@ -448,7 +487,7 @@ export function enc_policyrule(out, v, depth) {
   out.byte(0x7d);
 }
 
-export function enc_policypage(out, v, depth) {
+function writePolicyPage(out, v, depth) {
     if (typeof v.outcome !== "string") throw new Refusal("wrong_type",0);
     if (v.outcome !== "page" && v.outcome !== "gap" && v.outcome !== "invalid" && v.outcome !== "forbidden" && v.outcome !== "unavailable") { throw new Refusal("bad_enum",0); }
   out.byte(0x7b);
@@ -474,7 +513,7 @@ export function enc_policypage(out, v, depth) {
   pad(out, depth + 1);
   esc(out, "rules");
   out.ascii(": ");
-  encList(out, v.rules, depth + 1, enc_policyrule);
+  writeList(out, v.rules, depth + 1, writePolicyRule);
   out.byte(0x2c);
   out.byte(0x0a);
   pad(out, depth + 1);
@@ -492,7 +531,7 @@ export function enc_policypage(out, v, depth) {
   out.byte(0x7d);
 }
 
-export function enc_policyedit(out, v, depth) {
+function writePolicyEdit(out, v, depth) {
     if (typeof v.outcome !== "string") throw new Refusal("wrong_type",0);
     if (v.outcome !== "applied" && v.outcome !== "conflict" && v.outcome !== "invalid" && v.outcome !== "forbidden" && v.outcome !== "unavailable") { throw new Refusal("bad_enum",0); }
   out.byte(0x7b);
@@ -513,32 +552,32 @@ export function enc_policyedit(out, v, depth) {
     pad(out, depth + 1);
     esc(out, "current");
     out.ascii(": ");
-    enc_policyrule(out, v.current, depth + 1);
+    writePolicyRule(out, v.current, depth + 1);
   }
   out.byte(0x0a);
   pad(out, depth);
   out.byte(0x7d);
 }
 
-export function enc_rulerecord(out, v, depth) {
+function writeRuleRecord(out, v, depth) {
   out.byte(0x7b);
   out.byte(0x0a);
   pad(out, depth + 1);
   esc(out, "rule");
   out.ascii(": ");
-  enc_policyrule(out, v.rule, depth + 1);
+  writePolicyRule(out, v.rule, depth + 1);
   out.byte(0x2c);
   out.byte(0x0a);
   pad(out, depth + 1);
   esc(out, "set_by");
   out.ascii(": ");
-  enc_subject(out, v.set_by, depth + 1);
+  writeSubject(out, v.setBy, depth + 1);
   out.byte(0x2c);
   out.byte(0x0a);
   pad(out, depth + 1);
   esc(out, "set_at");
   out.ascii(": ");
-  esc(out, v.set_at);
+  esc(out, v.setAt);
   out.byte(0x2c);
   out.byte(0x0a);
   pad(out, depth + 1);
@@ -556,7 +595,7 @@ export function enc_rulerecord(out, v, depth) {
   out.byte(0x7d);
 }
 
-export function enc_ruleread(out, v, depth) {
+function writeRuleRead(out, v, depth) {
     if (typeof v.outcome !== "string") throw new Refusal("wrong_type",0);
     if (v.outcome !== "found" && v.outcome !== "expired" && v.outcome !== "unknown" && v.outcome !== "invalid" && v.outcome !== "forbidden" && v.outcome !== "unavailable") { throw new Refusal("bad_enum",0); }
   out.byte(0x7b);
@@ -577,14 +616,14 @@ export function enc_ruleread(out, v, depth) {
     pad(out, depth + 1);
     esc(out, "record");
     out.ascii(": ");
-    enc_rulerecord(out, v.record, depth + 1);
+    writeRuleRecord(out, v.record, depth + 1);
   }
   out.byte(0x0a);
   pad(out, depth);
   out.byte(0x7d);
 }
 
-export function enc_catalogentry(out, v, depth) {
+function writeCatalogEntry(out, v, depth) {
   out.byte(0x7b);
   out.byte(0x0a);
   pad(out, depth + 1);
@@ -596,19 +635,19 @@ export function enc_catalogentry(out, v, depth) {
   pad(out, depth + 1);
   esc(out, "registered_by");
   out.ascii(": ");
-  enc_subject(out, v.registered_by, depth + 1);
+  writeSubject(out, v.registeredBy, depth + 1);
   out.byte(0x2c);
   out.byte(0x0a);
   pad(out, depth + 1);
   esc(out, "registered_at");
   out.ascii(": ");
-  esc(out, v.registered_at);
+  esc(out, v.registeredAt);
   out.byte(0x0a);
   pad(out, depth);
   out.byte(0x7d);
 }
 
-export function enc_actionedit(out, v, depth) {
+function writeActionEdit(out, v, depth) {
     if (typeof v.outcome !== "string") throw new Refusal("wrong_type",0);
     if (v.outcome !== "applied" && v.outcome !== "conflict" && v.outcome !== "unknown" && v.outcome !== "invalid" && v.outcome !== "exhausted" && v.outcome !== "forbidden" && v.outcome !== "unavailable") { throw new Refusal("bad_enum",0); }
   out.byte(0x7b);
@@ -629,14 +668,14 @@ export function enc_actionedit(out, v, depth) {
     pad(out, depth + 1);
     esc(out, "current");
     out.ascii(": ");
-    enc_catalogentry(out, v.current, depth + 1);
+    writeCatalogEntry(out, v.current, depth + 1);
   }
   out.byte(0x0a);
   pad(out, depth);
   out.byte(0x7d);
 }
 
-export function enc_oaauthorizationdecidearguments(out, v, depth) {
+function writeOAAuthorizationDecideArguments(out, v, depth) {
   out.byte(0x7b);
   out.byte(0x0a);
   pad(out, depth + 1);
@@ -654,13 +693,13 @@ export function enc_oaauthorizationdecidearguments(out, v, depth) {
   out.byte(0x7d);
 }
 
-export function enc_oaauthorizationdecideforarguments(out, v, depth) {
+function writeOAAuthorizationDecideForArguments(out, v, depth) {
   out.byte(0x7b);
   out.byte(0x0a);
   pad(out, depth + 1);
   esc(out, "subject");
   out.ascii(": ");
-  enc_subject(out, v.subject, depth + 1);
+  writeSubject(out, v.subject, depth + 1);
   out.byte(0x2c);
   out.byte(0x0a);
   pad(out, depth + 1);
@@ -678,7 +717,7 @@ export function enc_oaauthorizationdecideforarguments(out, v, depth) {
   out.byte(0x7d);
 }
 
-export function enc_oaauthorizationoperatorlistpolicyarguments(out, v, depth) {
+function writeOAAuthorizationOperatorListPolicyArguments(out, v, depth) {
   out.byte(0x7b);
   out.byte(0x0a);
   pad(out, depth + 1);
@@ -696,37 +735,37 @@ export function enc_oaauthorizationoperatorlistpolicyarguments(out, v, depth) {
   out.byte(0x7d);
 }
 
-export function enc_oaauthorizationoperatorsetrulearguments(out, v, depth) {
+function writeOAAuthorizationOperatorSetRuleArguments(out, v, depth) {
   out.byte(0x7b);
   out.byte(0x0a);
   pad(out, depth + 1);
   esc(out, "expected_revision");
   out.ascii(": ");
-  esc(out, v.expected_revision);
+  esc(out, v.expectedRevision);
   out.byte(0x2c);
   out.byte(0x0a);
   pad(out, depth + 1);
   esc(out, "rule");
   out.ascii(": ");
-  enc_policyrule(out, v.rule, depth + 1);
+  writePolicyRule(out, v.rule, depth + 1);
   out.byte(0x0a);
   pad(out, depth);
   out.byte(0x7d);
 }
 
-export function enc_oaauthorizationoperatorrevokerulearguments(out, v, depth) {
+function writeOAAuthorizationOperatorRevokeRuleArguments(out, v, depth) {
   out.byte(0x7b);
   out.byte(0x0a);
   pad(out, depth + 1);
   esc(out, "expected_revision");
   out.ascii(": ");
-  esc(out, v.expected_revision);
+  esc(out, v.expectedRevision);
   out.byte(0x2c);
   out.byte(0x0a);
   pad(out, depth + 1);
   esc(out, "subject");
   out.ascii(": ");
-  enc_subject(out, v.subject, depth + 1);
+  writeSubject(out, v.subject, depth + 1);
   out.byte(0x2c);
   out.byte(0x0a);
   pad(out, depth + 1);
@@ -744,25 +783,25 @@ export function enc_oaauthorizationoperatorrevokerulearguments(out, v, depth) {
   out.byte(0x7d);
 }
 
-export function enc_oaauthorizationoperatorsetruleforarguments(out, v, depth) {
+function writeOAAuthorizationOperatorSetRuleForArguments(out, v, depth) {
   out.byte(0x7b);
   out.byte(0x0a);
   pad(out, depth + 1);
   esc(out, "expected_revision");
   out.ascii(": ");
-  esc(out, v.expected_revision);
+  esc(out, v.expectedRevision);
   out.byte(0x2c);
   out.byte(0x0a);
   pad(out, depth + 1);
   esc(out, "rule");
   out.ascii(": ");
-  enc_policyrule(out, v.rule, depth + 1);
+  writePolicyRule(out, v.rule, depth + 1);
   out.byte(0x2c);
   out.byte(0x0a);
   pad(out, depth + 1);
   esc(out, "ttl_ms");
   out.ascii(": ");
-  num(out, v.ttl_ms);
+  num(out, v.ttlMs);
   out.byte(0x2c);
   out.byte(0x0a);
   pad(out, depth + 1);
@@ -774,13 +813,13 @@ export function enc_oaauthorizationoperatorsetruleforarguments(out, v, depth) {
   out.byte(0x7d);
 }
 
-export function enc_oaauthorizationoperatorreadrulearguments(out, v, depth) {
+function writeOAAuthorizationOperatorReadRuleArguments(out, v, depth) {
   out.byte(0x7b);
   out.byte(0x0a);
   pad(out, depth + 1);
   esc(out, "subject");
   out.ascii(": ");
-  enc_subject(out, v.subject, depth + 1);
+  writeSubject(out, v.subject, depth + 1);
   out.byte(0x2c);
   out.byte(0x0a);
   pad(out, depth + 1);
@@ -798,13 +837,13 @@ export function enc_oaauthorizationoperatorreadrulearguments(out, v, depth) {
   out.byte(0x7d);
 }
 
-export function enc_oaauthorizationoperatorregisteractionarguments(out, v, depth) {
+function writeOAAuthorizationOperatorRegisterActionArguments(out, v, depth) {
   out.byte(0x7b);
   out.byte(0x0a);
   pad(out, depth + 1);
   esc(out, "expected_revision");
   out.ascii(": ");
-  esc(out, v.expected_revision);
+  esc(out, v.expectedRevision);
   out.byte(0x2c);
   out.byte(0x0a);
   pad(out, depth + 1);
@@ -816,13 +855,13 @@ export function enc_oaauthorizationoperatorregisteractionarguments(out, v, depth
   out.byte(0x7d);
 }
 
-export function enc_oaauthorizationoperatorretireactionarguments(out, v, depth) {
+function writeOAAuthorizationOperatorRetireActionArguments(out, v, depth) {
   out.byte(0x7b);
   out.byte(0x0a);
   pad(out, depth + 1);
   esc(out, "expected_revision");
   out.ascii(": ");
-  esc(out, v.expected_revision);
+  esc(out, v.expectedRevision);
   out.byte(0x2c);
   out.byte(0x0a);
   pad(out, depth + 1);
@@ -834,7 +873,7 @@ export function enc_oaauthorizationoperatorretireactionarguments(out, v, depth) 
   out.byte(0x7d);
 }
 
-export function enc_oaserviceframe(out, v, depth) {
+function writeOAServiceFrame(out, v, depth) {
   out.byte(0x7b);
   out.byte(0x0a);
   pad(out, depth + 1);
@@ -864,7 +903,7 @@ export function enc_oaserviceframe(out, v, depth) {
   out.byte(0x7d);
 }
 
-export function enc_oaservicereply(out, v, depth) {
+function writeOAServiceReply(out, v, depth) {
   out.byte(0x7b);
   out.byte(0x0a);
   pad(out, depth + 1);
@@ -900,7 +939,7 @@ export function enc_oaservicereply(out, v, depth) {
   out.byte(0x7d);
 }
 
-export function enc_oaserviceerror(out, v, depth) {
+function writeOAServiceError(out, v, depth) {
   out.byte(0x7b);
   out.byte(0x0a);
   pad(out, depth + 1);
@@ -918,109 +957,109 @@ export function enc_oaserviceerror(out, v, depth) {
   out.byte(0x7d);
 }
 
-export function enc_oaauthorizationdecideresult(out, v, depth) {
+function writeOAAuthorizationDecideResult(out, v, depth) {
   out.byte(0x7b);
   out.byte(0x0a);
   pad(out, depth + 1);
   esc(out, "value");
   out.ascii(": ");
-  enc_decision(out, v.value, depth + 1);
+  writeDecision(out, v.value, depth + 1);
   out.byte(0x0a);
   pad(out, depth);
   out.byte(0x7d);
 }
 
-export function enc_oaauthorizationdecideforresult(out, v, depth) {
+function writeOAAuthorizationDecideForResult(out, v, depth) {
   out.byte(0x7b);
   out.byte(0x0a);
   pad(out, depth + 1);
   esc(out, "value");
   out.ascii(": ");
-  enc_decision(out, v.value, depth + 1);
+  writeDecision(out, v.value, depth + 1);
   out.byte(0x0a);
   pad(out, depth);
   out.byte(0x7d);
 }
 
-export function enc_oaauthorizationoperatorlistpolicyresult(out, v, depth) {
+function writeOAAuthorizationOperatorListPolicyResult(out, v, depth) {
   out.byte(0x7b);
   out.byte(0x0a);
   pad(out, depth + 1);
   esc(out, "value");
   out.ascii(": ");
-  enc_policypage(out, v.value, depth + 1);
+  writePolicyPage(out, v.value, depth + 1);
   out.byte(0x0a);
   pad(out, depth);
   out.byte(0x7d);
 }
 
-export function enc_oaauthorizationoperatorsetruleresult(out, v, depth) {
+function writeOAAuthorizationOperatorSetRuleResult(out, v, depth) {
   out.byte(0x7b);
   out.byte(0x0a);
   pad(out, depth + 1);
   esc(out, "value");
   out.ascii(": ");
-  enc_policyedit(out, v.value, depth + 1);
+  writePolicyEdit(out, v.value, depth + 1);
   out.byte(0x0a);
   pad(out, depth);
   out.byte(0x7d);
 }
 
-export function enc_oaauthorizationoperatorrevokeruleresult(out, v, depth) {
+function writeOAAuthorizationOperatorRevokeRuleResult(out, v, depth) {
   out.byte(0x7b);
   out.byte(0x0a);
   pad(out, depth + 1);
   esc(out, "value");
   out.ascii(": ");
-  enc_policyedit(out, v.value, depth + 1);
+  writePolicyEdit(out, v.value, depth + 1);
   out.byte(0x0a);
   pad(out, depth);
   out.byte(0x7d);
 }
 
-export function enc_oaauthorizationoperatorsetruleforresult(out, v, depth) {
+function writeOAAuthorizationOperatorSetRuleForResult(out, v, depth) {
   out.byte(0x7b);
   out.byte(0x0a);
   pad(out, depth + 1);
   esc(out, "value");
   out.ascii(": ");
-  enc_policyedit(out, v.value, depth + 1);
+  writePolicyEdit(out, v.value, depth + 1);
   out.byte(0x0a);
   pad(out, depth);
   out.byte(0x7d);
 }
 
-export function enc_oaauthorizationoperatorreadruleresult(out, v, depth) {
+function writeOAAuthorizationOperatorReadRuleResult(out, v, depth) {
   out.byte(0x7b);
   out.byte(0x0a);
   pad(out, depth + 1);
   esc(out, "value");
   out.ascii(": ");
-  enc_ruleread(out, v.value, depth + 1);
+  writeRuleRead(out, v.value, depth + 1);
   out.byte(0x0a);
   pad(out, depth);
   out.byte(0x7d);
 }
 
-export function enc_oaauthorizationoperatorregisteractionresult(out, v, depth) {
+function writeOAAuthorizationOperatorRegisterActionResult(out, v, depth) {
   out.byte(0x7b);
   out.byte(0x0a);
   pad(out, depth + 1);
   esc(out, "value");
   out.ascii(": ");
-  enc_actionedit(out, v.value, depth + 1);
+  writeActionEdit(out, v.value, depth + 1);
   out.byte(0x0a);
   pad(out, depth);
   out.byte(0x7d);
 }
 
-export function enc_oaauthorizationoperatorretireactionresult(out, v, depth) {
+function writeOAAuthorizationOperatorRetireActionResult(out, v, depth) {
   out.byte(0x7b);
   out.byte(0x0a);
   pad(out, depth + 1);
   esc(out, "value");
   out.ascii(": ");
-  enc_actionedit(out, v.value, depth + 1);
+  writeActionEdit(out, v.value, depth + 1);
   out.byte(0x0a);
   pad(out, depth);
   out.byte(0x7d);
@@ -1028,7 +1067,7 @@ export function enc_oaauthorizationoperatorretireactionresult(out, v, depth) {
 
 export function encode(v) {
   const out = new Out();
-  enc_request(out, v, 0);
+  writeRequest(out, v, 0);
   out.byte(0x0a);
   return out.bytes();
 }
@@ -1309,7 +1348,7 @@ class Reader {
   }
 }
 
-function decodeList(r, elem) {
+function readList(r, elem) {
   if (r.at() !== 0x5b) throw r.refuse("wrong_type");
   r.enter();
   r.pos++;
@@ -1374,7 +1413,7 @@ export function newSubject() {
 // revision observed with that decision. Errors carry none. No lease, token,
 // cached permission lifetime or human consent is conveyed.
 export function newDecision() {
-  return { outcome: "", policy_revision: "" };
+  return { outcome: "", policyRevision: "" };
 }
 
 // One exact policy rule. Subject is the administrative target, never caller
@@ -1423,7 +1462,7 @@ export function newPolicyEdit() {
 // control characters. expires is empty for a rule without expiry, or the UTC
 // instant, in the same format, from which the rule decides nothing.
 export function newRuleRecord() {
-  return { rule: newPolicyRule(), set_by: newSubject(), set_at: "", why: "", expires: "" };
+  return { rule: newPolicyRule(), setBy: newSubject(), setAt: "", why: "", expires: "" };
 }
 
 // found and expired carry the revision and the exact record. expired names a
@@ -1440,7 +1479,7 @@ export function newRuleRead() {
 // executable for native registration. registered_at is the service's UTC time
 // as RFC 3339 with milliseconds.
 export function newCatalogEntry() {
-  return { action: "", registered_by: newSubject(), registered_at: "" };
+  return { action: "", registeredBy: newSubject(), registeredAt: "" };
 }
 
 // applied, conflict and unknown carry the revision observed inside the
@@ -1454,91 +1493,91 @@ export function newActionEdit() {
   return { outcome: "", revision: "", current: null };
 }
 
-export function newOAAuthorizationDecideArguments() {
+function newOAAuthorizationDecideArguments() {
   return { action: "", resource: "" };
 }
 
-export function newOAAuthorizationDecideForArguments() {
+function newOAAuthorizationDecideForArguments() {
   return { subject: newSubject(), action: "", resource: "" };
 }
 
-export function newOAAuthorizationOperatorListPolicyArguments() {
+function newOAAuthorizationOperatorListPolicyArguments() {
   return { cursor: "", limit: 0n };
 }
 
-export function newOAAuthorizationOperatorSetRuleArguments() {
-  return { expected_revision: "", rule: newPolicyRule() };
+function newOAAuthorizationOperatorSetRuleArguments() {
+  return { expectedRevision: "", rule: newPolicyRule() };
 }
 
-export function newOAAuthorizationOperatorRevokeRuleArguments() {
-  return { expected_revision: "", subject: newSubject(), action: "", resource: "" };
+function newOAAuthorizationOperatorRevokeRuleArguments() {
+  return { expectedRevision: "", subject: newSubject(), action: "", resource: "" };
 }
 
-export function newOAAuthorizationOperatorSetRuleForArguments() {
-  return { expected_revision: "", rule: newPolicyRule(), ttl_ms: 0n, why: "" };
+function newOAAuthorizationOperatorSetRuleForArguments() {
+  return { expectedRevision: "", rule: newPolicyRule(), ttlMs: 0n, why: "" };
 }
 
-export function newOAAuthorizationOperatorReadRuleArguments() {
+function newOAAuthorizationOperatorReadRuleArguments() {
   return { subject: newSubject(), action: "", resource: "" };
 }
 
-export function newOAAuthorizationOperatorRegisterActionArguments() {
-  return { expected_revision: "", action: "" };
+function newOAAuthorizationOperatorRegisterActionArguments() {
+  return { expectedRevision: "", action: "" };
 }
 
-export function newOAAuthorizationOperatorRetireActionArguments() {
-  return { expected_revision: "", action: "" };
+function newOAAuthorizationOperatorRetireActionArguments() {
+  return { expectedRevision: "", action: "" };
 }
 
-export function newOAServiceFrame() {
+function newOAServiceFrame() {
   return { version: 0, service: "", method: "", arguments: "" };
 }
 
-export function newOAServiceReply() {
+function newOAServiceReply() {
   return { version: 0, service: "", method: "", ok: false, payload: "" };
 }
 
-export function newOAServiceError() {
+function newOAServiceError() {
   return { code: "", message: "" };
 }
 
-export function newOAAuthorizationDecideResult() {
+function newOAAuthorizationDecideResult() {
   return { value: newDecision() };
 }
 
-export function newOAAuthorizationDecideForResult() {
+function newOAAuthorizationDecideForResult() {
   return { value: newDecision() };
 }
 
-export function newOAAuthorizationOperatorListPolicyResult() {
+function newOAAuthorizationOperatorListPolicyResult() {
   return { value: newPolicyPage() };
 }
 
-export function newOAAuthorizationOperatorSetRuleResult() {
+function newOAAuthorizationOperatorSetRuleResult() {
   return { value: newPolicyEdit() };
 }
 
-export function newOAAuthorizationOperatorRevokeRuleResult() {
+function newOAAuthorizationOperatorRevokeRuleResult() {
   return { value: newPolicyEdit() };
 }
 
-export function newOAAuthorizationOperatorSetRuleForResult() {
+function newOAAuthorizationOperatorSetRuleForResult() {
   return { value: newPolicyEdit() };
 }
 
-export function newOAAuthorizationOperatorReadRuleResult() {
+function newOAAuthorizationOperatorReadRuleResult() {
   return { value: newRuleRead() };
 }
 
-export function newOAAuthorizationOperatorRegisterActionResult() {
+function newOAAuthorizationOperatorRegisterActionResult() {
   return { value: newActionEdit() };
 }
 
-export function newOAAuthorizationOperatorRetireActionResult() {
+function newOAAuthorizationOperatorRetireActionResult() {
   return { value: newActionEdit() };
 }
 
-function decode_request(r) {
+function readRequest(r) {
   if (r.at() !== 0x7b) throw r.refuse("wrong_type");
   r.enter();
   r.pos++;
@@ -1605,7 +1644,7 @@ function decode_request(r) {
   return v;
 }
 
-function decode_appmetadata(r) {
+function readAppMetadata(r) {
   if (r.at() !== 0x7b) throw r.refuse("wrong_type");
   r.enter();
   r.pos++;
@@ -1652,7 +1691,7 @@ function decode_appmetadata(r) {
   return v;
 }
 
-function decode_holdmetadata(r) {
+function readHoldMetadata(r) {
   if (r.at() !== 0x7b) throw r.refuse("wrong_type");
   r.enter();
   r.pos++;
@@ -1703,7 +1742,7 @@ function decode_holdmetadata(r) {
   return v;
 }
 
-function decode_responsemetadata(r) {
+function readResponseMetadata(r) {
   if (r.at() !== 0x7b) throw r.refuse("wrong_type");
   r.enter();
   r.pos++;
@@ -1742,7 +1781,7 @@ function decode_responsemetadata(r) {
       } else if (key === "app") {
         if (seen & 32) throw r.refuse("duplicate_field");
         seen |= 32;
-        v.app = decode_appmetadata(r);
+        v.app = readAppMetadata(r);
       } else if (key === "right") {
         if (seen & 64) throw r.refuse("duplicate_field");
         seen |= 64;
@@ -1750,11 +1789,11 @@ function decode_responsemetadata(r) {
       } else if (key === "apps") {
         if (seen & 128) throw r.refuse("duplicate_field");
         seen |= 128;
-        v.apps = decodeList(r, decode_appmetadata);
+        v.apps = readList(r, readAppMetadata);
       } else if (key === "holds") {
         if (seen & 256) throw r.refuse("duplicate_field");
         seen |= 256;
-        v.holds = decodeList(r, decode_holdmetadata);
+        v.holds = readList(r, readHoldMetadata);
       } else {
         throw r.refuse("unknown_field");
       }
@@ -1769,7 +1808,7 @@ function decode_responsemetadata(r) {
   return v;
 }
 
-function decode_subject(r) {
+function readSubject(r) {
   if (r.at() !== 0x7b) throw r.refuse("wrong_type");
   r.enter();
   r.pos++;
@@ -1808,7 +1847,7 @@ function decode_subject(r) {
   return v;
 }
 
-function decode_decision(r) {
+function readDecision(r) {
   if (r.at() !== 0x7b) throw r.refuse("wrong_type");
   r.enter();
   r.pos++;
@@ -1831,7 +1870,7 @@ function decode_decision(r) {
       } else if (key === "policy_revision") {
         if (seen & 2) throw r.refuse("duplicate_field");
         seen |= 2;
-        v.policy_revision = r.string();
+        v.policyRevision = r.string();
       } else {
         throw r.refuse("unknown_field");
       }
@@ -1848,7 +1887,7 @@ function decode_decision(r) {
   return v;
 }
 
-function decode_policyrule(r) {
+function readPolicyRule(r) {
   if (r.at() !== 0x7b) throw r.refuse("wrong_type");
   r.enter();
   r.pos++;
@@ -1867,7 +1906,7 @@ function decode_policyrule(r) {
       if (key === "subject") {
         if (seen & 1) throw r.refuse("duplicate_field");
         seen |= 1;
-        v.subject = decode_subject(r);
+        v.subject = readSubject(r);
       } else if (key === "action") {
         if (seen & 2) throw r.refuse("duplicate_field");
         seen |= 2;
@@ -1895,7 +1934,7 @@ function decode_policyrule(r) {
   return v;
 }
 
-function decode_policypage(r) {
+function readPolicyPage(r) {
   if (r.at() !== 0x7b) throw r.refuse("wrong_type");
   r.enter();
   r.pos++;
@@ -1926,7 +1965,7 @@ function decode_policypage(r) {
       } else if (key === "rules") {
         if (seen & 8) throw r.refuse("duplicate_field");
         seen |= 8;
-        v.rules = decodeList(r, decode_policyrule);
+        v.rules = readList(r, readPolicyRule);
       } else if (key === "next") {
         if (seen & 16) throw r.refuse("duplicate_field");
         seen |= 16;
@@ -1951,7 +1990,7 @@ function decode_policypage(r) {
   return v;
 }
 
-function decode_policyedit(r) {
+function readPolicyEdit(r) {
   if (r.at() !== 0x7b) throw r.refuse("wrong_type");
   r.enter();
   r.pos++;
@@ -1978,7 +2017,7 @@ function decode_policyedit(r) {
       } else if (key === "current") {
         if (seen & 4) throw r.refuse("duplicate_field");
         seen |= 4;
-        v.current = decode_policyrule(r);
+        v.current = readPolicyRule(r);
       } else {
         throw r.refuse("unknown_field");
       }
@@ -1995,7 +2034,7 @@ function decode_policyedit(r) {
   return v;
 }
 
-function decode_rulerecord(r) {
+function readRuleRecord(r) {
   if (r.at() !== 0x7b) throw r.refuse("wrong_type");
   r.enter();
   r.pos++;
@@ -2014,15 +2053,15 @@ function decode_rulerecord(r) {
       if (key === "rule") {
         if (seen & 1) throw r.refuse("duplicate_field");
         seen |= 1;
-        v.rule = decode_policyrule(r);
+        v.rule = readPolicyRule(r);
       } else if (key === "set_by") {
         if (seen & 2) throw r.refuse("duplicate_field");
         seen |= 2;
-        v.set_by = decode_subject(r);
+        v.setBy = readSubject(r);
       } else if (key === "set_at") {
         if (seen & 4) throw r.refuse("duplicate_field");
         seen |= 4;
-        v.set_at = r.string();
+        v.setAt = r.string();
       } else if (key === "why") {
         if (seen & 8) throw r.refuse("duplicate_field");
         seen |= 8;
@@ -2046,7 +2085,7 @@ function decode_rulerecord(r) {
   return v;
 }
 
-function decode_ruleread(r) {
+function readRuleRead(r) {
   if (r.at() !== 0x7b) throw r.refuse("wrong_type");
   r.enter();
   r.pos++;
@@ -2073,7 +2112,7 @@ function decode_ruleread(r) {
       } else if (key === "record") {
         if (seen & 4) throw r.refuse("duplicate_field");
         seen |= 4;
-        v.record = decode_rulerecord(r);
+        v.record = readRuleRecord(r);
       } else {
         throw r.refuse("unknown_field");
       }
@@ -2090,7 +2129,7 @@ function decode_ruleread(r) {
   return v;
 }
 
-function decode_catalogentry(r) {
+function readCatalogEntry(r) {
   if (r.at() !== 0x7b) throw r.refuse("wrong_type");
   r.enter();
   r.pos++;
@@ -2113,11 +2152,11 @@ function decode_catalogentry(r) {
       } else if (key === "registered_by") {
         if (seen & 2) throw r.refuse("duplicate_field");
         seen |= 2;
-        v.registered_by = decode_subject(r);
+        v.registeredBy = readSubject(r);
       } else if (key === "registered_at") {
         if (seen & 4) throw r.refuse("duplicate_field");
         seen |= 4;
-        v.registered_at = r.string();
+        v.registeredAt = r.string();
       } else {
         throw r.refuse("unknown_field");
       }
@@ -2133,7 +2172,7 @@ function decode_catalogentry(r) {
   return v;
 }
 
-function decode_actionedit(r) {
+function readActionEdit(r) {
   if (r.at() !== 0x7b) throw r.refuse("wrong_type");
   r.enter();
   r.pos++;
@@ -2160,7 +2199,7 @@ function decode_actionedit(r) {
       } else if (key === "current") {
         if (seen & 4) throw r.refuse("duplicate_field");
         seen |= 4;
-        v.current = decode_catalogentry(r);
+        v.current = readCatalogEntry(r);
       } else {
         throw r.refuse("unknown_field");
       }
@@ -2177,7 +2216,7 @@ function decode_actionedit(r) {
   return v;
 }
 
-function decode_oaauthorizationdecidearguments(r) {
+function readOAAuthorizationDecideArguments(r) {
   if (r.at() !== 0x7b) throw r.refuse("wrong_type");
   r.enter();
   r.pos++;
@@ -2216,7 +2255,7 @@ function decode_oaauthorizationdecidearguments(r) {
   return v;
 }
 
-function decode_oaauthorizationdecideforarguments(r) {
+function readOAAuthorizationDecideForArguments(r) {
   if (r.at() !== 0x7b) throw r.refuse("wrong_type");
   r.enter();
   r.pos++;
@@ -2235,7 +2274,7 @@ function decode_oaauthorizationdecideforarguments(r) {
       if (key === "subject") {
         if (seen & 1) throw r.refuse("duplicate_field");
         seen |= 1;
-        v.subject = decode_subject(r);
+        v.subject = readSubject(r);
       } else if (key === "action") {
         if (seen & 2) throw r.refuse("duplicate_field");
         seen |= 2;
@@ -2259,7 +2298,7 @@ function decode_oaauthorizationdecideforarguments(r) {
   return v;
 }
 
-function decode_oaauthorizationoperatorlistpolicyarguments(r) {
+function readOAAuthorizationOperatorListPolicyArguments(r) {
   if (r.at() !== 0x7b) throw r.refuse("wrong_type");
   r.enter();
   r.pos++;
@@ -2298,7 +2337,7 @@ function decode_oaauthorizationoperatorlistpolicyarguments(r) {
   return v;
 }
 
-function decode_oaauthorizationoperatorsetrulearguments(r) {
+function readOAAuthorizationOperatorSetRuleArguments(r) {
   if (r.at() !== 0x7b) throw r.refuse("wrong_type");
   r.enter();
   r.pos++;
@@ -2317,11 +2356,11 @@ function decode_oaauthorizationoperatorsetrulearguments(r) {
       if (key === "expected_revision") {
         if (seen & 1) throw r.refuse("duplicate_field");
         seen |= 1;
-        v.expected_revision = r.string();
+        v.expectedRevision = r.string();
       } else if (key === "rule") {
         if (seen & 2) throw r.refuse("duplicate_field");
         seen |= 2;
-        v.rule = decode_policyrule(r);
+        v.rule = readPolicyRule(r);
       } else {
         throw r.refuse("unknown_field");
       }
@@ -2337,7 +2376,7 @@ function decode_oaauthorizationoperatorsetrulearguments(r) {
   return v;
 }
 
-function decode_oaauthorizationoperatorrevokerulearguments(r) {
+function readOAAuthorizationOperatorRevokeRuleArguments(r) {
   if (r.at() !== 0x7b) throw r.refuse("wrong_type");
   r.enter();
   r.pos++;
@@ -2356,11 +2395,11 @@ function decode_oaauthorizationoperatorrevokerulearguments(r) {
       if (key === "expected_revision") {
         if (seen & 1) throw r.refuse("duplicate_field");
         seen |= 1;
-        v.expected_revision = r.string();
+        v.expectedRevision = r.string();
       } else if (key === "subject") {
         if (seen & 2) throw r.refuse("duplicate_field");
         seen |= 2;
-        v.subject = decode_subject(r);
+        v.subject = readSubject(r);
       } else if (key === "action") {
         if (seen & 4) throw r.refuse("duplicate_field");
         seen |= 4;
@@ -2384,7 +2423,7 @@ function decode_oaauthorizationoperatorrevokerulearguments(r) {
   return v;
 }
 
-function decode_oaauthorizationoperatorsetruleforarguments(r) {
+function readOAAuthorizationOperatorSetRuleForArguments(r) {
   if (r.at() !== 0x7b) throw r.refuse("wrong_type");
   r.enter();
   r.pos++;
@@ -2403,15 +2442,15 @@ function decode_oaauthorizationoperatorsetruleforarguments(r) {
       if (key === "expected_revision") {
         if (seen & 1) throw r.refuse("duplicate_field");
         seen |= 1;
-        v.expected_revision = r.string();
+        v.expectedRevision = r.string();
       } else if (key === "rule") {
         if (seen & 2) throw r.refuse("duplicate_field");
         seen |= 2;
-        v.rule = decode_policyrule(r);
+        v.rule = readPolicyRule(r);
       } else if (key === "ttl_ms") {
         if (seen & 4) throw r.refuse("duplicate_field");
         seen |= 4;
-        v.ttl_ms = r.integer(-9223372036854775808n, 9223372036854775807n);
+        v.ttlMs = r.integer(-9223372036854775808n, 9223372036854775807n);
       } else if (key === "why") {
         if (seen & 8) throw r.refuse("duplicate_field");
         seen |= 8;
@@ -2431,7 +2470,7 @@ function decode_oaauthorizationoperatorsetruleforarguments(r) {
   return v;
 }
 
-function decode_oaauthorizationoperatorreadrulearguments(r) {
+function readOAAuthorizationOperatorReadRuleArguments(r) {
   if (r.at() !== 0x7b) throw r.refuse("wrong_type");
   r.enter();
   r.pos++;
@@ -2450,7 +2489,7 @@ function decode_oaauthorizationoperatorreadrulearguments(r) {
       if (key === "subject") {
         if (seen & 1) throw r.refuse("duplicate_field");
         seen |= 1;
-        v.subject = decode_subject(r);
+        v.subject = readSubject(r);
       } else if (key === "action") {
         if (seen & 2) throw r.refuse("duplicate_field");
         seen |= 2;
@@ -2474,7 +2513,7 @@ function decode_oaauthorizationoperatorreadrulearguments(r) {
   return v;
 }
 
-function decode_oaauthorizationoperatorregisteractionarguments(r) {
+function readOAAuthorizationOperatorRegisterActionArguments(r) {
   if (r.at() !== 0x7b) throw r.refuse("wrong_type");
   r.enter();
   r.pos++;
@@ -2493,7 +2532,7 @@ function decode_oaauthorizationoperatorregisteractionarguments(r) {
       if (key === "expected_revision") {
         if (seen & 1) throw r.refuse("duplicate_field");
         seen |= 1;
-        v.expected_revision = r.string();
+        v.expectedRevision = r.string();
       } else if (key === "action") {
         if (seen & 2) throw r.refuse("duplicate_field");
         seen |= 2;
@@ -2513,7 +2552,7 @@ function decode_oaauthorizationoperatorregisteractionarguments(r) {
   return v;
 }
 
-function decode_oaauthorizationoperatorretireactionarguments(r) {
+function readOAAuthorizationOperatorRetireActionArguments(r) {
   if (r.at() !== 0x7b) throw r.refuse("wrong_type");
   r.enter();
   r.pos++;
@@ -2532,7 +2571,7 @@ function decode_oaauthorizationoperatorretireactionarguments(r) {
       if (key === "expected_revision") {
         if (seen & 1) throw r.refuse("duplicate_field");
         seen |= 1;
-        v.expected_revision = r.string();
+        v.expectedRevision = r.string();
       } else if (key === "action") {
         if (seen & 2) throw r.refuse("duplicate_field");
         seen |= 2;
@@ -2552,7 +2591,7 @@ function decode_oaauthorizationoperatorretireactionarguments(r) {
   return v;
 }
 
-function decode_oaserviceframe(r) {
+function readOAServiceFrame(r) {
   if (r.at() !== 0x7b) throw r.refuse("wrong_type");
   r.enter();
   r.pos++;
@@ -2599,7 +2638,7 @@ function decode_oaserviceframe(r) {
   return v;
 }
 
-function decode_oaservicereply(r) {
+function readOAServiceReply(r) {
   if (r.at() !== 0x7b) throw r.refuse("wrong_type");
   r.enter();
   r.pos++;
@@ -2650,7 +2689,7 @@ function decode_oaservicereply(r) {
   return v;
 }
 
-function decode_oaserviceerror(r) {
+function readOAServiceError(r) {
   if (r.at() !== 0x7b) throw r.refuse("wrong_type");
   r.enter();
   r.pos++;
@@ -2689,7 +2728,7 @@ function decode_oaserviceerror(r) {
   return v;
 }
 
-function decode_oaauthorizationdecideresult(r) {
+function readOAAuthorizationDecideResult(r) {
   if (r.at() !== 0x7b) throw r.refuse("wrong_type");
   r.enter();
   r.pos++;
@@ -2708,7 +2747,7 @@ function decode_oaauthorizationdecideresult(r) {
       if (key === "value") {
         if (seen & 1) throw r.refuse("duplicate_field");
         seen |= 1;
-        v.value = decode_decision(r);
+        v.value = readDecision(r);
       } else {
         throw r.refuse("unknown_field");
       }
@@ -2724,7 +2763,7 @@ function decode_oaauthorizationdecideresult(r) {
   return v;
 }
 
-function decode_oaauthorizationdecideforresult(r) {
+function readOAAuthorizationDecideForResult(r) {
   if (r.at() !== 0x7b) throw r.refuse("wrong_type");
   r.enter();
   r.pos++;
@@ -2743,7 +2782,7 @@ function decode_oaauthorizationdecideforresult(r) {
       if (key === "value") {
         if (seen & 1) throw r.refuse("duplicate_field");
         seen |= 1;
-        v.value = decode_decision(r);
+        v.value = readDecision(r);
       } else {
         throw r.refuse("unknown_field");
       }
@@ -2759,7 +2798,7 @@ function decode_oaauthorizationdecideforresult(r) {
   return v;
 }
 
-function decode_oaauthorizationoperatorlistpolicyresult(r) {
+function readOAAuthorizationOperatorListPolicyResult(r) {
   if (r.at() !== 0x7b) throw r.refuse("wrong_type");
   r.enter();
   r.pos++;
@@ -2778,7 +2817,7 @@ function decode_oaauthorizationoperatorlistpolicyresult(r) {
       if (key === "value") {
         if (seen & 1) throw r.refuse("duplicate_field");
         seen |= 1;
-        v.value = decode_policypage(r);
+        v.value = readPolicyPage(r);
       } else {
         throw r.refuse("unknown_field");
       }
@@ -2794,7 +2833,7 @@ function decode_oaauthorizationoperatorlistpolicyresult(r) {
   return v;
 }
 
-function decode_oaauthorizationoperatorsetruleresult(r) {
+function readOAAuthorizationOperatorSetRuleResult(r) {
   if (r.at() !== 0x7b) throw r.refuse("wrong_type");
   r.enter();
   r.pos++;
@@ -2813,7 +2852,7 @@ function decode_oaauthorizationoperatorsetruleresult(r) {
       if (key === "value") {
         if (seen & 1) throw r.refuse("duplicate_field");
         seen |= 1;
-        v.value = decode_policyedit(r);
+        v.value = readPolicyEdit(r);
       } else {
         throw r.refuse("unknown_field");
       }
@@ -2829,7 +2868,7 @@ function decode_oaauthorizationoperatorsetruleresult(r) {
   return v;
 }
 
-function decode_oaauthorizationoperatorrevokeruleresult(r) {
+function readOAAuthorizationOperatorRevokeRuleResult(r) {
   if (r.at() !== 0x7b) throw r.refuse("wrong_type");
   r.enter();
   r.pos++;
@@ -2848,7 +2887,7 @@ function decode_oaauthorizationoperatorrevokeruleresult(r) {
       if (key === "value") {
         if (seen & 1) throw r.refuse("duplicate_field");
         seen |= 1;
-        v.value = decode_policyedit(r);
+        v.value = readPolicyEdit(r);
       } else {
         throw r.refuse("unknown_field");
       }
@@ -2864,7 +2903,7 @@ function decode_oaauthorizationoperatorrevokeruleresult(r) {
   return v;
 }
 
-function decode_oaauthorizationoperatorsetruleforresult(r) {
+function readOAAuthorizationOperatorSetRuleForResult(r) {
   if (r.at() !== 0x7b) throw r.refuse("wrong_type");
   r.enter();
   r.pos++;
@@ -2883,7 +2922,7 @@ function decode_oaauthorizationoperatorsetruleforresult(r) {
       if (key === "value") {
         if (seen & 1) throw r.refuse("duplicate_field");
         seen |= 1;
-        v.value = decode_policyedit(r);
+        v.value = readPolicyEdit(r);
       } else {
         throw r.refuse("unknown_field");
       }
@@ -2899,7 +2938,7 @@ function decode_oaauthorizationoperatorsetruleforresult(r) {
   return v;
 }
 
-function decode_oaauthorizationoperatorreadruleresult(r) {
+function readOAAuthorizationOperatorReadRuleResult(r) {
   if (r.at() !== 0x7b) throw r.refuse("wrong_type");
   r.enter();
   r.pos++;
@@ -2918,7 +2957,7 @@ function decode_oaauthorizationoperatorreadruleresult(r) {
       if (key === "value") {
         if (seen & 1) throw r.refuse("duplicate_field");
         seen |= 1;
-        v.value = decode_ruleread(r);
+        v.value = readRuleRead(r);
       } else {
         throw r.refuse("unknown_field");
       }
@@ -2934,7 +2973,7 @@ function decode_oaauthorizationoperatorreadruleresult(r) {
   return v;
 }
 
-function decode_oaauthorizationoperatorregisteractionresult(r) {
+function readOAAuthorizationOperatorRegisterActionResult(r) {
   if (r.at() !== 0x7b) throw r.refuse("wrong_type");
   r.enter();
   r.pos++;
@@ -2953,7 +2992,7 @@ function decode_oaauthorizationoperatorregisteractionresult(r) {
       if (key === "value") {
         if (seen & 1) throw r.refuse("duplicate_field");
         seen |= 1;
-        v.value = decode_actionedit(r);
+        v.value = readActionEdit(r);
       } else {
         throw r.refuse("unknown_field");
       }
@@ -2969,7 +3008,7 @@ function decode_oaauthorizationoperatorregisteractionresult(r) {
   return v;
 }
 
-function decode_oaauthorizationoperatorretireactionresult(r) {
+function readOAAuthorizationOperatorRetireActionResult(r) {
   if (r.at() !== 0x7b) throw r.refuse("wrong_type");
   r.enter();
   r.pos++;
@@ -2988,7 +3027,7 @@ function decode_oaauthorizationoperatorretireactionresult(r) {
       if (key === "value") {
         if (seen & 1) throw r.refuse("duplicate_field");
         seen |= 1;
-        v.value = decode_actionedit(r);
+        v.value = readActionEdit(r);
       } else {
         throw r.refuse("unknown_field");
       }
@@ -3007,16 +3046,16 @@ function decode_oaauthorizationoperatorretireactionresult(r) {
 export function decode(data) {
   const r = new Reader(data);
   r.ws();
-  const v = decode_request(r);
+  const v = readRequest(r);
   r.ws();
   if (r.pos < r.buf.length) throw r.refuse("trailing_bytes");
   return v;
 }
 
 // refusals is in the order two of them are chosen between.
-export const refusals = ["malformed", "bad_string", "number_spelling", "wrong_type", "depth_exceeded", "duplicate_key", "duplicate_field", "unknown_field", "missing_field", "bad_enum", "trailing_bytes"];
+const refusals = ["malformed", "bad_string", "number_spelling", "wrong_type", "depth_exceeded", "duplicate_key", "duplicate_field", "unknown_field", "missing_field", "bad_enum", "trailing_bytes"];
 
-export function refusalRank(word) {
+function refusalRank(word) {
   return refusals.indexOf(word);
 }
 
@@ -3078,23 +3117,23 @@ _serviceRecords["AppMetadata"] = [["id","string","never"],["name","string","neve
 _serviceRecords["HoldMetadata"] = [["app","string","never"],["name","string","never"],["right","string","never"],["why","string","never"],["since","string","never"],];
 _serviceRecords["ResponseMetadata"] = [["code","string","absent"],["error","string","absent"],["secret","string","absent"],["token","string","absent"],["expires","string","absent"],["app","AppMetadata","absent"],["right","string","absent"],["apps","list<AppMetadata>","zero"],["holds","list<HoldMetadata>","zero"],];
 _serviceRecords["Subject"] = [["account","string","never"],["program","string","never"],];
-_serviceRecords["Decision"] = [["outcome","string","never"],["policy_revision","string","absent"],];
+_serviceRecords["Decision"] = [["outcome","string","never"],["policyRevision","string","absent"],];
 _serviceRecords["PolicyRule"] = [["subject","Subject","never"],["action","string","never"],["resource","string","never"],["permit","bool","never"],];
 _serviceRecords["PolicyPage"] = [["outcome","string","never"],["revision","string","never"],["catalog","list<string>","never"],["rules","list<PolicyRule>","never"],["next","string","never"],["complete","bool","never"],];
 _serviceRecords["PolicyEdit"] = [["outcome","string","never"],["revision","string","never"],["current","PolicyRule","absent"],];
-_serviceRecords["RuleRecord"] = [["rule","PolicyRule","never"],["set_by","Subject","never"],["set_at","string","never"],["why","string","never"],["expires","string","never"],];
+_serviceRecords["RuleRecord"] = [["rule","PolicyRule","never"],["setBy","Subject","never"],["setAt","string","never"],["why","string","never"],["expires","string","never"],];
 _serviceRecords["RuleRead"] = [["outcome","string","never"],["revision","string","never"],["record","RuleRecord","absent"],];
-_serviceRecords["CatalogEntry"] = [["action","string","never"],["registered_by","Subject","never"],["registered_at","string","never"],];
+_serviceRecords["CatalogEntry"] = [["action","string","never"],["registeredBy","Subject","never"],["registeredAt","string","never"],];
 _serviceRecords["ActionEdit"] = [["outcome","string","never"],["revision","string","never"],["current","CatalogEntry","absent"],];
 _serviceRecords["OAAuthorizationDecideArguments"] = [["action","string","never"],["resource","string","never"],];
 _serviceRecords["OAAuthorizationDecideForArguments"] = [["subject","Subject","never"],["action","string","never"],["resource","string","never"],];
 _serviceRecords["OAAuthorizationOperatorListPolicyArguments"] = [["cursor","string","never"],["limit","i64","never"],];
-_serviceRecords["OAAuthorizationOperatorSetRuleArguments"] = [["expected_revision","string","never"],["rule","PolicyRule","never"],];
-_serviceRecords["OAAuthorizationOperatorRevokeRuleArguments"] = [["expected_revision","string","never"],["subject","Subject","never"],["action","string","never"],["resource","string","never"],];
-_serviceRecords["OAAuthorizationOperatorSetRuleForArguments"] = [["expected_revision","string","never"],["rule","PolicyRule","never"],["ttl_ms","i64","never"],["why","string","never"],];
+_serviceRecords["OAAuthorizationOperatorSetRuleArguments"] = [["expectedRevision","string","never"],["rule","PolicyRule","never"],];
+_serviceRecords["OAAuthorizationOperatorRevokeRuleArguments"] = [["expectedRevision","string","never"],["subject","Subject","never"],["action","string","never"],["resource","string","never"],];
+_serviceRecords["OAAuthorizationOperatorSetRuleForArguments"] = [["expectedRevision","string","never"],["rule","PolicyRule","never"],["ttlMs","i64","never"],["why","string","never"],];
 _serviceRecords["OAAuthorizationOperatorReadRuleArguments"] = [["subject","Subject","never"],["action","string","never"],["resource","string","never"],];
-_serviceRecords["OAAuthorizationOperatorRegisterActionArguments"] = [["expected_revision","string","never"],["action","string","never"],];
-_serviceRecords["OAAuthorizationOperatorRetireActionArguments"] = [["expected_revision","string","never"],["action","string","never"],];
+_serviceRecords["OAAuthorizationOperatorRegisterActionArguments"] = [["expectedRevision","string","never"],["action","string","never"],];
+_serviceRecords["OAAuthorizationOperatorRetireActionArguments"] = [["expectedRevision","string","never"],["action","string","never"],];
 _serviceRecords["OAServiceFrame"] = [["version","i32","never"],["service","string","never"],["method","string","never"],["arguments","json","never"],];
 _serviceRecords["OAServiceReply"] = [["version","i32","never"],["service","string","never"],["method","string","never"],["ok","bool","never"],["payload","json","never"],];
 _serviceRecords["OAServiceError"] = [["code","string","never"],["message","string","never"],];
@@ -3109,18 +3148,18 @@ _serviceRecords["OAAuthorizationOperatorRegisterActionResult"] = [["value","Acti
 _serviceRecords["OAAuthorizationOperatorRetireActionResult"] = [["value","ActionEdit","never"],];
 
 function _serviceRequest(service, method, argumentsBytes) {
-  return _serviceEncode(enc_oaserviceframe, {
+  return _serviceEncode(writeOAServiceFrame, {
     version:1, service, method, arguments:new TextDecoder("utf-8",{fatal:true}).decode(argumentsBytes)
   },0);
 }
 
 function _serviceResponse(frame, service, method) {
   if (!(frame instanceof Uint8Array)) throw new TypeError("transport frame must be Uint8Array");
-  const reply = _serviceDecode(decode_oaservicereply, frame, 0);
+  const reply = _serviceDecode(readOAServiceReply, frame, 0);
   if (reply.version !== 1) throw new DispatchError("unknown_version");
   if (reply.service !== service || reply.method !== method) throw new DispatchError("mismatched_response");
   if (!reply.ok) {
-    const error = _serviceDecode(decode_oaserviceerror, reply.payload, 1);
+    const error = _serviceDecode(readOAServiceError, reply.payload, 1);
     if (!error.code) throw new DispatchError("invalid_error");
     throw new ServiceError(error.code, error.message);
   }
@@ -3129,124 +3168,133 @@ function _serviceResponse(frame, service, method) {
 
 export class AuthorizationClient {
   constructor(transport) { this._transport = transport; }
-  async Decide(arg0,arg1) {
-    const args = newOAAuthorizationDecideArguments();
-    args["action"] = arg0;
-    args["resource"] = arg1;
-    _serviceCheck("OAAuthorizationDecideArguments", args);
-    const payload = _serviceEncode(enc_oaauthorizationdecidearguments, args, 1);
-    _serviceDecode(decode_oaauthorizationdecidearguments, payload, 1);
-    const request = _serviceRequest("abstraction.rights/authorization@1", "Decide", payload);
-    const reply = _serviceResponse(await this._transport.exchangeFrame(request), "abstraction.rights/authorization@1", "Decide");
-    const result = _serviceDecode(decode_oaauthorizationdecideresult, reply, 1);
-    return result.value;
+
+  async decide(action, resource) {
+    const _args = newOAAuthorizationDecideArguments();
+    _args.action = action;
+    _args.resource = resource;
+    _serviceCheck("OAAuthorizationDecideArguments", _args);
+    const _payload = _serviceEncode(writeOAAuthorizationDecideArguments, _args, 1);
+    _serviceDecode(readOAAuthorizationDecideArguments, _payload, 1);
+    const _request = _serviceRequest("abstraction.rights/authorization@1", "Decide", _payload);
+    const _reply = _serviceResponse(await this._transport.exchangeFrame(_request), "abstraction.rights/authorization@1", "Decide");
+    const _result = _serviceDecode(readOAAuthorizationDecideResult, _reply, 1);
+    return _result.value;
   }
-  async DecideFor(arg0,arg1,arg2) {
-    const args = newOAAuthorizationDecideForArguments();
-    args["subject"] = arg0;
-    args["action"] = arg1;
-    args["resource"] = arg2;
-    _serviceCheck("OAAuthorizationDecideForArguments", args);
-    const payload = _serviceEncode(enc_oaauthorizationdecideforarguments, args, 1);
-    _serviceDecode(decode_oaauthorizationdecideforarguments, payload, 1);
-    const request = _serviceRequest("abstraction.rights/authorization@1", "DecideFor", payload);
-    const reply = _serviceResponse(await this._transport.exchangeFrame(request), "abstraction.rights/authorization@1", "DecideFor");
-    const result = _serviceDecode(decode_oaauthorizationdecideforresult, reply, 1);
-    return result.value;
+
+  async decideFor(subject, action, resource) {
+    const _args = newOAAuthorizationDecideForArguments();
+    _args.subject = subject;
+    _args.action = action;
+    _args.resource = resource;
+    _serviceCheck("OAAuthorizationDecideForArguments", _args);
+    const _payload = _serviceEncode(writeOAAuthorizationDecideForArguments, _args, 1);
+    _serviceDecode(readOAAuthorizationDecideForArguments, _payload, 1);
+    const _request = _serviceRequest("abstraction.rights/authorization@1", "DecideFor", _payload);
+    const _reply = _serviceResponse(await this._transport.exchangeFrame(_request), "abstraction.rights/authorization@1", "DecideFor");
+    const _result = _serviceDecode(readOAAuthorizationDecideForResult, _reply, 1);
+    return _result.value;
   }
 }
 export const AuthorizationService = Object.freeze({wireName:"abstraction.rights/authorization@1",Client:AuthorizationClient});
 
 export class AuthorizationOperatorClient {
   constructor(transport) { this._transport = transport; }
-  async ListPolicy(arg0,arg1) {
-    const args = newOAAuthorizationOperatorListPolicyArguments();
-    args["cursor"] = arg0;
-    args["limit"] = arg1;
-    _serviceCheck("OAAuthorizationOperatorListPolicyArguments", args);
-    const payload = _serviceEncode(enc_oaauthorizationoperatorlistpolicyarguments, args, 1);
-    _serviceDecode(decode_oaauthorizationoperatorlistpolicyarguments, payload, 1);
-    const request = _serviceRequest("abstraction.rights/operator@1", "ListPolicy", payload);
-    const reply = _serviceResponse(await this._transport.exchangeFrame(request), "abstraction.rights/operator@1", "ListPolicy");
-    const result = _serviceDecode(decode_oaauthorizationoperatorlistpolicyresult, reply, 1);
-    return result.value;
+
+  async listPolicy(cursor, limit) {
+    const _args = newOAAuthorizationOperatorListPolicyArguments();
+    _args.cursor = cursor;
+    _args.limit = limit;
+    _serviceCheck("OAAuthorizationOperatorListPolicyArguments", _args);
+    const _payload = _serviceEncode(writeOAAuthorizationOperatorListPolicyArguments, _args, 1);
+    _serviceDecode(readOAAuthorizationOperatorListPolicyArguments, _payload, 1);
+    const _request = _serviceRequest("abstraction.rights/operator@1", "ListPolicy", _payload);
+    const _reply = _serviceResponse(await this._transport.exchangeFrame(_request), "abstraction.rights/operator@1", "ListPolicy");
+    const _result = _serviceDecode(readOAAuthorizationOperatorListPolicyResult, _reply, 1);
+    return _result.value;
   }
-  async SetRule(arg0,arg1) {
-    const args = newOAAuthorizationOperatorSetRuleArguments();
-    args["expected_revision"] = arg0;
-    args["rule"] = arg1;
-    _serviceCheck("OAAuthorizationOperatorSetRuleArguments", args);
-    const payload = _serviceEncode(enc_oaauthorizationoperatorsetrulearguments, args, 1);
-    _serviceDecode(decode_oaauthorizationoperatorsetrulearguments, payload, 1);
-    const request = _serviceRequest("abstraction.rights/operator@1", "SetRule", payload);
-    const reply = _serviceResponse(await this._transport.exchangeFrame(request), "abstraction.rights/operator@1", "SetRule");
-    const result = _serviceDecode(decode_oaauthorizationoperatorsetruleresult, reply, 1);
-    return result.value;
+
+  async setRule(expectedRevision, rule) {
+    const _args = newOAAuthorizationOperatorSetRuleArguments();
+    _args.expectedRevision = expectedRevision;
+    _args.rule = rule;
+    _serviceCheck("OAAuthorizationOperatorSetRuleArguments", _args);
+    const _payload = _serviceEncode(writeOAAuthorizationOperatorSetRuleArguments, _args, 1);
+    _serviceDecode(readOAAuthorizationOperatorSetRuleArguments, _payload, 1);
+    const _request = _serviceRequest("abstraction.rights/operator@1", "SetRule", _payload);
+    const _reply = _serviceResponse(await this._transport.exchangeFrame(_request), "abstraction.rights/operator@1", "SetRule");
+    const _result = _serviceDecode(readOAAuthorizationOperatorSetRuleResult, _reply, 1);
+    return _result.value;
   }
-  async RevokeRule(arg0,arg1,arg2,arg3) {
-    const args = newOAAuthorizationOperatorRevokeRuleArguments();
-    args["expected_revision"] = arg0;
-    args["subject"] = arg1;
-    args["action"] = arg2;
-    args["resource"] = arg3;
-    _serviceCheck("OAAuthorizationOperatorRevokeRuleArguments", args);
-    const payload = _serviceEncode(enc_oaauthorizationoperatorrevokerulearguments, args, 1);
-    _serviceDecode(decode_oaauthorizationoperatorrevokerulearguments, payload, 1);
-    const request = _serviceRequest("abstraction.rights/operator@1", "RevokeRule", payload);
-    const reply = _serviceResponse(await this._transport.exchangeFrame(request), "abstraction.rights/operator@1", "RevokeRule");
-    const result = _serviceDecode(decode_oaauthorizationoperatorrevokeruleresult, reply, 1);
-    return result.value;
+
+  async revokeRule(expectedRevision, subject, action, resource) {
+    const _args = newOAAuthorizationOperatorRevokeRuleArguments();
+    _args.expectedRevision = expectedRevision;
+    _args.subject = subject;
+    _args.action = action;
+    _args.resource = resource;
+    _serviceCheck("OAAuthorizationOperatorRevokeRuleArguments", _args);
+    const _payload = _serviceEncode(writeOAAuthorizationOperatorRevokeRuleArguments, _args, 1);
+    _serviceDecode(readOAAuthorizationOperatorRevokeRuleArguments, _payload, 1);
+    const _request = _serviceRequest("abstraction.rights/operator@1", "RevokeRule", _payload);
+    const _reply = _serviceResponse(await this._transport.exchangeFrame(_request), "abstraction.rights/operator@1", "RevokeRule");
+    const _result = _serviceDecode(readOAAuthorizationOperatorRevokeRuleResult, _reply, 1);
+    return _result.value;
   }
-  async SetRuleFor(arg0,arg1,arg2,arg3) {
-    const args = newOAAuthorizationOperatorSetRuleForArguments();
-    args["expected_revision"] = arg0;
-    args["rule"] = arg1;
-    args["ttl_ms"] = arg2;
-    args["why"] = arg3;
-    _serviceCheck("OAAuthorizationOperatorSetRuleForArguments", args);
-    const payload = _serviceEncode(enc_oaauthorizationoperatorsetruleforarguments, args, 1);
-    _serviceDecode(decode_oaauthorizationoperatorsetruleforarguments, payload, 1);
-    const request = _serviceRequest("abstraction.rights/operator@1", "SetRuleFor", payload);
-    const reply = _serviceResponse(await this._transport.exchangeFrame(request), "abstraction.rights/operator@1", "SetRuleFor");
-    const result = _serviceDecode(decode_oaauthorizationoperatorsetruleforresult, reply, 1);
-    return result.value;
+
+  async setRuleFor(expectedRevision, rule, ttlMs, why) {
+    const _args = newOAAuthorizationOperatorSetRuleForArguments();
+    _args.expectedRevision = expectedRevision;
+    _args.rule = rule;
+    _args.ttlMs = ttlMs;
+    _args.why = why;
+    _serviceCheck("OAAuthorizationOperatorSetRuleForArguments", _args);
+    const _payload = _serviceEncode(writeOAAuthorizationOperatorSetRuleForArguments, _args, 1);
+    _serviceDecode(readOAAuthorizationOperatorSetRuleForArguments, _payload, 1);
+    const _request = _serviceRequest("abstraction.rights/operator@1", "SetRuleFor", _payload);
+    const _reply = _serviceResponse(await this._transport.exchangeFrame(_request), "abstraction.rights/operator@1", "SetRuleFor");
+    const _result = _serviceDecode(readOAAuthorizationOperatorSetRuleForResult, _reply, 1);
+    return _result.value;
   }
-  async ReadRule(arg0,arg1,arg2) {
-    const args = newOAAuthorizationOperatorReadRuleArguments();
-    args["subject"] = arg0;
-    args["action"] = arg1;
-    args["resource"] = arg2;
-    _serviceCheck("OAAuthorizationOperatorReadRuleArguments", args);
-    const payload = _serviceEncode(enc_oaauthorizationoperatorreadrulearguments, args, 1);
-    _serviceDecode(decode_oaauthorizationoperatorreadrulearguments, payload, 1);
-    const request = _serviceRequest("abstraction.rights/operator@1", "ReadRule", payload);
-    const reply = _serviceResponse(await this._transport.exchangeFrame(request), "abstraction.rights/operator@1", "ReadRule");
-    const result = _serviceDecode(decode_oaauthorizationoperatorreadruleresult, reply, 1);
-    return result.value;
+
+  async readRule(subject, action, resource) {
+    const _args = newOAAuthorizationOperatorReadRuleArguments();
+    _args.subject = subject;
+    _args.action = action;
+    _args.resource = resource;
+    _serviceCheck("OAAuthorizationOperatorReadRuleArguments", _args);
+    const _payload = _serviceEncode(writeOAAuthorizationOperatorReadRuleArguments, _args, 1);
+    _serviceDecode(readOAAuthorizationOperatorReadRuleArguments, _payload, 1);
+    const _request = _serviceRequest("abstraction.rights/operator@1", "ReadRule", _payload);
+    const _reply = _serviceResponse(await this._transport.exchangeFrame(_request), "abstraction.rights/operator@1", "ReadRule");
+    const _result = _serviceDecode(readOAAuthorizationOperatorReadRuleResult, _reply, 1);
+    return _result.value;
   }
-  async RegisterAction(arg0,arg1) {
-    const args = newOAAuthorizationOperatorRegisterActionArguments();
-    args["expected_revision"] = arg0;
-    args["action"] = arg1;
-    _serviceCheck("OAAuthorizationOperatorRegisterActionArguments", args);
-    const payload = _serviceEncode(enc_oaauthorizationoperatorregisteractionarguments, args, 1);
-    _serviceDecode(decode_oaauthorizationoperatorregisteractionarguments, payload, 1);
-    const request = _serviceRequest("abstraction.rights/operator@1", "RegisterAction", payload);
-    const reply = _serviceResponse(await this._transport.exchangeFrame(request), "abstraction.rights/operator@1", "RegisterAction");
-    const result = _serviceDecode(decode_oaauthorizationoperatorregisteractionresult, reply, 1);
-    return result.value;
+
+  async registerAction(expectedRevision, action) {
+    const _args = newOAAuthorizationOperatorRegisterActionArguments();
+    _args.expectedRevision = expectedRevision;
+    _args.action = action;
+    _serviceCheck("OAAuthorizationOperatorRegisterActionArguments", _args);
+    const _payload = _serviceEncode(writeOAAuthorizationOperatorRegisterActionArguments, _args, 1);
+    _serviceDecode(readOAAuthorizationOperatorRegisterActionArguments, _payload, 1);
+    const _request = _serviceRequest("abstraction.rights/operator@1", "RegisterAction", _payload);
+    const _reply = _serviceResponse(await this._transport.exchangeFrame(_request), "abstraction.rights/operator@1", "RegisterAction");
+    const _result = _serviceDecode(readOAAuthorizationOperatorRegisterActionResult, _reply, 1);
+    return _result.value;
   }
-  async RetireAction(arg0,arg1) {
-    const args = newOAAuthorizationOperatorRetireActionArguments();
-    args["expected_revision"] = arg0;
-    args["action"] = arg1;
-    _serviceCheck("OAAuthorizationOperatorRetireActionArguments", args);
-    const payload = _serviceEncode(enc_oaauthorizationoperatorretireactionarguments, args, 1);
-    _serviceDecode(decode_oaauthorizationoperatorretireactionarguments, payload, 1);
-    const request = _serviceRequest("abstraction.rights/operator@1", "RetireAction", payload);
-    const reply = _serviceResponse(await this._transport.exchangeFrame(request), "abstraction.rights/operator@1", "RetireAction");
-    const result = _serviceDecode(decode_oaauthorizationoperatorretireactionresult, reply, 1);
-    return result.value;
+
+  async retireAction(expectedRevision, action) {
+    const _args = newOAAuthorizationOperatorRetireActionArguments();
+    _args.expectedRevision = expectedRevision;
+    _args.action = action;
+    _serviceCheck("OAAuthorizationOperatorRetireActionArguments", _args);
+    const _payload = _serviceEncode(writeOAAuthorizationOperatorRetireActionArguments, _args, 1);
+    _serviceDecode(readOAAuthorizationOperatorRetireActionArguments, _payload, 1);
+    const _request = _serviceRequest("abstraction.rights/operator@1", "RetireAction", _payload);
+    const _reply = _serviceResponse(await this._transport.exchangeFrame(_request), "abstraction.rights/operator@1", "RetireAction");
+    const _result = _serviceDecode(readOAAuthorizationOperatorRetireActionResult, _reply, 1);
+    return _result.value;
   }
 }
 export const AuthorizationOperatorService = Object.freeze({wireName:"abstraction.rights/operator@1",Client:AuthorizationOperatorClient});
