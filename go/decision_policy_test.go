@@ -86,6 +86,32 @@ func TestDecisionPolicyPersistenceRevocationAndNoop(t *testing.T) {
 		t.Fatal("catalog silently changed")
 	}
 }
+
+func TestDecisionPolicyResourceSpellingIsExact(t *testing.T) {
+	p, err := LoadDecisionPolicy(filepath.Join(t.TempDir(), "decisions.json"), []string{decisionAction})
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := subject(t)
+	if err := p.Set(s, decisionAction, "host:Ollama", true); err != nil {
+		t.Fatal(err)
+	}
+	if got := p.Decide(s, decisionAction, "host:Ollama").Outcome; got != wire.DecisionOutcomePermitted {
+		t.Fatalf("exact resource: %s", got)
+	}
+	if got := p.Decide(s, decisionAction, "host:ollama").Outcome; got != wire.DecisionOutcomeNotGranted {
+		t.Fatalf("case-folded resource: %s", got)
+	}
+	if err := p.Set(s, decisionAction, "host:ollama", false); err != nil {
+		t.Fatal(err)
+	}
+	if got := p.Decide(s, decisionAction, "host:Ollama").Outcome; got != wire.DecisionOutcomePermitted {
+		t.Fatalf("distinct permit: %s", got)
+	}
+	if got := p.Decide(s, decisionAction, "host:ollama").Outcome; got != wire.DecisionOutcomeDenied {
+		t.Fatalf("distinct deny: %s", got)
+	}
+}
 func TestDecisionPolicyCorruptionRefusesAndPreserves(t *testing.T) {
 	s := subject(t)
 	for _, mode := range []string{"duplicate", "conflicting", "oversized", "unknown-profile", "unicode", "nonregular"} {

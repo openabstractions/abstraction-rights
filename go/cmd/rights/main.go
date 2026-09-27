@@ -21,6 +21,13 @@ const usage = `rights — who may do what on this machine
 
 An application that registers is a question in 'asks pending'; answer it there.
 <app> is an id from 'rights apps', or a name if only one has it.
+
+A hold of awake is a lease of resource awake: the rule is
+abstraction.resource/hold on awake, and the hold is a row of the resource
+table. 'holds' prints those rows where the service was composed with the
+table, and 'openabstractions resources awake' prints them from the table
+itself. The platform request stays on the holder's connection, which is why
+this service and not a request-response call keeps it.
 `
 
 func main() {
@@ -73,7 +80,11 @@ func main() {
 			fmt.Println("nothing is held")
 		}
 		for _, h := range hs {
-			fmt.Printf("%s  %-20s holds %-8s for %s: %s\n      %s\n", h.App, h.Name, h.Right, ago(h.Since), h.Why, seen(h.Seen))
+			lease := h.Lease
+			if lease == "" {
+				lease = "no lease row"
+			}
+			fmt.Printf("%s  %-20s holds %-8s for %s: %s\n      %s\n      %s\n", h.App, h.Name, h.Right, ago(h.Since), h.Why, seen(h.Seen), lease)
 		}
 	default:
 		flag.Usage()

@@ -85,6 +85,12 @@ func boundedDecisionString(v string, max int) bool {
 func validWhy(v string) bool {
 	return v == "" || boundedDecisionString(v, MaxRuleWhy)
 }
+// NormalizeDecisionSubject also canonicalizes a plain program path: a rule
+// granted or matched against a short DOS 8.3 launch alias compares equal to
+// the same file's long spelling (identity.CanonicalProgramPath), on both the
+// stored side (grant, revoke, register/retire) and the query side (decide,
+// read). A path CanonicalProgramPath cannot resolve, including one naming no
+// existing file, comes back unchanged, so a different file still refuses.
 func NormalizeDecisionSubject(s wire.Subject) (wire.Subject, error) {
 	if strings.HasPrefix(s.Program, identity.PackagedProgramPrefix) {
 		if !boundedDecisionString(s.Account, 128) || !identity.ValidSubjectProgram(s.Program) {
@@ -95,7 +101,7 @@ func NormalizeDecisionSubject(s wire.Subject) (wire.Subject, error) {
 	if !boundedDecisionString(s.Account, 128) || !boundedDecisionString(s.Program, 4096) || !filepath.IsAbs(s.Program) {
 		return wire.Subject{}, errors.New("rights: invalid subject")
 	}
-	s.Program = filepath.Clean(s.Program)
+	s.Program = identity.CanonicalProgramPath(filepath.Clean(s.Program))
 	return s, nil
 }
 func ValidDecisionQuery(action, resource string) bool {

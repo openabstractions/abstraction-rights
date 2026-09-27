@@ -57,12 +57,12 @@ func Listen(endpoint string, policy *rights.DecisionPolicy, enforcer AuthorizeEn
 	if _, e = rand.Read(epoch[:]); e != nil {
 		return nil, e
 	}
-	l, e := listen.Listen(endpoint)
+	l, e := listen.ListenFramed(endpoint, listen.Program)
 	if e != nil {
 		return nil, e
 	}
 	ctx, cancel := context.WithCancel(context.Background())
-	return &Host{listener: l, owner: owner.Uid, policy: policy, enforcer: enforcer, ctx: ctx, cancel: cancel, slots: make(chan struct{}, 32), operatorEpoch: hex.EncodeToString(epoch[:])}, nil
+	return &Host{listener: listen.Sessions(l, listen.SessionOptions{MaxSessions: 32}), owner: owner.Uid, policy: policy, enforcer: enforcer, ctx: ctx, cancel: cancel, slots: make(chan struct{}, 32), operatorEpoch: hex.EncodeToString(epoch[:])}, nil
 }
 func (h *Host) Close() error {
 	var e error

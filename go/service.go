@@ -47,6 +47,10 @@ type Service struct {
 	holds    map[*holder]struct{}
 	wg       sync.WaitGroup
 	awake    func(who, why string) (func(), error)
+	// leases writes each wake hold into the resource lease book and reads the
+	// holds back from the table (awake_leases.go); nil keeps the listing this
+	// service makes itself.
+	leases AwakeLeases
 }
 
 func Start(endpoint, stateDir, asksEndpoint string) (*Service, error) {
@@ -267,7 +271,11 @@ func (s *Service) hold(k *listen.Call, req Request) {
 		reply(k, failure(err))
 		return
 	}
-	if right != RightAwake {
+	// The rule is abstraction.resource/hold on awake; the old word `awake` is
+	// the same decision under the name this service has always taken
+	// (wire.go Alias, abstraction-resource CONTRACT.md RES-A1).
+	action, resource, held := Alias(right)
+	if !held {
 		reply(k, Response{Code: CodeUnsupportedHold, Error: "rights: " + right + " is not a right that can be held"})
 		return
 	}
@@ -277,10 +285,19 @@ func (s *Service) hold(k *listen.Call, req Request) {
 		return
 	}
 	h := &holder{Hold: Hold{App: app.ID, Name: app.Name, Right: right, Why: req.Why, Since: time.Now().UTC(), Seen: k.Caller}, c: k, release: release}
+	// The hold becomes a row of the resource table's awake resource, so one
+	// reader answers who holds the card and who holds the wake. The platform
+	// request stays on this connection: that is the half that did not move.
 	s.mu.Lock()
+	book := s.leases
 	s.holds[h] = struct{}{}
 	s.mu.Unlock()
-	slog.Info("hold", "right", right, "app", app.Name, "why", req.Why, "by", k.Caller.Path)
+	if book != nil {
+		lease, end := book.HoldAwake(k.Caller.Path, k.Caller.User, req.Why)
+		h.Hold.Lease = lease
+		defer end()
+	}
+	slog.Info("hold", "right", right, "action", action, "resource", resource, "app", app.Name, "why", req.Why, "by", k.Caller.Path)
 	if reply(k, Response{App: &app, Right: right}) == nil {
 		<-k.Gone()
 	}
@@ -301,13 +318,36 @@ func (s *Service) drop(match func(*holder) bool) {
 	}
 }
 
+// listHolds is what holds the machine awake. With a lease book it is the
+// table's awake rows, which is what every reader of the wake hold reads; the
+// application's name is looked up from the holds this service is carrying,
+// because the table names a program and not a registration.
 func (s *Service) listHolds() []Hold {
 	s.mu.Lock()
-	defer s.mu.Unlock()
-	var out []Hold
+	book := s.leases
+	live := make([]Hold, 0, len(s.holds))
 	for h := range s.holds {
-		out = append(out, h.Hold)
+		live = append(live, h.Hold)
 	}
-	sort.Slice(out, func(i, j int) bool { return out[i].Since.Before(out[j].Since) })
+	s.mu.Unlock()
+	if book == nil {
+		sort.Slice(live, func(i, j int) bool { return live[i].Since.Before(live[j].Since) })
+		return live
+	}
+	named := map[string]Hold{}
+	for _, h := range live {
+		if h.Lease != "" {
+			named[h.Lease] = h
+		}
+	}
+	var out []Hold
+	for _, row := range book.AwakeHolds() {
+		hold := Hold{App: named[row.Lease].App, Name: named[row.Lease].Name, Right: RightAwake,
+			Why: row.Why, Since: row.Since, Seen: named[row.Lease].Seen, Lease: row.Lease}
+		if hold.Name == "" {
+			hold.Name = row.Program
+		}
+		out = append(out, hold)
+	}
 	return out
 }

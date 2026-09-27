@@ -1,5 +1,11 @@
 # abstraction-rights
 
+An application cannot register its own action today; `RegisterAction` is an
+operator call, made by the service that owns the action. What an application
+can do is read a decision: call `Decide` or `DecideFor` for an action and a
+resource (the rights target string) the runtime already registered, and get
+back the decision the enforcing service then honors.
+
 Give one program permission to perform one named action on one resource, inspect
 that decision, and revoke it without changing the application. Every protected
 service checks rights at the resource boundary. A rule identifies the account,
@@ -27,10 +33,23 @@ openabstractions rights grant --program /absolute/path/to/app \
   --action <action> --resource <resource> --why "operator choice"
 ```
 
-`grant --for downloads` and `grant --for inference` expand documented bundles
-into exact rules and report every rule that landed. Resource services remain the
-enforcement points and return their own typed `forbidden` or `unavailable`
-outcomes.
+`grant --for downloads` and `grant --for inference` write a bundle of exact
+rules for one program, one conditional edit at a time, and report every rule
+that landed. `--for` and the bundles it names belong to the `openabstractions`
+runtime program, not to this module; the rules they write are exact rules
+this module decides on like any other.
+
+- `downloads` grants `abstraction.job/acceptance.submit` on
+  `abstraction.job/acceptance@1`, `abstraction.model/lookup` on each
+  `--registry`, and `abstraction.credentials/apply` on each `--credential`.
+- `inference` grants `abstraction.router/inventory.read` on
+  `abstraction.router/inventory`, `abstraction.router/route` on
+  `abstraction.router/routes`, `abstraction.inference/complete` on
+  `host:<name>` for each `--host`, and `abstraction.credentials/apply` on
+  each `--credential`.
+
+Resource services remain the enforcement points and return their own typed
+`forbidden` or `unavailable` outcomes.
 
 The table says which host enforces each action. **Installed** is
 `openabstractions serve runtime`: it decides in its own process against
@@ -65,6 +84,14 @@ credentials and inference definitions declare their own `resource_actions`.
 | storage change Observe, List | `abstraction.storage/content.observe` | `abstraction.storage/changes` | library |
 | storage Remove | `abstraction.storage/content.remove` | `store:<name>` | library |
 
+The actions and resources above are today's wire strings. `model/lookup`,
+`router/route`, `credentials/apply`, `inference/complete` and the resource
+`host:<name>` are renamed by `research/vocabulary/DECISION.md` (S11, D11,
+D88); [CONTRACT.md](CONTRACT.md#reading-this-page) carries the full
+prose-to-wire table and the release each rename ships in. A rule written
+against the string in this table keeps deciding until that release's dual
+reader is in place.
+
 Config reads, log writes, a program's own work (cancellation included), its own
 questions and its own `Decide` need no rule. An evaluated refusal reaches the
 caller as that service's `forbidden` outcome. A decision the service cannot
@@ -93,6 +120,50 @@ A right a person has granted to an application is held by a service on the
 application's behalf, so revoking the right releases the machine the same
 second, and no service ever says yes on its own.
 
+## How an application gets a rule
+
+A person grants a rule, through `openabstractions rights grant` on the command
+line or the Panel's Rights and Explore sections. An application never grants
+its own rule and never holds one by installation.
+
+For three actions — job submit, model lookup and inference complete — the
+runtime asks the person the first time an application's call decides
+`not_granted`: the question names the program, the action and the resource,
+and the person's answer is what `openabstractions rights grant --for
+downloads|inference` and the Panel do by hand for every other action.
+
+## Decide from an application
+
+```go
+package main
+
+import (
+	"context"
+	"log"
+
+	facade "github.com/openabstractions/abstraction-facade/go"
+)
+
+func main() {
+	ctx := context.Background()
+	rights, err := facade.Discover().ResolveRights(ctx, facade.Requirements{})
+	if err != nil {
+		log.Fatal(err)
+	}
+	decision, err := rights.DecideContext(ctx, "abstraction.credentials/apply", "credential:openrouter")
+	if err != nil {
+		log.Fatal(err)
+	}
+	log.Println(decision.Outcome) // "permitted", "denied", "not_granted", "unknown_action"
+}
+```
+
+`DecideContext` derives the subject from the calling program's own native
+identity. Only `permitted` authorizes the caller to proceed; every other
+outcome refuses. A resource service deciding on another program's behalf
+calls `Require(ctx, peer, action, resource)` instead, over the peer it bound
+at its own receiving boundary.
+
 ## The problem
 
 Every application that wants to hold the machine awake asks the operating
@@ -103,16 +174,24 @@ application hold the machine awake. The service holds the OS request on the
 application's behalf, so revoking the right releases the machine the same
 second.
 
+The resource layer holds the `awake` state today, as a lease of its `awake`
+resource. This layer keeps `awake` as a one-line alias for that lease's rule;
+grants a person already made, and every reader of them, keep working.
+
 ## Words
 
 | word | meaning |
 |---|---|
-| **right** | one name from a closed vocabulary; the first is `awake`. Everything not on the list is absent, and absent means no |
+| **resource right** | one name from a closed vocabulary the registration/token/hold workflow below grants; the first is `awake`. Everything not on the list is absent, and absent means no |
 | **registration** | the device authorization grant (RFC 8628): an application connects, says its name and the rights it wants, and waits for a person |
 | **grant** | a person's act; its subject is the application, designated by its secret |
-| **token** | a bearer credential (RFC 6750) scoped to one right and one hour |
-| **hold** | a right in use, kept by the service on the application's behalf |
+| **token** | a bearer credential (RFC 6750) scoped to one resource right and one hour |
+| **hold** | a resource right in use, kept by the service on the application's behalf |
 | **check** | token introspection (RFC 7662) for a resource holder in another process |
+
+Elsewhere on this page, "right" means an ordinary rule: permission for one
+program to perform one action on one resource, the kind `Decide` and
+`DecideFor` check.
 
 No rule on this page carries a tag; the contract below is held by the tests
 named in it.
@@ -127,6 +206,11 @@ named in it.
   in this repository and the facade. Native provider support is separate.
 
 ## Run
+
+Install the runtime first: https://openabstractions.org/adopt.html. The
+installed `openabstractions serve runtime` already serves this layer;
+`rightsd` below is for a checkout without the runtime installed, and it
+refuses to start on the same pipe the installed runtime uses.
 
     go build -o bin/ ./go/cmd/...
     bin/asksd                        # registrations are questions; see abstraction-asks
@@ -270,8 +354,8 @@ Apache-2.0. See [LICENSE](https://github.com/openabstractions/abstraction-rights
 
 ### Policy administration
 
-The generated `AuthorizationOperator` service reads bounded catalogue/rule pages
-and conditionally sets or revokes exact rules. Configure typed-peer operator
+The generated `AuthorizationOperator` service reads bounded pages of
+registered actions and rules, and conditionally sets or revokes exact rules. Configure typed-peer operator
 authorization explicitly on the service; same-account applications receive no
 operator permission by default. Go callers use `client.NewOperator` with the
 selected `abstraction.rights/operator@1` endpoint and its context methods.

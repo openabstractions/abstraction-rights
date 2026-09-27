@@ -22,6 +22,7 @@ type PolicySnapshot struct {
 // revision identifies the configured seed together with the file content, so a
 // changed seed changes the revision as a changed file does.
 func (p *DecisionPolicy) revision(f decisionFile) string {
+	//unchecked: data only feeds the revision hash below, never a returned payload; its fields are plain marshalable data
 	data, _ := json.Marshal(struct {
 		Seed []string     `json:"seed"`
 		File decisionFile `json:"file"`

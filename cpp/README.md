@@ -1,5 +1,7 @@
 # C++ rights decisions
 
+Install the runtime first: https://openabstractions.org/adopt.html
+
 `abstraction::rights_client` is supplied by the installed `abstraction_rights`
 CMake package. It uses generated Authorization codecs and shared identity IPC.
 `rights::Client(endpoint).decide(action, resource)` asks about the receiving

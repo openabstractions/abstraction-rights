@@ -34,7 +34,7 @@ func nativeSubject(t *testing.T) wire.Subject {
 	if e != nil {
 		t.Fatal(e)
 	}
-	return wire.Subject{Account: u.Uid, Program: filepath.Clean(exe)}
+	return wire.Subject{Account: u.Uid, Program: identity.CanonicalProgramPath(filepath.Clean(exe))}
 }
 func live(t *testing.T, p *rights.DecisionPolicy, enforcer AuthorizeEnforcer) (*client.Client, string) {
 	t.Helper()
