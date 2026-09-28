@@ -35,7 +35,14 @@ func TestOperatorUsesCanonicalSubjectForReturnedRules(t *testing.T) {
 		t.Fatal(err)
 	}
 	buf := make([]uint16, windows.MAX_LONG_PATH)
-	n, err := windows.GetShortPathName(p, &buf[0], uint32(len(buf)))
+	// TEMP may itself contain DOS aliases on hosted Windows runners.
+	// Use Win32 as the independent oracle for the complete canonical path.
+	n, err := windows.GetLongPathName(p, &buf[0], uint32(len(buf)))
+	if err != nil || n == 0 || n >= uint32(len(buf)) {
+		t.Fatalf("long path: n=%d err=%v", n, err)
+	}
+	long = windows.UTF16ToString(buf[:n])
+	n, err = windows.GetShortPathName(p, &buf[0], uint32(len(buf)))
 	if err != nil || n == 0 || n >= uint32(len(buf)) {
 		t.Fatalf("short path: n=%d err=%v", n, err)
 	}
