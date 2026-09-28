@@ -6,7 +6,7 @@ github.com/openabstractions/abstraction-facade/go-core v0.3.0 h1:QSAs64nabM2YLS8
 github.com/openabstractions/abstraction-facade/go-core v0.3.0/go.mod h1:zvr+SWV8e7iP2G8vcXE/X/KWhlefraZL70Z0dW5qBFU=
 github.com/openabstractions/abstraction-identity v0.4.2 h1:bT7Q37jIQEJg28wHziEju2HDhqnh06ejw05ZnWuCbqU=
 github.com/openabstractions/abstraction-identity v0.4.2/go.mod h1:gv5sDQuTQqv/UY+fXY5Q74i1junNIEvf/5UsZxMxwKY=
-github.com/openabstractions/abstraction-job/go v0.6.1 h1:F1S3aZ+6CM+AaIeZ4pi5AmATy07RSd+E+5piA/BNfi4=
+github.com/openabstractions/abstraction-job/go v0.6.1 h1:4MH0SfJp6bJBW83kUHilsT+JcGl4ZQwTn5sYVV3TYE0=
 github.com/openabstractions/abstraction-job/go v0.6.1/go.mod h1:BPDJa2XpkLm9qI62PfMX06rj/mJW47qnf1HSwxJZwOI=
 github.com/openabstractions/abstraction-logging/go v0.5.0 h1:pDLo+WvbOMnUsvtgCxjiff3OZ2OORQRCvxWWOqQFj88=
 github.com/openabstractions/abstraction-logging/go v0.5.0/go.mod h1:tsxFF7w/SIGaHr156YlKbAdMzAeVJDNYhZf0juAEcz8=
