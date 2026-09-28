@@ -3,12 +3,14 @@ package rights
 import (
 	"bytes"
 	"encoding/json"
-	wire "github.com/openabstractions/abstraction-rights/go/abstraction/rights/api"
 	"os"
 	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
+
+	"github.com/openabstractions/abstraction-identity"
+	wire "github.com/openabstractions/abstraction-rights/go/abstraction/rights/api"
 )
 
 const decisionAction = "abstraction.storage/content.read"
@@ -19,7 +21,7 @@ func subject(t *testing.T) wire.Subject {
 	if e != nil {
 		t.Fatal(e)
 	}
-	return wire.Subject{Account: "test-account", Program: exe}
+	return wire.Subject{Account: "test-account", Program: identity.CanonicalProgramPath(filepath.Clean(exe))}
 }
 func TestDecisionPolicyPersistenceRevocationAndNoop(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "decisions.json")
