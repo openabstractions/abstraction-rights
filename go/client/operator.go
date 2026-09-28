@@ -7,7 +7,6 @@ import (
 	identity "github.com/openabstractions/abstraction-identity"
 	"github.com/openabstractions/abstraction-identity/listen"
 	wire "github.com/openabstractions/abstraction-rights/go/abstraction/rights/api"
-	"path/filepath"
 	"slices"
 	"strings"
 	"time"
@@ -31,6 +30,13 @@ func boundedOperatorString(s string, max int) bool {
 }
 func validPolicyRule(r PolicyRule) bool {
 	return boundedOperatorString(r.Subject.Account, 128) && boundedOperatorString(r.Subject.Program, 4096) && identity.ValidSubjectProgram(r.Subject.Program) && boundedOperatorString(r.Action, 128) && boundedOperatorString(r.Resource, 1024)
+}
+
+// normalizeOperatorSubject uses the same program spelling as the decision
+// policy before sending a rule and checking the rule returned by the service.
+func normalizeOperatorSubject(s Subject) Subject {
+	s.Program = identity.NormalizeSubjectProgram(s.Program)
+	return s
 }
 func (c *Operator) ListPolicyContext(ctx context.Context, cursor string, limit int64) (wire.PolicyPage, error) {
 	if err := ctx.Err(); err != nil {
@@ -78,7 +84,7 @@ func (c *Operator) SetRuleContext(ctx context.Context, expected string, rule Pol
 	if err := ctx.Err(); err != nil {
 		return wire.PolicyEdit{}, err
 	}
-	rule.Subject.Program = filepath.Clean(rule.Subject.Program)
+	rule.Subject = normalizeOperatorSubject(rule.Subject)
 	if !boundedOperatorString(expected, 128) || !validPolicyRule(rule) {
 		return wire.PolicyEdit{}, errors.New("rights: invalid policy edit")
 	}
@@ -89,7 +95,7 @@ func (c *Operator) RevokeRuleContext(ctx context.Context, expected string, subje
 	if err := ctx.Err(); err != nil {
 		return wire.PolicyEdit{}, err
 	}
-	subject.Program = filepath.Clean(subject.Program)
+	subject = normalizeOperatorSubject(subject)
 	if !boundedOperatorString(expected, 128) || !validPolicyRule(PolicyRule{Subject: subject, Action: action, Resource: resource}) {
 		return wire.PolicyEdit{}, errors.New("rights: invalid policy revoke")
 	}
@@ -133,7 +139,7 @@ func (c *Operator) SetRuleForContext(ctx context.Context, expected string, rule 
 	if err := ctx.Err(); err != nil {
 		return wire.PolicyEdit{}, err
 	}
-	rule.Subject.Program = filepath.Clean(rule.Subject.Program)
+	rule.Subject = normalizeOperatorSubject(rule.Subject)
 	if !boundedOperatorString(expected, 128) || !validPolicyRule(rule) || ttl < 0 || ttl > maxRuleTTL || ttl%time.Millisecond != 0 || !(why == "" || boundedOperatorString(why, 256)) {
 		return wire.PolicyEdit{}, errors.New("rights: invalid policy edit")
 	}
@@ -146,7 +152,7 @@ func (c *Operator) ReadRuleContext(ctx context.Context, subject Subject, action,
 	if err := ctx.Err(); err != nil {
 		return wire.RuleRead{}, err
 	}
-	subject.Program = filepath.Clean(subject.Program)
+	subject = normalizeOperatorSubject(subject)
 	if !validPolicyRule(PolicyRule{Subject: subject, Action: action, Resource: resource}) {
 		return wire.RuleRead{}, errors.New("rights: invalid rule read")
 	}

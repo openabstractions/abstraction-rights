@@ -85,6 +85,7 @@ func boundedDecisionString(v string, max int) bool {
 func validWhy(v string) bool {
 	return v == "" || boundedDecisionString(v, MaxRuleWhy)
 }
+
 // NormalizeDecisionSubject also canonicalizes a plain program path: a rule
 // granted or matched against a short DOS 8.3 launch alias compares equal to
 // the same file's long spelling (identity.CanonicalProgramPath), on both the
@@ -101,7 +102,7 @@ func NormalizeDecisionSubject(s wire.Subject) (wire.Subject, error) {
 	if !boundedDecisionString(s.Account, 128) || !boundedDecisionString(s.Program, 4096) || !filepath.IsAbs(s.Program) {
 		return wire.Subject{}, errors.New("rights: invalid subject")
 	}
-	s.Program = identity.CanonicalProgramPath(filepath.Clean(s.Program))
+	s.Program = identity.NormalizeSubjectProgram(s.Program)
 	return s, nil
 }
 func ValidDecisionQuery(action, resource string) bool {
