@@ -182,10 +182,10 @@ func TestOperatorCallerProcess(t *testing.T) {
 func TestOperatorCancelledEditAndWireBounds(t *testing.T) {
 	p, path := policy(t)
 	subject := nativeSubject(t)
-	entered := make(chan struct{}, 1)
-	h, _, op, endpoint := liveOperator(t, p, func(context.Context, *identity.Peer) error {
+	entered := make(chan context.Context, 1)
+	h, _, op, endpoint := liveOperator(t, p, func(ctx context.Context, _ *identity.Peer) error {
 		select {
-		case entered <- struct{}{}:
+		case entered <- ctx:
 		default:
 		}
 		return nil
@@ -203,6 +203,13 @@ func TestOperatorCancelledEditAndWireBounds(t *testing.T) {
 		lockDone <- cas.ChangeLimit(path, rights.MaxDecisionBytes, func(data []byte) ([]byte, error) { close(locked); <-release; return data, nil })
 	}()
 	<-locked
+	released := false
+	defer func() {
+		if !released {
+			close(release)
+			<-lockDone
+		}
+	}()
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	done := make(chan error, 1)
@@ -210,10 +217,10 @@ func TestOperatorCancelledEditAndWireBounds(t *testing.T) {
 		_, err := op.SetRuleContext(ctx, initial.Revision, wire.PolicyRule{Subject: subject, Action: action, Resource: "x", Permit: true})
 		done <- err
 	}()
+	var serverCall context.Context
 	select {
-	case <-entered:
+	case serverCall = <-entered:
 	case <-time.After(2 * time.Second):
-		close(release)
 		t.Fatal("edit not admitted")
 	}
 	cancel()
@@ -225,7 +232,15 @@ func TestOperatorCancelledEditAndWireBounds(t *testing.T) {
 	case <-time.After(2 * time.Second):
 		t.Error("cancel did not stop wait")
 	}
+	// Client cancellation can return before the server observes the closed
+	// connection. Keep the CAS lock held until the admitted call is canceled.
+	select {
+	case <-serverCall.Done():
+	case <-time.After(2 * time.Second):
+		t.Fatal("server did not observe cancellation")
+	}
 	close(release)
+	released = true
 	if err := <-lockDone; err != nil {
 		t.Fatal(err)
 	}
