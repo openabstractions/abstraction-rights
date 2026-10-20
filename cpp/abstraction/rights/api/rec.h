@@ -436,6 +436,97 @@ inline constexpr bool operator!=(std::string_view name, DecisionSource value) { 
 
 inline const std::vector<std::string> kDecisionSourceNames = {"none", "own_rule", "typed_block", "account_default", "default_excluded"};
 
+enum class ChangeKind : std::int32_t {
+    SetRule = 1,
+    RevokeRule = 2,
+    SetDefault = 3,
+    RegisterAction = 4,
+    RetireAction = 5,
+    Declaration = 6,
+};
+
+// The member's name on the wire; empty for a value that names no member.
+inline constexpr std::string_view wire_name(ChangeKind value) {
+    switch (value) {
+        case ChangeKind::SetRule: return "set_rule";
+        case ChangeKind::RevokeRule: return "revoke_rule";
+        case ChangeKind::SetDefault: return "set_default";
+        case ChangeKind::RegisterAction: return "register_action";
+        case ChangeKind::RetireAction: return "retire_action";
+        case ChangeKind::Declaration: return "declaration";
+    }
+    return {};
+}
+
+// The member a wire name spells; empty for a name this vocabulary refuses.
+inline std::optional<ChangeKind> parse_change_kind(std::string_view name) {
+    if (name == "set_rule") return ChangeKind::SetRule;
+    if (name == "revoke_rule") return ChangeKind::RevokeRule;
+    if (name == "set_default") return ChangeKind::SetDefault;
+    if (name == "register_action") return ChangeKind::RegisterAction;
+    if (name == "retire_action") return ChangeKind::RetireAction;
+    if (name == "declaration") return ChangeKind::Declaration;
+    return std::nullopt;
+}
+
+// A member equals its wire name, so code holding the contract's word compares directly.
+inline constexpr bool operator==(ChangeKind value, std::string_view name) { return wire_name(value) == name; }
+inline constexpr bool operator!=(ChangeKind value, std::string_view name) { return wire_name(value) != name; }
+inline constexpr bool operator==(std::string_view name, ChangeKind value) { return wire_name(value) == name; }
+inline constexpr bool operator!=(std::string_view name, ChangeKind value) { return wire_name(value) != name; }
+
+inline const std::vector<std::string> kChangeKindNames = {"set_rule", "revoke_rule", "set_default", "register_action", "retire_action", "declaration"};
+
+enum class ChangeRequestOutcome : std::int32_t {
+    Applied = 1,
+    Pending = 2,
+    Refused = 3,
+    Expired = 4,
+    Conflict = 5,
+    Unknown = 6,
+    Invalid = 7,
+    Forbidden = 8,
+    Unavailable = 9,
+};
+
+// The member's name on the wire; empty for a value that names no member.
+inline constexpr std::string_view wire_name(ChangeRequestOutcome value) {
+    switch (value) {
+        case ChangeRequestOutcome::Applied: return "applied";
+        case ChangeRequestOutcome::Pending: return "pending";
+        case ChangeRequestOutcome::Refused: return "refused";
+        case ChangeRequestOutcome::Expired: return "expired";
+        case ChangeRequestOutcome::Conflict: return "conflict";
+        case ChangeRequestOutcome::Unknown: return "unknown";
+        case ChangeRequestOutcome::Invalid: return "invalid";
+        case ChangeRequestOutcome::Forbidden: return "forbidden";
+        case ChangeRequestOutcome::Unavailable: return "unavailable";
+    }
+    return {};
+}
+
+// The member a wire name spells; empty for a name this vocabulary refuses.
+inline std::optional<ChangeRequestOutcome> parse_change_request_outcome(std::string_view name) {
+    if (name == "applied") return ChangeRequestOutcome::Applied;
+    if (name == "pending") return ChangeRequestOutcome::Pending;
+    if (name == "refused") return ChangeRequestOutcome::Refused;
+    if (name == "expired") return ChangeRequestOutcome::Expired;
+    if (name == "conflict") return ChangeRequestOutcome::Conflict;
+    if (name == "unknown") return ChangeRequestOutcome::Unknown;
+    if (name == "invalid") return ChangeRequestOutcome::Invalid;
+    if (name == "forbidden") return ChangeRequestOutcome::Forbidden;
+    if (name == "unavailable") return ChangeRequestOutcome::Unavailable;
+    return std::nullopt;
+}
+
+// A member equals its wire name, so code holding the contract's word compares directly.
+inline constexpr bool operator==(ChangeRequestOutcome value, std::string_view name) { return wire_name(value) == name; }
+inline constexpr bool operator!=(ChangeRequestOutcome value, std::string_view name) { return wire_name(value) != name; }
+inline constexpr bool operator==(std::string_view name, ChangeRequestOutcome value) { return wire_name(value) == name; }
+inline constexpr bool operator!=(std::string_view name, ChangeRequestOutcome value) { return wire_name(value) != name; }
+
+inline const std::vector<std::string> kChangeRequestOutcomeNames = {"applied", "pending", "refused", "expired", "conflict", "unknown", "invalid", "forbidden", "unavailable"};
+
 enum class ResourceSelectorKind : std::int32_t {
     One = 1,
     All = 2,
@@ -1065,6 +1156,57 @@ struct DecisionExplanation {
     std::string default_name;
 };
 
+// One typed rights change an operator program requests (RIGHTS-O17). set_rule
+// carries rule, and optionally ttl_ms and why with SetRuleFor's bounds;
+// revoke_rule carries rule, whose permit is ignored; set_default carries name
+// and on; register_action and retire_action carry action. declaration is a
+// provider declaration or inference host add the registry or inference service
+// admitted for the caller: name is the declared name, program its program
+// (empty for a hosted server), address the server address it reaches (a hosted
+// server's base URL or a remote runtime's endpoint; empty for a local program)
+// and rules the exact rule set it writes on Allow; RequestChange refuses it as
+// invalid. Other fields are absent. An empty expected_revision applies at the
+// policy revision current when the change is applied; a nonempty one conflicts
+// when the policy changed. The request is never free text: the service words
+// the person's question from its own catalogue.
+struct PolicyChange {
+    ChangeKind kind{};
+    std::string expected_revision;
+    std::optional<PolicyRule> rule;
+    std::int64_t ttl_ms = 0;
+    std::string why;
+    std::string name;
+    bool on = false;
+    std::string action;
+    std::string program;
+    std::vector<PolicyRule> rules;
+    std::string address;
+};
+
+// One change request as the service holds it (RIGHTS-O17). pending waits for
+// the person's answer in the service's popup until expires, a UTC RFC 3339
+// instant ten minutes after the request. applied means the service applied
+// exactly this change, once, and carries the policy revision after it; exempt
+// marks a change applied without a question for an elevated caller. refused is
+// the person's Not now; expired is a request nobody answered in time, which
+// changes nothing; conflict is an expected revision the policy no longer had.
+// unknown, invalid, forbidden and unavailable carry no id, change or revision.
+struct ChangeRequestState {
+    ChangeRequestOutcome outcome{};
+    std::string id;
+    std::string revision;
+    std::optional<PolicyChange> change;
+    std::string expires;
+    bool exempt = false;
+};
+
+// The requests this operator program made that the service still holds, newest
+// first, at most 64. Refusals carry none.
+struct ChangeRequestPage {
+    PolicyPageOutcome outcome{};
+    std::vector<ChangeRequestState> requests;
+};
+
 struct PermissionKey {
     std::string action;
     std::string resource_profile;
@@ -1574,6 +1716,19 @@ struct OAAuthorizationOperatorExplainForArguments {
 struct OAAuthorizationOperatorListDefaultsArguments {
 };
 
+struct OAAuthorizationOperatorRequestChangeArguments {
+    PolicyChange change;
+    std::int64_t wait_ms = 0;
+};
+
+struct OAAuthorizationOperatorObserveChangeRequestArguments {
+    std::string id;
+    std::int64_t wait_ms = 0;
+};
+
+struct OAAuthorizationOperatorListChangeRequestsArguments {
+};
+
 struct OAAuthorizationOperatorSetDefaultArguments {
     std::string expected_revision;
     std::string name;
@@ -1748,6 +1903,18 @@ struct OAAuthorizationOperatorListDefaultsResult {
     DefaultPage value;
 };
 
+struct OAAuthorizationOperatorRequestChangeResult {
+    ChangeRequestState value;
+};
+
+struct OAAuthorizationOperatorObserveChangeRequestResult {
+    ChangeRequestState value;
+};
+
+struct OAAuthorizationOperatorListChangeRequestsResult {
+    ChangeRequestPage value;
+};
+
 struct OAAuthorizationOperatorSetDefaultResult {
     DefaultEdit value;
 };
@@ -1828,6 +1995,9 @@ inline void enc_account_default(std::string&, const AccountDefault&, int);
 inline void enc_default_page(std::string&, const DefaultPage&, int);
 inline void enc_default_edit(std::string&, const DefaultEdit&, int);
 inline void enc_decision_explanation(std::string&, const DecisionExplanation&, int);
+inline void enc_policy_change(std::string&, const PolicyChange&, int);
+inline void enc_change_request_state(std::string&, const ChangeRequestState&, int);
+inline void enc_change_request_page(std::string&, const ChangeRequestPage&, int);
 inline void enc_permission_key(std::string&, const PermissionKey&, int);
 inline void enc_resource_selector(std::string&, const ResourceSelector&, int);
 inline void enc_permission_selection(std::string&, const PermissionSelection&, int);
@@ -1871,6 +2041,9 @@ inline void enc_oa_authorization_operator_register_action_arguments(std::string&
 inline void enc_oa_authorization_operator_retire_action_arguments(std::string&, const OAAuthorizationOperatorRetireActionArguments&, int);
 inline void enc_oa_authorization_operator_explain_for_arguments(std::string&, const OAAuthorizationOperatorExplainForArguments&, int);
 inline void enc_oa_authorization_operator_list_defaults_arguments(std::string&, const OAAuthorizationOperatorListDefaultsArguments&, int);
+inline void enc_oa_authorization_operator_request_change_arguments(std::string&, const OAAuthorizationOperatorRequestChangeArguments&, int);
+inline void enc_oa_authorization_operator_observe_change_request_arguments(std::string&, const OAAuthorizationOperatorObserveChangeRequestArguments&, int);
+inline void enc_oa_authorization_operator_list_change_requests_arguments(std::string&, const OAAuthorizationOperatorListChangeRequestsArguments&, int);
 inline void enc_oa_authorization_operator_set_default_arguments(std::string&, const OAAuthorizationOperatorSetDefaultArguments&, int);
 inline void enc_oa_selector_authorization_list_permission_definitions_arguments(std::string&, const OASelectorAuthorizationListPermissionDefinitionsArguments&, int);
 inline void enc_oa_selector_authorization_list_permission_bundles_arguments(std::string&, const OASelectorAuthorizationListPermissionBundlesArguments&, int);
@@ -1907,6 +2080,9 @@ inline void enc_oa_authorization_operator_register_action_result(std::string&, c
 inline void enc_oa_authorization_operator_retire_action_result(std::string&, const OAAuthorizationOperatorRetireActionResult&, int);
 inline void enc_oa_authorization_operator_explain_for_result(std::string&, const OAAuthorizationOperatorExplainForResult&, int);
 inline void enc_oa_authorization_operator_list_defaults_result(std::string&, const OAAuthorizationOperatorListDefaultsResult&, int);
+inline void enc_oa_authorization_operator_request_change_result(std::string&, const OAAuthorizationOperatorRequestChangeResult&, int);
+inline void enc_oa_authorization_operator_observe_change_request_result(std::string&, const OAAuthorizationOperatorObserveChangeRequestResult&, int);
+inline void enc_oa_authorization_operator_list_change_requests_result(std::string&, const OAAuthorizationOperatorListChangeRequestsResult&, int);
 inline void enc_oa_authorization_operator_set_default_result(std::string&, const OAAuthorizationOperatorSetDefaultResult&, int);
 inline void enc_oa_selector_authorization_list_permission_definitions_result(std::string&, const OASelectorAuthorizationListPermissionDefinitionsResult&, int);
 inline void enc_oa_selector_authorization_list_permission_bundles_result(std::string&, const OASelectorAuthorizationListPermissionBundlesResult&, int);
@@ -2870,6 +3046,182 @@ inline void enc_decision_explanation(std::string& out, const DecisionExplanation
         out += ": ";
         esc(out, v.default_name);
     }
+    out += '\n';
+    pad(out, depth);
+    out += '}';
+}
+
+inline void enc_policy_change(std::string& out, const PolicyChange& v, int depth) {
+    if (const auto n = static_cast<std::uint64_t>(v.expected_revision.size()); n > 128ULL) throw Refusal("bad_value",0);
+    for (std::size_t i = 0; i < v.expected_revision.size(); ++i) { const auto c = static_cast<unsigned char>(v.expected_revision[i]); if (c < 0x20 || c == 0x7f || (c == 0xc2 && i + 1 < v.expected_revision.size() && static_cast<unsigned char>(v.expected_revision[i + 1]) <= 0x9f)) throw Refusal("bad_value",0); }
+    if (v.ttl_ms < 0LL || v.ttl_ms > 31536000000LL) throw Refusal("bad_value",0);
+    if (const auto n = static_cast<std::uint64_t>(v.why.size()); n > 256ULL) throw Refusal("bad_value",0);
+    for (std::size_t i = 0; i < v.why.size(); ++i) { const auto c = static_cast<unsigned char>(v.why[i]); if (c < 0x20 || c == 0x7f || (c == 0xc2 && i + 1 < v.why.size() && static_cast<unsigned char>(v.why[i + 1]) <= 0x9f)) throw Refusal("bad_value",0); }
+    if (const auto n = static_cast<std::uint64_t>(v.name.size()); n > 64ULL) throw Refusal("bad_value",0);
+    for (std::size_t i = 0; i < v.name.size(); ++i) { const auto c = static_cast<unsigned char>(v.name[i]); if (c < 0x20 || c == 0x7f || (c == 0xc2 && i + 1 < v.name.size() && static_cast<unsigned char>(v.name[i + 1]) <= 0x9f)) throw Refusal("bad_value",0); }
+    if (const auto n = static_cast<std::uint64_t>(v.action.size()); n > 128ULL) throw Refusal("bad_value",0);
+    for (std::size_t i = 0; i < v.action.size(); ++i) { const auto c = static_cast<unsigned char>(v.action[i]); if (c < 0x20 || c == 0x7f || (c == 0xc2 && i + 1 < v.action.size() && static_cast<unsigned char>(v.action[i + 1]) <= 0x9f)) throw Refusal("bad_value",0); }
+    if (const auto n = static_cast<std::uint64_t>(v.program.size()); n > 4096ULL) throw Refusal("bad_value",0);
+    for (std::size_t i = 0; i < v.program.size(); ++i) { const auto c = static_cast<unsigned char>(v.program[i]); if (c < 0x20 || c == 0x7f || (c == 0xc2 && i + 1 < v.program.size() && static_cast<unsigned char>(v.program[i + 1]) <= 0x9f)) throw Refusal("bad_value",0); }
+    if (const auto n = static_cast<std::uint64_t>(v.rules.size()); n > 64ULL) throw Refusal("bad_value",0);
+    if (const auto n = static_cast<std::uint64_t>(v.address.size()); n > 2048ULL) throw Refusal("bad_value",0);
+    for (std::size_t i = 0; i < v.address.size(); ++i) { const auto c = static_cast<unsigned char>(v.address[i]); if (c < 0x20 || c == 0x7f || (c == 0xc2 && i + 1 < v.address.size() && static_cast<unsigned char>(v.address[i + 1]) <= 0x9f)) throw Refusal("bad_value",0); }
+    if (wire_name(v.kind).empty()) throw Refusal("bad_enum", 0);
+    out += '{';
+    out += '\n';
+    pad(out, depth + 1);
+    esc(out, "kind");
+    out += ": ";
+    esc(out, std::string(wire_name(v.kind)));
+    out += ',';
+    out += '\n';
+    pad(out, depth + 1);
+    esc(out, "expected_revision");
+    out += ": ";
+    esc(out, v.expected_revision);
+    if (v.rule.has_value()) {
+        out += ',';
+        out += '\n';
+        pad(out, depth + 1);
+        esc(out, "rule");
+        out += ": ";
+        enc_policy_rule(out, *v.rule, depth + 1);
+    }
+    if (v.ttl_ms != 0) {
+        out += ',';
+        out += '\n';
+        pad(out, depth + 1);
+        esc(out, "ttl_ms");
+        out += ": ";
+        num(out, v.ttl_ms);
+    }
+    if (!v.why.empty()) {
+        out += ',';
+        out += '\n';
+        pad(out, depth + 1);
+        esc(out, "why");
+        out += ": ";
+        esc(out, v.why);
+    }
+    if (!v.name.empty()) {
+        out += ',';
+        out += '\n';
+        pad(out, depth + 1);
+        esc(out, "name");
+        out += ": ";
+        esc(out, v.name);
+    }
+    if (v.on) {
+        out += ',';
+        out += '\n';
+        pad(out, depth + 1);
+        esc(out, "on");
+        out += ": ";
+        out += v.on ? "true" : "false";
+    }
+    if (!v.action.empty()) {
+        out += ',';
+        out += '\n';
+        pad(out, depth + 1);
+        esc(out, "action");
+        out += ": ";
+        esc(out, v.action);
+    }
+    if (!v.program.empty()) {
+        out += ',';
+        out += '\n';
+        pad(out, depth + 1);
+        esc(out, "program");
+        out += ": ";
+        esc(out, v.program);
+    }
+    if (!v.rules.empty()) {
+        out += ',';
+        out += '\n';
+        pad(out, depth + 1);
+        esc(out, "rules");
+        out += ": ";
+        enc_list<PolicyRule>(out, v.rules, depth + 1, enc_policy_rule);
+    }
+    if (!v.address.empty()) {
+        out += ',';
+        out += '\n';
+        pad(out, depth + 1);
+        esc(out, "address");
+        out += ": ";
+        esc(out, v.address);
+    }
+    out += '\n';
+    pad(out, depth);
+    out += '}';
+}
+
+inline void enc_change_request_state(std::string& out, const ChangeRequestState& v, int depth) {
+    if (const auto n = static_cast<std::uint64_t>(v.id.size()); n > 128ULL) throw Refusal("bad_value",0);
+    for (std::size_t i = 0; i < v.id.size(); ++i) { const auto c = static_cast<unsigned char>(v.id[i]); if (c < 0x20 || c == 0x7f || (c == 0xc2 && i + 1 < v.id.size() && static_cast<unsigned char>(v.id[i + 1]) <= 0x9f)) throw Refusal("bad_value",0); }
+    if (const auto n = static_cast<std::uint64_t>(v.revision.size()); n > 128ULL) throw Refusal("bad_value",0);
+    for (std::size_t i = 0; i < v.revision.size(); ++i) { const auto c = static_cast<unsigned char>(v.revision[i]); if (c < 0x20 || c == 0x7f || (c == 0xc2 && i + 1 < v.revision.size() && static_cast<unsigned char>(v.revision[i + 1]) <= 0x9f)) throw Refusal("bad_value",0); }
+    if (const auto n = static_cast<std::uint64_t>(v.expires.size()); n > 64ULL) throw Refusal("bad_value",0);
+    for (std::size_t i = 0; i < v.expires.size(); ++i) { const auto c = static_cast<unsigned char>(v.expires[i]); if (c < 0x20 || c == 0x7f || (c == 0xc2 && i + 1 < v.expires.size() && static_cast<unsigned char>(v.expires[i + 1]) <= 0x9f)) throw Refusal("bad_value",0); }
+    if (wire_name(v.outcome).empty()) throw Refusal("bad_enum", 0);
+    out += '{';
+    out += '\n';
+    pad(out, depth + 1);
+    esc(out, "outcome");
+    out += ": ";
+    esc(out, std::string(wire_name(v.outcome)));
+    out += ',';
+    out += '\n';
+    pad(out, depth + 1);
+    esc(out, "id");
+    out += ": ";
+    esc(out, v.id);
+    out += ',';
+    out += '\n';
+    pad(out, depth + 1);
+    esc(out, "revision");
+    out += ": ";
+    esc(out, v.revision);
+    if (v.change.has_value()) {
+        out += ',';
+        out += '\n';
+        pad(out, depth + 1);
+        esc(out, "change");
+        out += ": ";
+        enc_policy_change(out, *v.change, depth + 1);
+    }
+    out += ',';
+    out += '\n';
+    pad(out, depth + 1);
+    esc(out, "expires");
+    out += ": ";
+    esc(out, v.expires);
+    out += ',';
+    out += '\n';
+    pad(out, depth + 1);
+    esc(out, "exempt");
+    out += ": ";
+    out += v.exempt ? "true" : "false";
+    out += '\n';
+    pad(out, depth);
+    out += '}';
+}
+
+inline void enc_change_request_page(std::string& out, const ChangeRequestPage& v, int depth) {
+    if (const auto n = static_cast<std::uint64_t>(v.requests.size()); n > 64ULL) throw Refusal("bad_value",0);
+    if (wire_name(v.outcome).empty()) throw Refusal("bad_enum", 0);
+    out += '{';
+    out += '\n';
+    pad(out, depth + 1);
+    esc(out, "outcome");
+    out += ": ";
+    esc(out, std::string(wire_name(v.outcome)));
+    out += ',';
+    out += '\n';
+    pad(out, depth + 1);
+    esc(out, "requests");
+    out += ": ";
+    enc_list<ChangeRequestState>(out, v.requests, depth + 1, enc_change_request_state);
     out += '\n';
     pad(out, depth);
     out += '}';
@@ -4151,6 +4503,53 @@ inline void enc_oa_authorization_operator_list_defaults_arguments(std::string& o
     out += '}';
 }
 
+inline void enc_oa_authorization_operator_request_change_arguments(std::string& out, const OAAuthorizationOperatorRequestChangeArguments& v, int depth) {
+    if (v.wait_ms < 0LL || v.wait_ms > 30000LL) throw Refusal("bad_value",0);
+    out += '{';
+    out += '\n';
+    pad(out, depth + 1);
+    esc(out, "change");
+    out += ": ";
+    enc_policy_change(out, v.change, depth + 1);
+    out += ',';
+    out += '\n';
+    pad(out, depth + 1);
+    esc(out, "wait_ms");
+    out += ": ";
+    num(out, v.wait_ms);
+    out += '\n';
+    pad(out, depth);
+    out += '}';
+}
+
+inline void enc_oa_authorization_operator_observe_change_request_arguments(std::string& out, const OAAuthorizationOperatorObserveChangeRequestArguments& v, int depth) {
+    if (const auto n = static_cast<std::uint64_t>(v.id.size()); n < 1ULL || n > 128ULL) throw Refusal("bad_value",0);
+    for (std::size_t i = 0; i < v.id.size(); ++i) { const auto c = static_cast<unsigned char>(v.id[i]); if (c < 0x20 || c == 0x7f || (c == 0xc2 && i + 1 < v.id.size() && static_cast<unsigned char>(v.id[i + 1]) <= 0x9f)) throw Refusal("bad_value",0); }
+    if (v.wait_ms < 0LL || v.wait_ms > 30000LL) throw Refusal("bad_value",0);
+    out += '{';
+    out += '\n';
+    pad(out, depth + 1);
+    esc(out, "id");
+    out += ": ";
+    esc(out, v.id);
+    out += ',';
+    out += '\n';
+    pad(out, depth + 1);
+    esc(out, "wait_ms");
+    out += ": ";
+    num(out, v.wait_ms);
+    out += '\n';
+    pad(out, depth);
+    out += '}';
+}
+
+inline void enc_oa_authorization_operator_list_change_requests_arguments(std::string& out, const OAAuthorizationOperatorListChangeRequestsArguments& v, int depth) {
+    (void)v;
+    (void)depth;
+    out += '{';
+    out += '}';
+}
+
 inline void enc_oa_authorization_operator_set_default_arguments(std::string& out, const OAAuthorizationOperatorSetDefaultArguments& v, int depth) {
     out += '{';
     out += '\n';
@@ -4758,6 +5157,42 @@ inline void enc_oa_authorization_operator_list_defaults_result(std::string& out,
     esc(out, "value");
     out += ": ";
     enc_default_page(out, v.value, depth + 1);
+    out += '\n';
+    pad(out, depth);
+    out += '}';
+}
+
+inline void enc_oa_authorization_operator_request_change_result(std::string& out, const OAAuthorizationOperatorRequestChangeResult& v, int depth) {
+    out += '{';
+    out += '\n';
+    pad(out, depth + 1);
+    esc(out, "value");
+    out += ": ";
+    enc_change_request_state(out, v.value, depth + 1);
+    out += '\n';
+    pad(out, depth);
+    out += '}';
+}
+
+inline void enc_oa_authorization_operator_observe_change_request_result(std::string& out, const OAAuthorizationOperatorObserveChangeRequestResult& v, int depth) {
+    out += '{';
+    out += '\n';
+    pad(out, depth + 1);
+    esc(out, "value");
+    out += ": ";
+    enc_change_request_state(out, v.value, depth + 1);
+    out += '\n';
+    pad(out, depth);
+    out += '}';
+}
+
+inline void enc_oa_authorization_operator_list_change_requests_result(std::string& out, const OAAuthorizationOperatorListChangeRequestsResult& v, int depth) {
+    out += '{';
+    out += '\n';
+    pad(out, depth + 1);
+    esc(out, "value");
+    out += ": ";
+    enc_change_request_page(out, v.value, depth + 1);
     out += '\n';
     pad(out, depth);
     out += '}';
@@ -5405,6 +5840,9 @@ inline AccountDefault decode_account_default(Reader& r);
 inline DefaultPage decode_default_page(Reader& r);
 inline DefaultEdit decode_default_edit(Reader& r);
 inline DecisionExplanation decode_decision_explanation(Reader& r);
+inline PolicyChange decode_policy_change(Reader& r);
+inline ChangeRequestState decode_change_request_state(Reader& r);
+inline ChangeRequestPage decode_change_request_page(Reader& r);
 inline PermissionKey decode_permission_key(Reader& r);
 inline ResourceSelector decode_resource_selector(Reader& r);
 inline PermissionSelection decode_permission_selection(Reader& r);
@@ -5448,6 +5886,9 @@ inline OAAuthorizationOperatorRegisterActionArguments decode_oa_authorization_op
 inline OAAuthorizationOperatorRetireActionArguments decode_oa_authorization_operator_retire_action_arguments(Reader& r);
 inline OAAuthorizationOperatorExplainForArguments decode_oa_authorization_operator_explain_for_arguments(Reader& r);
 inline OAAuthorizationOperatorListDefaultsArguments decode_oa_authorization_operator_list_defaults_arguments(Reader& r);
+inline OAAuthorizationOperatorRequestChangeArguments decode_oa_authorization_operator_request_change_arguments(Reader& r);
+inline OAAuthorizationOperatorObserveChangeRequestArguments decode_oa_authorization_operator_observe_change_request_arguments(Reader& r);
+inline OAAuthorizationOperatorListChangeRequestsArguments decode_oa_authorization_operator_list_change_requests_arguments(Reader& r);
 inline OAAuthorizationOperatorSetDefaultArguments decode_oa_authorization_operator_set_default_arguments(Reader& r);
 inline OASelectorAuthorizationListPermissionDefinitionsArguments decode_oa_selector_authorization_list_permission_definitions_arguments(Reader& r);
 inline OASelectorAuthorizationListPermissionBundlesArguments decode_oa_selector_authorization_list_permission_bundles_arguments(Reader& r);
@@ -5484,6 +5925,9 @@ inline OAAuthorizationOperatorRegisterActionResult decode_oa_authorization_opera
 inline OAAuthorizationOperatorRetireActionResult decode_oa_authorization_operator_retire_action_result(Reader& r);
 inline OAAuthorizationOperatorExplainForResult decode_oa_authorization_operator_explain_for_result(Reader& r);
 inline OAAuthorizationOperatorListDefaultsResult decode_oa_authorization_operator_list_defaults_result(Reader& r);
+inline OAAuthorizationOperatorRequestChangeResult decode_oa_authorization_operator_request_change_result(Reader& r);
+inline OAAuthorizationOperatorObserveChangeRequestResult decode_oa_authorization_operator_observe_change_request_result(Reader& r);
+inline OAAuthorizationOperatorListChangeRequestsResult decode_oa_authorization_operator_list_change_requests_result(Reader& r);
 inline OAAuthorizationOperatorSetDefaultResult decode_oa_authorization_operator_set_default_result(Reader& r);
 inline OASelectorAuthorizationListPermissionDefinitionsResult decode_oa_selector_authorization_list_permission_definitions_result(Reader& r);
 inline OASelectorAuthorizationListPermissionBundlesResult decode_oa_selector_authorization_list_permission_bundles_result(Reader& r);
@@ -6841,6 +7285,214 @@ inline DecisionExplanation decode_decision_explanation(Reader& r) {
         const auto parsed = parse_decision_source(*wire_source);
         if (!parsed) r.refuse("bad_enum");
         v.source = *parsed;
+    }
+    return v;
+}
+
+inline PolicyChange decode_policy_change(Reader& r) {
+    if (r.at() != '{') r.refuse("wrong_type");
+    r.enter();
+    ++r.pos;
+    PolicyChange v;
+    std::optional<std::string> wire_kind;
+    std::uint32_t seen = 0;
+    r.skip_ws();
+    if (r.at() != '}') {
+        for (;;) {
+            r.skip_ws();
+            if (r.at() != '"') r.refuse("malformed");
+            const std::string key = r.str();
+            r.skip_ws();
+            if (r.at() != ':') r.refuse("malformed");
+            ++r.pos;
+            r.skip_ws();
+            if (key == "kind") {
+                if (seen & 1u) r.refuse("duplicate_field");
+                seen |= 1u;
+                wire_kind = r.str();
+            } else if (key == "expected_revision") {
+                if (seen & 2u) r.refuse("duplicate_field");
+                seen |= 2u;
+                v.expected_revision = r.str();
+            } else if (key == "rule") {
+                if (seen & 4u) r.refuse("duplicate_field");
+                seen |= 4u;
+                v.rule = decode_policy_rule(r);
+            } else if (key == "ttl_ms") {
+                if (seen & 8u) r.refuse("duplicate_field");
+                seen |= 8u;
+                v.ttl_ms = r.integer(INT64_MIN, INT64_MAX);
+            } else if (key == "why") {
+                if (seen & 16u) r.refuse("duplicate_field");
+                seen |= 16u;
+                v.why = r.str();
+            } else if (key == "name") {
+                if (seen & 32u) r.refuse("duplicate_field");
+                seen |= 32u;
+                v.name = r.str();
+            } else if (key == "on") {
+                if (seen & 64u) r.refuse("duplicate_field");
+                seen |= 64u;
+                v.on = r.boolean();
+            } else if (key == "action") {
+                if (seen & 128u) r.refuse("duplicate_field");
+                seen |= 128u;
+                v.action = r.str();
+            } else if (key == "program") {
+                if (seen & 256u) r.refuse("duplicate_field");
+                seen |= 256u;
+                v.program = r.str();
+            } else if (key == "rules") {
+                if (seen & 512u) r.refuse("duplicate_field");
+                seen |= 512u;
+                v.rules = decode_list<PolicyRule>(r, decode_policy_rule);
+            } else if (key == "address") {
+                if (seen & 1024u) r.refuse("duplicate_field");
+                seen |= 1024u;
+                v.address = r.str();
+            } else {
+                r.refuse("unknown_field");
+            }
+            r.skip_ws();
+            if (r.at() != ',') break;
+            ++r.pos;
+        }
+    }
+    if (r.at() != '}') r.refuse("malformed");
+    ++r.pos;
+    --r.depth;
+    if ((seen & 3u) != 3u) r.refuse("missing_field");
+    if (const auto n = static_cast<std::uint64_t>(v.expected_revision.size()); n > 128ULL) r.refuse("bad_value");
+    for (std::size_t i = 0; i < v.expected_revision.size(); ++i) { const auto c = static_cast<unsigned char>(v.expected_revision[i]); if (c < 0x20 || c == 0x7f || (c == 0xc2 && i + 1 < v.expected_revision.size() && static_cast<unsigned char>(v.expected_revision[i + 1]) <= 0x9f)) r.refuse("bad_value"); }
+    if (v.ttl_ms < 0LL || v.ttl_ms > 31536000000LL) r.refuse("bad_value");
+    if (const auto n = static_cast<std::uint64_t>(v.why.size()); n > 256ULL) r.refuse("bad_value");
+    for (std::size_t i = 0; i < v.why.size(); ++i) { const auto c = static_cast<unsigned char>(v.why[i]); if (c < 0x20 || c == 0x7f || (c == 0xc2 && i + 1 < v.why.size() && static_cast<unsigned char>(v.why[i + 1]) <= 0x9f)) r.refuse("bad_value"); }
+    if (const auto n = static_cast<std::uint64_t>(v.name.size()); n > 64ULL) r.refuse("bad_value");
+    for (std::size_t i = 0; i < v.name.size(); ++i) { const auto c = static_cast<unsigned char>(v.name[i]); if (c < 0x20 || c == 0x7f || (c == 0xc2 && i + 1 < v.name.size() && static_cast<unsigned char>(v.name[i + 1]) <= 0x9f)) r.refuse("bad_value"); }
+    if (const auto n = static_cast<std::uint64_t>(v.action.size()); n > 128ULL) r.refuse("bad_value");
+    for (std::size_t i = 0; i < v.action.size(); ++i) { const auto c = static_cast<unsigned char>(v.action[i]); if (c < 0x20 || c == 0x7f || (c == 0xc2 && i + 1 < v.action.size() && static_cast<unsigned char>(v.action[i + 1]) <= 0x9f)) r.refuse("bad_value"); }
+    if (const auto n = static_cast<std::uint64_t>(v.program.size()); n > 4096ULL) r.refuse("bad_value");
+    for (std::size_t i = 0; i < v.program.size(); ++i) { const auto c = static_cast<unsigned char>(v.program[i]); if (c < 0x20 || c == 0x7f || (c == 0xc2 && i + 1 < v.program.size() && static_cast<unsigned char>(v.program[i + 1]) <= 0x9f)) r.refuse("bad_value"); }
+    if (const auto n = static_cast<std::uint64_t>(v.rules.size()); n > 64ULL) r.refuse("bad_value");
+    if (const auto n = static_cast<std::uint64_t>(v.address.size()); n > 2048ULL) r.refuse("bad_value");
+    for (std::size_t i = 0; i < v.address.size(); ++i) { const auto c = static_cast<unsigned char>(v.address[i]); if (c < 0x20 || c == 0x7f || (c == 0xc2 && i + 1 < v.address.size() && static_cast<unsigned char>(v.address[i + 1]) <= 0x9f)) r.refuse("bad_value"); }
+    if (wire_kind) {
+        const auto parsed = parse_change_kind(*wire_kind);
+        if (!parsed) r.refuse("bad_enum");
+        v.kind = *parsed;
+    }
+    return v;
+}
+
+inline ChangeRequestState decode_change_request_state(Reader& r) {
+    if (r.at() != '{') r.refuse("wrong_type");
+    r.enter();
+    ++r.pos;
+    ChangeRequestState v;
+    std::optional<std::string> wire_outcome;
+    std::uint32_t seen = 0;
+    r.skip_ws();
+    if (r.at() != '}') {
+        for (;;) {
+            r.skip_ws();
+            if (r.at() != '"') r.refuse("malformed");
+            const std::string key = r.str();
+            r.skip_ws();
+            if (r.at() != ':') r.refuse("malformed");
+            ++r.pos;
+            r.skip_ws();
+            if (key == "outcome") {
+                if (seen & 1u) r.refuse("duplicate_field");
+                seen |= 1u;
+                wire_outcome = r.str();
+            } else if (key == "id") {
+                if (seen & 2u) r.refuse("duplicate_field");
+                seen |= 2u;
+                v.id = r.str();
+            } else if (key == "revision") {
+                if (seen & 4u) r.refuse("duplicate_field");
+                seen |= 4u;
+                v.revision = r.str();
+            } else if (key == "change") {
+                if (seen & 8u) r.refuse("duplicate_field");
+                seen |= 8u;
+                v.change = decode_policy_change(r);
+            } else if (key == "expires") {
+                if (seen & 16u) r.refuse("duplicate_field");
+                seen |= 16u;
+                v.expires = r.str();
+            } else if (key == "exempt") {
+                if (seen & 32u) r.refuse("duplicate_field");
+                seen |= 32u;
+                v.exempt = r.boolean();
+            } else {
+                r.refuse("unknown_field");
+            }
+            r.skip_ws();
+            if (r.at() != ',') break;
+            ++r.pos;
+        }
+    }
+    if (r.at() != '}') r.refuse("malformed");
+    ++r.pos;
+    --r.depth;
+    if ((seen & 55u) != 55u) r.refuse("missing_field");
+    if (const auto n = static_cast<std::uint64_t>(v.id.size()); n > 128ULL) r.refuse("bad_value");
+    for (std::size_t i = 0; i < v.id.size(); ++i) { const auto c = static_cast<unsigned char>(v.id[i]); if (c < 0x20 || c == 0x7f || (c == 0xc2 && i + 1 < v.id.size() && static_cast<unsigned char>(v.id[i + 1]) <= 0x9f)) r.refuse("bad_value"); }
+    if (const auto n = static_cast<std::uint64_t>(v.revision.size()); n > 128ULL) r.refuse("bad_value");
+    for (std::size_t i = 0; i < v.revision.size(); ++i) { const auto c = static_cast<unsigned char>(v.revision[i]); if (c < 0x20 || c == 0x7f || (c == 0xc2 && i + 1 < v.revision.size() && static_cast<unsigned char>(v.revision[i + 1]) <= 0x9f)) r.refuse("bad_value"); }
+    if (const auto n = static_cast<std::uint64_t>(v.expires.size()); n > 64ULL) r.refuse("bad_value");
+    for (std::size_t i = 0; i < v.expires.size(); ++i) { const auto c = static_cast<unsigned char>(v.expires[i]); if (c < 0x20 || c == 0x7f || (c == 0xc2 && i + 1 < v.expires.size() && static_cast<unsigned char>(v.expires[i + 1]) <= 0x9f)) r.refuse("bad_value"); }
+    if (wire_outcome) {
+        const auto parsed = parse_change_request_outcome(*wire_outcome);
+        if (!parsed) r.refuse("bad_enum");
+        v.outcome = *parsed;
+    }
+    return v;
+}
+
+inline ChangeRequestPage decode_change_request_page(Reader& r) {
+    if (r.at() != '{') r.refuse("wrong_type");
+    r.enter();
+    ++r.pos;
+    ChangeRequestPage v;
+    std::optional<std::string> wire_outcome;
+    std::uint32_t seen = 0;
+    r.skip_ws();
+    if (r.at() != '}') {
+        for (;;) {
+            r.skip_ws();
+            if (r.at() != '"') r.refuse("malformed");
+            const std::string key = r.str();
+            r.skip_ws();
+            if (r.at() != ':') r.refuse("malformed");
+            ++r.pos;
+            r.skip_ws();
+            if (key == "outcome") {
+                if (seen & 1u) r.refuse("duplicate_field");
+                seen |= 1u;
+                wire_outcome = r.str();
+            } else if (key == "requests") {
+                if (seen & 2u) r.refuse("duplicate_field");
+                seen |= 2u;
+                v.requests = decode_list<ChangeRequestState>(r, decode_change_request_state);
+            } else {
+                r.refuse("unknown_field");
+            }
+            r.skip_ws();
+            if (r.at() != ',') break;
+            ++r.pos;
+        }
+    }
+    if (r.at() != '}') r.refuse("malformed");
+    ++r.pos;
+    --r.depth;
+    if ((seen & 3u) != 3u) r.refuse("missing_field");
+    if (const auto n = static_cast<std::uint64_t>(v.requests.size()); n > 64ULL) r.refuse("bad_value");
+    if (wire_outcome) {
+        const auto parsed = parse_policy_page_outcome(*wire_outcome);
+        if (!parsed) r.refuse("bad_enum");
+        v.outcome = *parsed;
     }
     return v;
 }
@@ -8938,6 +9590,118 @@ inline OAAuthorizationOperatorListDefaultsArguments decode_oa_authorization_oper
     return v;
 }
 
+inline OAAuthorizationOperatorRequestChangeArguments decode_oa_authorization_operator_request_change_arguments(Reader& r) {
+    if (r.at() != '{') r.refuse("wrong_type");
+    r.enter();
+    ++r.pos;
+    OAAuthorizationOperatorRequestChangeArguments v;
+    std::uint32_t seen = 0;
+    r.skip_ws();
+    if (r.at() != '}') {
+        for (;;) {
+            r.skip_ws();
+            if (r.at() != '"') r.refuse("malformed");
+            const std::string key = r.str();
+            r.skip_ws();
+            if (r.at() != ':') r.refuse("malformed");
+            ++r.pos;
+            r.skip_ws();
+            if (key == "change") {
+                if (seen & 1u) r.refuse("duplicate_field");
+                seen |= 1u;
+                v.change = decode_policy_change(r);
+            } else if (key == "wait_ms") {
+                if (seen & 2u) r.refuse("duplicate_field");
+                seen |= 2u;
+                v.wait_ms = r.integer(INT64_MIN, INT64_MAX);
+            } else {
+                r.refuse("unknown_field");
+            }
+            r.skip_ws();
+            if (r.at() != ',') break;
+            ++r.pos;
+        }
+    }
+    if (r.at() != '}') r.refuse("malformed");
+    ++r.pos;
+    --r.depth;
+    if ((seen & 3u) != 3u) r.refuse("missing_field");
+    if (v.wait_ms < 0LL || v.wait_ms > 30000LL) r.refuse("bad_value");
+    return v;
+}
+
+inline OAAuthorizationOperatorObserveChangeRequestArguments decode_oa_authorization_operator_observe_change_request_arguments(Reader& r) {
+    if (r.at() != '{') r.refuse("wrong_type");
+    r.enter();
+    ++r.pos;
+    OAAuthorizationOperatorObserveChangeRequestArguments v;
+    std::uint32_t seen = 0;
+    r.skip_ws();
+    if (r.at() != '}') {
+        for (;;) {
+            r.skip_ws();
+            if (r.at() != '"') r.refuse("malformed");
+            const std::string key = r.str();
+            r.skip_ws();
+            if (r.at() != ':') r.refuse("malformed");
+            ++r.pos;
+            r.skip_ws();
+            if (key == "id") {
+                if (seen & 1u) r.refuse("duplicate_field");
+                seen |= 1u;
+                v.id = r.str();
+            } else if (key == "wait_ms") {
+                if (seen & 2u) r.refuse("duplicate_field");
+                seen |= 2u;
+                v.wait_ms = r.integer(INT64_MIN, INT64_MAX);
+            } else {
+                r.refuse("unknown_field");
+            }
+            r.skip_ws();
+            if (r.at() != ',') break;
+            ++r.pos;
+        }
+    }
+    if (r.at() != '}') r.refuse("malformed");
+    ++r.pos;
+    --r.depth;
+    if ((seen & 3u) != 3u) r.refuse("missing_field");
+    if (const auto n = static_cast<std::uint64_t>(v.id.size()); n < 1ULL || n > 128ULL) r.refuse("bad_value");
+    for (std::size_t i = 0; i < v.id.size(); ++i) { const auto c = static_cast<unsigned char>(v.id[i]); if (c < 0x20 || c == 0x7f || (c == 0xc2 && i + 1 < v.id.size() && static_cast<unsigned char>(v.id[i + 1]) <= 0x9f)) r.refuse("bad_value"); }
+    if (v.wait_ms < 0LL || v.wait_ms > 30000LL) r.refuse("bad_value");
+    return v;
+}
+
+inline OAAuthorizationOperatorListChangeRequestsArguments decode_oa_authorization_operator_list_change_requests_arguments(Reader& r) {
+    if (r.at() != '{') r.refuse("wrong_type");
+    r.enter();
+    ++r.pos;
+    OAAuthorizationOperatorListChangeRequestsArguments v;
+    r.skip_ws();
+    if (r.at() != '}') {
+        for (;;) {
+            r.skip_ws();
+            if (r.at() != '"') r.refuse("malformed");
+            const std::string key = r.str();
+            r.skip_ws();
+            if (r.at() != ':') r.refuse("malformed");
+            ++r.pos;
+            r.skip_ws();
+            if (false) {
+            } else {
+                r.refuse("unknown_field");
+            }
+            r.skip_ws();
+            if (r.at() != ',') break;
+            ++r.pos;
+        }
+    }
+    if (r.at() != '}') r.refuse("malformed");
+    ++r.pos;
+    --r.depth;
+    return v;
+}
+
 inline OAAuthorizationOperatorSetDefaultArguments decode_oa_authorization_operator_set_default_arguments(Reader& r) {
     if (r.at() != '{') r.refuse("wrong_type");
     r.enter();
@@ -10318,6 +11082,111 @@ inline OAAuthorizationOperatorListDefaultsResult decode_oa_authorization_operato
     return v;
 }
 
+inline OAAuthorizationOperatorRequestChangeResult decode_oa_authorization_operator_request_change_result(Reader& r) {
+    if (r.at() != '{') r.refuse("wrong_type");
+    r.enter();
+    ++r.pos;
+    OAAuthorizationOperatorRequestChangeResult v;
+    std::uint32_t seen = 0;
+    r.skip_ws();
+    if (r.at() != '}') {
+        for (;;) {
+            r.skip_ws();
+            if (r.at() != '"') r.refuse("malformed");
+            const std::string key = r.str();
+            r.skip_ws();
+            if (r.at() != ':') r.refuse("malformed");
+            ++r.pos;
+            r.skip_ws();
+            if (key == "value") {
+                if (seen & 1u) r.refuse("duplicate_field");
+                seen |= 1u;
+                v.value = decode_change_request_state(r);
+            } else {
+                r.refuse("unknown_field");
+            }
+            r.skip_ws();
+            if (r.at() != ',') break;
+            ++r.pos;
+        }
+    }
+    if (r.at() != '}') r.refuse("malformed");
+    ++r.pos;
+    --r.depth;
+    if ((seen & 1u) != 1u) r.refuse("missing_field");
+    return v;
+}
+
+inline OAAuthorizationOperatorObserveChangeRequestResult decode_oa_authorization_operator_observe_change_request_result(Reader& r) {
+    if (r.at() != '{') r.refuse("wrong_type");
+    r.enter();
+    ++r.pos;
+    OAAuthorizationOperatorObserveChangeRequestResult v;
+    std::uint32_t seen = 0;
+    r.skip_ws();
+    if (r.at() != '}') {
+        for (;;) {
+            r.skip_ws();
+            if (r.at() != '"') r.refuse("malformed");
+            const std::string key = r.str();
+            r.skip_ws();
+            if (r.at() != ':') r.refuse("malformed");
+            ++r.pos;
+            r.skip_ws();
+            if (key == "value") {
+                if (seen & 1u) r.refuse("duplicate_field");
+                seen |= 1u;
+                v.value = decode_change_request_state(r);
+            } else {
+                r.refuse("unknown_field");
+            }
+            r.skip_ws();
+            if (r.at() != ',') break;
+            ++r.pos;
+        }
+    }
+    if (r.at() != '}') r.refuse("malformed");
+    ++r.pos;
+    --r.depth;
+    if ((seen & 1u) != 1u) r.refuse("missing_field");
+    return v;
+}
+
+inline OAAuthorizationOperatorListChangeRequestsResult decode_oa_authorization_operator_list_change_requests_result(Reader& r) {
+    if (r.at() != '{') r.refuse("wrong_type");
+    r.enter();
+    ++r.pos;
+    OAAuthorizationOperatorListChangeRequestsResult v;
+    std::uint32_t seen = 0;
+    r.skip_ws();
+    if (r.at() != '}') {
+        for (;;) {
+            r.skip_ws();
+            if (r.at() != '"') r.refuse("malformed");
+            const std::string key = r.str();
+            r.skip_ws();
+            if (r.at() != ':') r.refuse("malformed");
+            ++r.pos;
+            r.skip_ws();
+            if (key == "value") {
+                if (seen & 1u) r.refuse("duplicate_field");
+                seen |= 1u;
+                v.value = decode_change_request_page(r);
+            } else {
+                r.refuse("unknown_field");
+            }
+            r.skip_ws();
+            if (r.at() != ',') break;
+            ++r.pos;
+        }
+    }
+    if (r.at() != '}') r.refuse("malformed");
+    ++r.pos;
+    --r.depth;
+    if ((seen & 1u) != 1u) r.refuse("missing_field");
+    return v;
+}
+
 inline OAAuthorizationOperatorSetDefaultResult decode_oa_authorization_operator_set_default_result(Reader& r) {
     if (r.at() != '{') r.refuse("wrong_type");
     r.enter();
@@ -11228,6 +12097,51 @@ template <> inline DecisionExplanation from_json<DecisionExplanation>(std::strin
     return v;
 }
 
+inline std::string to_json(const PolicyChange& v) {
+    std::string out;
+    detail::enc_policy_change(out, v, 0);
+    return out;
+}
+
+template <> inline PolicyChange from_json<PolicyChange>(std::string_view data) {
+    detail::Reader r{data};
+    r.skip_ws();
+    PolicyChange v = detail::decode_policy_change(r);
+    r.skip_ws();
+    if (r.pos < r.buf.size()) r.refuse("trailing_bytes");
+    return v;
+}
+
+inline std::string to_json(const ChangeRequestState& v) {
+    std::string out;
+    detail::enc_change_request_state(out, v, 0);
+    return out;
+}
+
+template <> inline ChangeRequestState from_json<ChangeRequestState>(std::string_view data) {
+    detail::Reader r{data};
+    r.skip_ws();
+    ChangeRequestState v = detail::decode_change_request_state(r);
+    r.skip_ws();
+    if (r.pos < r.buf.size()) r.refuse("trailing_bytes");
+    return v;
+}
+
+inline std::string to_json(const ChangeRequestPage& v) {
+    std::string out;
+    detail::enc_change_request_page(out, v, 0);
+    return out;
+}
+
+template <> inline ChangeRequestPage from_json<ChangeRequestPage>(std::string_view data) {
+    detail::Reader r{data};
+    r.skip_ws();
+    ChangeRequestPage v = detail::decode_change_request_page(r);
+    r.skip_ws();
+    if (r.pos < r.buf.size()) r.refuse("trailing_bytes");
+    return v;
+}
+
 inline std::string to_json(const PermissionKey& v) {
     std::string out;
     detail::enc_permission_key(out, v, 0);
@@ -11806,6 +12720,9 @@ virtual ActionEdit register_action(const std::string& expected_revision,const st
 virtual ActionEdit retire_action(const std::string& expected_revision,const std::string& action)=0;
 virtual DecisionExplanation explain_for(const Subject& subject,const std::string& action,const std::string& resource)=0;
 virtual DefaultPage list_defaults()=0;
+virtual ChangeRequestState request_change(const PolicyChange& change,const std::int64_t& wait_ms)=0;
+virtual ChangeRequestState observe_change_request(const std::string& id,const std::int64_t& wait_ms)=0;
+virtual ChangeRequestPage list_change_requests()=0;
 virtual DefaultEdit set_default(const std::string& expected_revision,const std::string& name,const bool& on)=0;
 };
 template<class Transport>struct AuthorizationOperatorClient:AuthorizationOperator{Transport& transport_;explicit AuthorizationOperatorClient(Transport&t):transport_(t){}
@@ -11925,6 +12842,25 @@ detail::OAServiceFrame v;v.version=1;v.service="abstraction.rights/operator@1";v
 auto response=transport_.exchange_frame(frame);auto payload=detail::service_response(response,v.service,v.method);detail::Reader r{payload};r.depth=1;r.skip_ws();auto result=detail::decode_oa_authorization_operator_list_defaults_result(r);r.skip_ws();if(r.pos!=r.buf.size())r.refuse("trailing_bytes");
 return result.value;
 }
+ChangeRequestState request_change(const PolicyChange& change,const std::int64_t& wait_ms)override{detail::OAAuthorizationOperatorRequestChangeArguments args;
+args.change=change;
+args.wait_ms=wait_ms;
+detail::OAServiceFrame v;v.version=1;v.service="abstraction.rights/operator@1";v.method="RequestChange";detail::enc_oa_authorization_operator_request_change_arguments(v.arguments,args,1);std::string frame;detail::enc_oa_service_frame(frame,v,0);detail::service_payload(frame);
+auto response=transport_.exchange_frame(frame);auto payload=detail::service_response(response,v.service,v.method);detail::Reader r{payload};r.depth=1;r.skip_ws();auto result=detail::decode_oa_authorization_operator_request_change_result(r);r.skip_ws();if(r.pos!=r.buf.size())r.refuse("trailing_bytes");
+return result.value;
+}
+ChangeRequestState observe_change_request(const std::string& id,const std::int64_t& wait_ms)override{detail::OAAuthorizationOperatorObserveChangeRequestArguments args;
+args.id=id;
+args.wait_ms=wait_ms;
+detail::OAServiceFrame v;v.version=1;v.service="abstraction.rights/operator@1";v.method="ObserveChangeRequest";detail::enc_oa_authorization_operator_observe_change_request_arguments(v.arguments,args,1);std::string frame;detail::enc_oa_service_frame(frame,v,0);detail::service_payload(frame);
+auto response=transport_.exchange_frame(frame);auto payload=detail::service_response(response,v.service,v.method);detail::Reader r{payload};r.depth=1;r.skip_ws();auto result=detail::decode_oa_authorization_operator_observe_change_request_result(r);r.skip_ws();if(r.pos!=r.buf.size())r.refuse("trailing_bytes");
+return result.value;
+}
+ChangeRequestPage list_change_requests()override{detail::OAAuthorizationOperatorListChangeRequestsArguments args;
+detail::OAServiceFrame v;v.version=1;v.service="abstraction.rights/operator@1";v.method="ListChangeRequests";detail::enc_oa_authorization_operator_list_change_requests_arguments(v.arguments,args,1);std::string frame;detail::enc_oa_service_frame(frame,v,0);detail::service_payload(frame);
+auto response=transport_.exchange_frame(frame);auto payload=detail::service_response(response,v.service,v.method);detail::Reader r{payload};r.depth=1;r.skip_ws();auto result=detail::decode_oa_authorization_operator_list_change_requests_result(r);r.skip_ws();if(r.pos!=r.buf.size())r.refuse("trailing_bytes");
+return result.value;
+}
 DefaultEdit set_default(const std::string& expected_revision,const std::string& name,const bool& on)override{detail::OAAuthorizationOperatorSetDefaultArguments args;
 args.expected_revision=expected_revision;
 args.name=name;
@@ -11947,7 +12883,7 @@ struct AuthorizationOperatorDispatcher:FrameWriter,FrameExchanger{AuthorizationO
 template<class H,class=decltype(static_cast<AuthorizationOperator&>(*static_cast<H*>(nullptr)))>explicit AuthorizationOperatorDispatcher(H&h):handler(h),ready_self_(&h),ready_hook_(detail::ready_hook<H>(0)),metadata_hook_(detail::metadata_hook<H>(0)){}
 // This dispatcher's service as abstraction.facade/endpoint@1 Describe lists it.
 DescribedService describe_service()const{DescribedService s{"abstraction.rights/operator@1",true,std::string()};if(ready_hook_){s.ready=ready_hook_(ready_self_,s.why);if(s.ready)s.why.clear();}return s;}
-std::string describe_service_definition_hash()const{return "sha256:25e83138975aa53bfa85eedc696dba7e5fff243a3118d0e45621e20c1e058546";}
+std::string describe_service_definition_hash()const{return "sha256:ce2cb03fe39562443081f045714cde4406f0d508249086bbe194f3dab9dd5c71";}
 std::pair<std::vector<std::string>,std::map<std::string,std::string>> describe_service_metadata()const{if(metadata_hook_)return metadata_hook_(ready_self_);return {};}
 void write_frame(std::string_view frame)override{auto v=detail::service_payload(frame);if(v.service!="abstraction.rights/operator@1")throw DispatchError("unknown_service");
 if(v.method=="ObservePolicy"){
@@ -11979,6 +12915,12 @@ throw DispatchError("wrong_mode");}
 if(v.method=="ExplainFor"){
 throw DispatchError("wrong_mode");}
 if(v.method=="ListDefaults"){
+throw DispatchError("wrong_mode");}
+if(v.method=="RequestChange"){
+throw DispatchError("wrong_mode");}
+if(v.method=="ObserveChangeRequest"){
+throw DispatchError("wrong_mode");}
+if(v.method=="ListChangeRequests"){
 throw DispatchError("wrong_mode");}
 if(v.method=="SetDefault"){
 throw DispatchError("wrong_mode");}
@@ -12015,6 +12957,12 @@ if(v.method=="ExplainFor"){
 detail::Reader r{v.arguments};r.depth=1;r.skip_ws();auto args=detail::decode_oa_authorization_operator_explain_for_arguments(r);r.skip_ws();if(r.pos!=r.buf.size())r.refuse("trailing_bytes");auto payload=invoke_explain_for(args);return detail::service_reply(v,payload);}
 if(v.method=="ListDefaults"){
 detail::Reader r{v.arguments};r.depth=1;r.skip_ws();auto args=detail::decode_oa_authorization_operator_list_defaults_arguments(r);r.skip_ws();if(r.pos!=r.buf.size())r.refuse("trailing_bytes");auto payload=invoke_list_defaults(args);return detail::service_reply(v,payload);}
+if(v.method=="RequestChange"){
+detail::Reader r{v.arguments};r.depth=1;r.skip_ws();auto args=detail::decode_oa_authorization_operator_request_change_arguments(r);r.skip_ws();if(r.pos!=r.buf.size())r.refuse("trailing_bytes");auto payload=invoke_request_change(args);return detail::service_reply(v,payload);}
+if(v.method=="ObserveChangeRequest"){
+detail::Reader r{v.arguments};r.depth=1;r.skip_ws();auto args=detail::decode_oa_authorization_operator_observe_change_request_arguments(r);r.skip_ws();if(r.pos!=r.buf.size())r.refuse("trailing_bytes");auto payload=invoke_observe_change_request(args);return detail::service_reply(v,payload);}
+if(v.method=="ListChangeRequests"){
+detail::Reader r{v.arguments};r.depth=1;r.skip_ws();auto args=detail::decode_oa_authorization_operator_list_change_requests_arguments(r);r.skip_ws();if(r.pos!=r.buf.size())r.refuse("trailing_bytes");auto payload=invoke_list_change_requests(args);return detail::service_reply(v,payload);}
 if(v.method=="SetDefault"){
 detail::Reader r{v.arguments};r.depth=1;r.skip_ws();auto args=detail::decode_oa_authorization_operator_set_default_arguments(r);r.skip_ws();if(r.pos!=r.buf.size())r.refuse("trailing_bytes");auto payload=invoke_set_default(args);return detail::service_reply(v,payload);}
 throw ServiceError("unknown_method","");}catch(const ServiceError&e){return detail::service_reply(v,"",&e);}catch(const Refusal&e){ServiceError error(e.word,"");return detail::service_reply(v,"",&error);}
@@ -12184,6 +13132,40 @@ try{
 detail::OAAuthorizationOperatorListDefaultsResult value;
 value.value=result;
 Raw payload;detail::enc_oa_authorization_operator_list_defaults_result(payload,value,1);detail::Reader r{payload};r.depth=1;r.skip_ws();detail::decode_oa_authorization_operator_list_defaults_result(r);r.skip_ws();if(r.pos!=r.buf.size())r.refuse("trailing_bytes");return payload;
+}catch(...){throw ServiceError("invalid_result","");}
+}
+Raw invoke_request_change(const detail::OAAuthorizationOperatorRequestChangeArguments&args){
+ChangeRequestState result{};
+try{
+result=handler.request_change(args.change,args.wait_ms);
+}catch(const ServiceError&){throw;}catch(...){throw ServiceError("handler_error","handler failed");}
+try{
+detail::OAAuthorizationOperatorRequestChangeResult value;
+value.value=result;
+Raw payload;detail::enc_oa_authorization_operator_request_change_result(payload,value,1);detail::Reader r{payload};r.depth=1;r.skip_ws();detail::decode_oa_authorization_operator_request_change_result(r);r.skip_ws();if(r.pos!=r.buf.size())r.refuse("trailing_bytes");return payload;
+}catch(...){throw ServiceError("invalid_result","");}
+}
+Raw invoke_observe_change_request(const detail::OAAuthorizationOperatorObserveChangeRequestArguments&args){
+ChangeRequestState result{};
+try{
+result=handler.observe_change_request(args.id,args.wait_ms);
+}catch(const ServiceError&){throw;}catch(...){throw ServiceError("handler_error","handler failed");}
+try{
+detail::OAAuthorizationOperatorObserveChangeRequestResult value;
+value.value=result;
+Raw payload;detail::enc_oa_authorization_operator_observe_change_request_result(payload,value,1);detail::Reader r{payload};r.depth=1;r.skip_ws();detail::decode_oa_authorization_operator_observe_change_request_result(r);r.skip_ws();if(r.pos!=r.buf.size())r.refuse("trailing_bytes");return payload;
+}catch(...){throw ServiceError("invalid_result","");}
+}
+Raw invoke_list_change_requests(const detail::OAAuthorizationOperatorListChangeRequestsArguments&args){
+(void)args;
+ChangeRequestPage result{};
+try{
+result=handler.list_change_requests();
+}catch(const ServiceError&){throw;}catch(...){throw ServiceError("handler_error","handler failed");}
+try{
+detail::OAAuthorizationOperatorListChangeRequestsResult value;
+value.value=result;
+Raw payload;detail::enc_oa_authorization_operator_list_change_requests_result(payload,value,1);detail::Reader r{payload};r.depth=1;r.skip_ws();detail::decode_oa_authorization_operator_list_change_requests_result(r);r.skip_ws();if(r.pos!=r.buf.size())r.refuse("trailing_bytes");return payload;
 }catch(...){throw ServiceError("invalid_result","");}
 }
 Raw invoke_set_default(const detail::OAAuthorizationOperatorSetDefaultArguments&args){
@@ -12731,6 +13713,27 @@ inline std::string encode_decision_explanation_at(const DecisionExplanation& v,i
 }  // namespace detail
 inline std::string encode_decision_explanation(const DecisionExplanation& v){return detail::encode_decision_explanation_at(v,0)+"\n";}
 inline DecisionExplanation decode_decision_explanation(std::string_view in){std::size_t n=0;auto v=detail::decode_decision_explanation_at(in,0,64,n);detail::Reader r{in};r.pos=n;r.skip_ws();if(r.pos!=in.size())r.refuse("trailing_bytes");return v;}
+
+namespace detail {
+inline PolicyChange decode_policy_change_at(std::string_view in,int depth,int limit,std::size_t& consumed){detail::Reader r{in};if(depth<0||limit<1)r.refuse("depth_exceeded");r.depth=depth;r.limit=limit<64?limit:64;r.skip_ws();auto v=detail::decode_policy_change(r);consumed=r.pos;return v;}
+inline std::string encode_policy_change_at(const PolicyChange& v,int depth){detail::Reader r{""};if(depth<0||depth>=64)r.refuse("depth_exceeded");std::string out;detail::enc_policy_change(out,v,depth);std::size_t n=0;decode_policy_change_at(out,depth,64,n);return out;}
+}  // namespace detail
+inline std::string encode_policy_change(const PolicyChange& v){return detail::encode_policy_change_at(v,0)+"\n";}
+inline PolicyChange decode_policy_change(std::string_view in){std::size_t n=0;auto v=detail::decode_policy_change_at(in,0,64,n);detail::Reader r{in};r.pos=n;r.skip_ws();if(r.pos!=in.size())r.refuse("trailing_bytes");return v;}
+
+namespace detail {
+inline ChangeRequestState decode_change_request_state_at(std::string_view in,int depth,int limit,std::size_t& consumed){detail::Reader r{in};if(depth<0||limit<1)r.refuse("depth_exceeded");r.depth=depth;r.limit=limit<64?limit:64;r.skip_ws();auto v=detail::decode_change_request_state(r);consumed=r.pos;return v;}
+inline std::string encode_change_request_state_at(const ChangeRequestState& v,int depth){detail::Reader r{""};if(depth<0||depth>=64)r.refuse("depth_exceeded");std::string out;detail::enc_change_request_state(out,v,depth);std::size_t n=0;decode_change_request_state_at(out,depth,64,n);return out;}
+}  // namespace detail
+inline std::string encode_change_request_state(const ChangeRequestState& v){return detail::encode_change_request_state_at(v,0)+"\n";}
+inline ChangeRequestState decode_change_request_state(std::string_view in){std::size_t n=0;auto v=detail::decode_change_request_state_at(in,0,64,n);detail::Reader r{in};r.pos=n;r.skip_ws();if(r.pos!=in.size())r.refuse("trailing_bytes");return v;}
+
+namespace detail {
+inline ChangeRequestPage decode_change_request_page_at(std::string_view in,int depth,int limit,std::size_t& consumed){detail::Reader r{in};if(depth<0||limit<1)r.refuse("depth_exceeded");r.depth=depth;r.limit=limit<64?limit:64;r.skip_ws();auto v=detail::decode_change_request_page(r);consumed=r.pos;return v;}
+inline std::string encode_change_request_page_at(const ChangeRequestPage& v,int depth){detail::Reader r{""};if(depth<0||depth>=64)r.refuse("depth_exceeded");std::string out;detail::enc_change_request_page(out,v,depth);std::size_t n=0;decode_change_request_page_at(out,depth,64,n);return out;}
+}  // namespace detail
+inline std::string encode_change_request_page(const ChangeRequestPage& v){return detail::encode_change_request_page_at(v,0)+"\n";}
+inline ChangeRequestPage decode_change_request_page(std::string_view in){std::size_t n=0;auto v=detail::decode_change_request_page_at(in,0,64,n);detail::Reader r{in};r.pos=n;r.skip_ws();if(r.pos!=in.size())r.refuse("trailing_bytes");return v;}
 
 namespace detail {
 inline PermissionKey decode_permission_key_at(std::string_view in,int depth,int limit,std::size_t& consumed){detail::Reader r{in};if(depth<0||limit<1)r.refuse("depth_exceeded");r.depth=depth;r.limit=limit<64?limit:64;r.skip_ws();auto v=detail::decode_permission_key(r);consumed=r.pos;return v;}

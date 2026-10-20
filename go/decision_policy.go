@@ -12,6 +12,7 @@ import (
 	"github.com/openabstractions/abstraction-identity/remote"
 	wire "github.com/openabstractions/abstraction-rights/go/abstraction/rights/api"
 	"io"
+	"log/slog"
 	"os"
 	"os/user"
 	"path/filepath"
@@ -130,7 +131,11 @@ type DecisionPolicy struct {
 	// RefreshMetaHolder, when configured before sharing, refreshes the host's
 	// immutable holder facts at outer admissions. It honors ctx and runs before
 	// policy/Book locks. MetaHolder itself remains a lock-free current read.
-	RefreshMetaHolder     func(context.Context) error
+	RefreshMetaHolder func(context.Context) error
+	// Logger records unavailable decisions at WARN with stage (config,
+	// meta-holder or read) and error attributes. Assign before sharing.
+	// Nil writes no record; decisions and refusals are unchanged.
+	Logger                *slog.Logger
 	permitAdmissionAction string
 	permitAdmission       func(context.Context, wire.Subject, wire.PermissionSelection) (func() error, error)
 	// defaults, defaultAccount and defaultExcluded are the account-wide
@@ -688,11 +693,18 @@ func (p *DecisionPolicy) canonicalizeState() error {
 // DecisionReadBudget is the least time one read of the decision state has,
 // and its bound when the caller set no deadline. A caller deadline with more
 // time remaining bounds the read instead (budget.Within), so a read a person
-// waits for finishes under load. A readable file reads in milliseconds. The
-// file store retries a denied open, because a writer's replace denies it for
-// an instant, and a file denied for good ends that retry at the bound: the
-// decision, rule read or listing is unavailable.
+// waits for finishes under load. A readable file reads in milliseconds. An
+// open that a writer holding the file refuses with a sharing violation is
+// retried until that bound. An open refused with access denied is retried for
+// DecisionDeniedRetry only: a writer's replace denies the name for an instant,
+// and an ACL that denies the read denies every retry. Either way the
+// decision, rule read or listing is unavailable, and the call is refused.
 const DecisionReadBudget = 500 * time.Millisecond
+
+// DecisionDeniedRetry bounds the retry of a policy open answered with access
+// denied. It covers a writer's replace and answers a policy whose ACL denies
+// the read promptly, well inside the caller's deadline.
+const DecisionDeniedRetry = 200 * time.Millisecond
 
 func (p *DecisionPolicy) readDecision() (decisionFile, string, error) {
 	return p.readDecisionContext(context.Background())
@@ -708,13 +720,18 @@ func (p *DecisionPolicy) CheckState(ctx context.Context) error {
 }
 
 // readDecisionContext reads the state within ctx's deadline, at least DecisionReadBudget.
-func (p *DecisionPolicy) readDecisionContext(ctx context.Context) (decisionFile, string, error) {
+func (p *DecisionPolicy) readDecisionContext(ctx context.Context) (file decisionFile, revision string, failure error) {
+	defer func() {
+		if failure != nil {
+			p.logUnavailable("read", failure)
+		}
+	}()
 	if e := p.regular(); e != nil {
 		return decisionFile{}, "", e
 	}
 	ctx, cancel := budget.Within(ctx, DecisionReadBudget, DecisionReadBudget)
 	defer cancel()
-	data, e := cas.ReadLimitContext(ctx, p.path, MaxDecisionBytes)
+	data, e := readDecisionBytes(ctx, p.path)
 	if e != nil {
 		return decisionFile{}, "", e
 	}
@@ -726,9 +743,28 @@ func (p *DecisionPolicy) readDecisionContext(ctx context.Context) (decisionFile,
 	if e != nil {
 		return f, "", e
 	}
-	revision := p.revision(f)
+	revision = p.revision(f)
 	p.decoded.put(data, f, revision, definitionDigest)
 	return f, revision, nil
+}
+
+func (p *DecisionPolicy) logUnavailable(stage string, err error) {
+	if p != nil && p.Logger != nil {
+		p.Logger.Warn("rights decision unavailable", "stage", stage, "error", err)
+	}
+}
+
+// readDecisionBytes reads the policy file within ctx. The first read retries a
+// refused open for at most DecisionDeniedRetry. Access denied ends the read
+// there; a sharing violation, a writer holding the file, retries until ctx ends.
+func readDecisionBytes(ctx context.Context, path string) ([]byte, error) {
+	first, cancel := context.WithTimeout(ctx, DecisionDeniedRetry)
+	data, e := cas.ReadLimitContext(first, path, MaxDecisionBytes)
+	cancel()
+	if e == nil || !errors.Is(e, cas.ErrRefused) || errors.Is(e, os.ErrPermission) || ctx.Err() != nil {
+		return data, e
+	}
+	return cas.ReadLimitContext(ctx, path, MaxDecisionBytes)
 }
 
 // decodedState is the last decision state a read decoded, reused for the same

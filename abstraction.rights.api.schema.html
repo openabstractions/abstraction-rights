@@ -135,6 +135,19 @@
 <p>Read every configured account-wide default and its switch under operator authorization, rechecked before returning. An earlier operator@1 service returns unknown_method.</p>
 <h3><code>ListDefaults</code></h3><p><code>request-response</code> <code>DefaultPage</code> · readonly</p><ul>
 </ul>
+<p>Request one typed rights change (RIGHTS-O17). The Panel window applies its changes through the direct methods. Any other operator program&#39;s change becomes a pending request the person confirms in a person-only popup the service words; the call waits up to wait_ms for the answer and then returns pending with the request id. A request expires ten minutes after it was made. Allow applies exactly that change, once. A caller whose own connection-bound token is elevated is exempt while the elevated-callers default is on: its change applies at once. Every applied change writes an Activity line with Undo. An earlier operator@1 service returns unknown_method; a caller must not fall back to a direct edit.</p>
+<h3><code>RequestChange</code></h3><p><code>request-response</code> <code>ChangeRequestState</code> · idempotent</p><ul>
+<li>Argument 1: <code>PolicyChange</code> <code>change</code> (required, including zero/false/empty)</li>
+<li>Argument 2: <code>i64</code> <code>wait_ms</code> (required; range 0..30000; refusal <code>bad_value</code>, including zero/false/empty)</li>
+</ul>
+<p>Wait up to wait_ms for one request this operator program made to settle and report its state (RIGHTS-O17). A request of another program, or one the service no longer holds, is unknown.</p>
+<h3><code>ObserveChangeRequest</code></h3><p><code>request-response</code> <code>ChangeRequestState</code> · readonly</p><ul>
+<li>Argument 1: <code>string</code> <code>id</code> (required; length 1..128 UTF-8 bytes; pattern no_control; refusal <code>bad_value</code>, including zero/false/empty)</li>
+<li>Argument 2: <code>i64</code> <code>wait_ms</code> (required; range 0..30000; refusal <code>bad_value</code>, including zero/false/empty)</li>
+</ul>
+<p>List the change requests this operator program made that the service still holds (RIGHTS-O17).</p>
+<h3><code>ListChangeRequests</code></h3><p><code>request-response</code> <code>ChangeRequestPage</code> · readonly</p><ul>
+</ul>
 <p>Atomically compare the expected durable revision and turn one configured account-wide default on or off, recording the operator subject and service time. An unconfigured name is invalid. Authorization and revision are rechecked after lock waiting. The next fresh decision observes the switch. No rule is written or removed. An earlier operator@1 service returns unknown_method.</p>
 <h3><code>SetDefault</code></h3><p><code>request-response</code> <code>DefaultEdit</code> · idempotent</p><ul>
 <li>Argument 1: <code>string</code> <code>expected_revision</code> (required, including zero/false/empty)</li>
@@ -142,31 +155,31 @@
 <li>Argument 3: <code>bool</code> <code>on</code> (required, including zero/false/empty)</li>
 </ul>
 <h2 id="service-SelectorAuthorization">Service <code>SelectorAuthorization</code> <span class="tag">[DEF-S1]</span></h2>
-<p></p>
+<p>Typed authorization: permissions keyed by action and resource profile, decided for One resources and All collections from one snapshot. authorization@1 decides exact action and resource strings; a program uses this service for typed selectors. The Go client type rights.Client serves both services: ResolveRights binds authorization@1 for Decide, DecideFor, DecideForAtLeastRevision, Require and ListActionDescriptions, and ResolveRightsSelector binds this service for ListPermissionDefinitions, ListPermissionBundles, CheckBatch, CheckBatchFor and CheckLegacyOperationFor. A method of the other service answers unknown_method.</p>
 <p>Wire identity: <code>abstraction.rights/authorization@2</code></p>
 <p>Multiple services share this namespace. Generated ServiceName (Go) and service_name (C++/Python) validate the request envelope and version before returning its service identity for routing. Go ServiceMethod returns the service and method routing pair through the same strict decoder, exposing no arguments. The selected generated dispatcher validates the method and typed arguments; these selectors do not authorize callers or establish a handler outcome.</p>
 <p>Frames carry version, service, method and typed arguments. Transport owns framing, associated exchanges, deadlines and connections. Unknown version/service/method and malformed arguments are rejected before invoking a handler. One-way WriteFrame success means local submission, not remote acceptance or persistence.</p>
 <p>Request-response methods use ExchangeFrame. Replies carry version, service, method, ok and payload; success payload contains typed value (or an empty object for void). Error payload contains nonempty code and message, which may be empty. ServiceError preserves unknown codes. Unexpected handler failures become handler_error without private details; invalid results become invalid_result. Clients validate reply identity and result before exposing it. A malformed frame or transport failure remains a local error; the transport must associate each response with its exchange. C++ dispatchers are pure protocol bindings, not listening servers.</p>
-<p></p>
+<p>List the typed permission definitions the catalogue serves: each action with its resource profile and the selectors it supports. Callers of the runtime&#39;s own account only. A page binds one policy revision; a cursor from another revision reads gap.</p>
 <h3><code>ListPermissionDefinitions</code></h3><p><code>request-response</code> <code>PermissionDefinitionPage</code> · readonly <span class="tag">[DEF-S3]</span></p><ul>
 <li>Argument 1: <code>string</code> <code>cursor</code> (required, including zero/false/empty)</li>
 <li>Argument 2: <code>i64</code> <code>limit</code> (required, including zero/false/empty)</li>
 </ul>
-<p></p>
+<p>List the named permission bundles an operator can apply as one consent, each an immutable version with its member permissions. Callers of the runtime&#39;s own account only. A page binds one policy revision.</p>
 <h3><code>ListPermissionBundles</code></h3><p><code>request-response</code> <code>PermissionBundlePage</code> · readonly</p><ul>
 <li>Argument 1: <code>string</code> <code>cursor</code> (required, including zero/false/empty)</li>
 <li>Argument 2: <code>i64</code> <code>limit</code> (required, including zero/false/empty)</li>
 </ul>
-<p></p>
+<p>Decide the calling program&#39;s own typed permissions for 1..256 resources and an optional All collection admission, from one policy snapshot (RIGHTS-R19). Each target is the owning capability&#39;s document for the resource, which this service prepares; a caller supplies no captured evidence. The result is advisory to the caller: a resource service decides with CheckBatchFor. Asks nobody and writes nothing.</p>
 <h3><code>CheckBatch</code></h3><p><code>request-response</code> <code>BatchDecision</code> · readonly</p><ul>
 <li>Argument 1: <code>CheckBatchRequest</code> <code>request</code> (required, including zero/false/empty)</li>
 </ul>
-<p></p>
+<p>Decide a subject&#39;s typed permissions as CheckBatch does. The receiving host must designate the calling program as the enforcer of every requested permission and of the collection admission; otherwise forbidden. Subject and caller belong to the runtime&#39;s own account, and subject is the enforcer&#39;s assertion. Asks nobody and writes nothing.</p>
 <h3><code>CheckBatchFor</code></h3><p><code>request-response</code> <code>BatchDecision</code> · readonly</p><ul>
 <li>Argument 1: <code>Subject</code> <code>subject</code> (required, including zero/false/empty)</li>
 <li>Argument 2: <code>CheckBatchRequest</code> <code>request</code> (required, including zero/false/empty)</li>
 </ul>
-<p></p>
+<p>Decide one exact authorization@1 action and resource for a subject with live typed blocks carried across known equivalence (RIGHTS-R20). The caller enforces the legacy action, and the concrete operation when one is supplied. It grants no typed permit.</p>
 <h3><code>CheckLegacyOperationFor</code></h3><p><code>request-response</code> <code>Decision</code> · readonly</p><ul>
 <li>Argument 1: <code>Subject</code> <code>subject</code> (required, including zero/false/empty)</li>
 <li>Argument 2: <code>LegacyOperationRequest</code> <code>request</code> (required, including zero/false/empty)</li>
@@ -177,30 +190,30 @@
 <p>Multiple services share this namespace. Generated ServiceName (Go) and service_name (C++/Python) validate the request envelope and version before returning its service identity for routing. Go ServiceMethod returns the service and method routing pair through the same strict decoder, exposing no arguments. The selected generated dispatcher validates the method and typed arguments; these selectors do not authorize callers or establish a handler outcome.</p>
 <p>Frames carry version, service, method and typed arguments. Transport owns framing, associated exchanges, deadlines and connections. Unknown version/service/method and malformed arguments are rejected before invoking a handler. One-way WriteFrame success means local submission, not remote acceptance or persistence.</p>
 <p>Request-response methods use ExchangeFrame. Replies carry version, service, method, ok and payload; success payload contains typed value (or an empty object for void). Error payload contains nonempty code and message, which may be empty. ServiceError preserves unknown codes. Unexpected handler failures become handler_error without private details; invalid results become invalid_result. Clients validate reply identity and result before exposing it. A malformed frame or transport failure remains a local error; the transport must associate each response with its exchange. C++ dispatchers are pure protocol bindings, not listening servers.</p>
-<p></p>
+<p>List every typed rule with its setter, time, reason, expiry and bundle origin. Operator programs only. A page binds one policy revision.</p>
 <h3><code>ListSelectorRules</code></h3><p><code>request-response</code> <code>SelectorRulePage</code> · readonly <span class="tag">[DEF-S3]</span></p><ul>
 <li>Argument 1: <code>string</code> <code>cursor</code> (required, including zero/false/empty)</li>
 <li>Argument 2: <code>i64</code> <code>limit</code> (required, including zero/false/empty)</li>
 </ul>
-<p></p>
+<p>Read the one rule for a subject and an exact permission selection, addressed by the selection&#39;s retained bytes with no new target preparation. Operator programs only.</p>
 <h3><code>ReadSelectorRule</code></h3><p><code>request-response</code> <code>SelectorRuleRead</code> · readonly</p><ul>
 <li>Argument 1: <code>Subject</code> <code>subject</code> (required, including zero/false/empty)</li>
 <li>Argument 2: <code>PermissionSelection</code> <code>selection</code> (required, including zero/false/empty)</li>
 </ul>
-<p></p>
+<p>Set one typed permit or block at expected_revision; a stale revision conflicts. ttl_ms 0 keeps the rule until removed, and at most one year bounds it. Replacing a row detaches its bundle origin (RIGHTS-O12). The Panel window&#39;s edit only (RIGHTS-O17).</p>
 <h3><code>SetSelectorRule</code></h3><p><code>request-response</code> <code>SelectorEdit</code> · idempotent</p><ul>
 <li>Argument 1: <code>string</code> <code>expected_revision</code> (required, including zero/false/empty)</li>
 <li>Argument 2: <code>SelectorRule</code> <code>rule</code> (required, including zero/false/empty)</li>
 <li>Argument 3: <code>i64</code> <code>ttl_ms</code> (required, including zero/false/empty)</li>
 <li>Argument 4: <code>string</code> <code>why</code> (required, including zero/false/empty)</li>
 </ul>
-<p></p>
+<p>Remove the rule for a subject and an exact permission selection at expected_revision. The Panel window&#39;s edit only (RIGHTS-O17).</p>
 <h3><code>RemoveSelectorRule</code></h3><p><code>request-response</code> <code>SelectorEdit</code> · idempotent</p><ul>
 <li>Argument 1: <code>string</code> <code>expected_revision</code> (required, including zero/false/empty)</li>
 <li>Argument 2: <code>Subject</code> <code>subject</code> (required, including zero/false/empty)</li>
 <li>Argument 3: <code>PermissionSelection</code> <code>selection</code> (required, including zero/false/empty)</li>
 </ul>
-<p></p>
+<p>Expand one immutable bundle version into explicit permits for a subject, atomically, with one setter and expiry and a retained bundle origin (RIGHTS-O12). New members of a later version need new consent. The Panel window&#39;s edit only (RIGHTS-O17).</p>
 <h3><code>ApplyBundle</code></h3><p><code>request-response</code> <code>SelectorEdit</code> · idempotent</p><ul>
 <li>Argument 1: <code>string</code> <code>expected_revision</code> (required, including zero/false/empty)</li>
 <li>Argument 2: <code>Subject</code> <code>subject</code> (required, including zero/false/empty)</li>
@@ -209,18 +222,18 @@
 <li>Argument 5: <code>i64</code> <code>ttl_ms</code> (required, including zero/false/empty)</li>
 <li>Argument 6: <code>string</code> <code>why</code> (required, including zero/false/empty)</li>
 </ul>
-<p></p>
+<p>Remove a subject&#39;s rules that still carry bundle origin origin_id. Rows replaced since keep their later independent edits. The Panel window&#39;s edit only (RIGHTS-O17).</p>
 <h3><code>RemoveBundle</code></h3><p><code>request-response</code> <code>SelectorEdit</code> · idempotent</p><ul>
 <li>Argument 1: <code>string</code> <code>expected_revision</code> (required, including zero/false/empty)</li>
 <li>Argument 2: <code>Subject</code> <code>subject</code> (required, including zero/false/empty)</li>
 <li>Argument 3: <code>string</code> <code>origin_id</code> (required, including zero/false/empty)</li>
 </ul>
-<p></p>
+<p>Write the typed effect pinned by the asks permission@1 question question_id after an operator Allow on it. The effect comes from the question, never from the caller. The Panel window and the Asks presenter only (RIGHTS-O17). A revoked or expired occurrence refuses replay.</p>
 <h3><code>ApplyPermissionAllow</code></h3><p><code>request-response</code> <code>SelectorEdit</code> · idempotent</p><ul>
 <li>Argument 1: <code>string</code> <code>expected_revision</code> (required, including zero/false/empty)</li>
 <li>Argument 2: <code>string</code> <code>question_id</code> (required, including zero/false/empty)</li>
 </ul>
-<p></p>
+<p>Remove the still-current rules that question_id&#39;s Allow wrote, keeping later edits and blocks. The Panel window&#39;s edit only (RIGHTS-O17).</p>
 <h3><code>UndoPermissionEffect</code></h3><p><code>request-response</code> <code>SelectorEdit</code> · idempotent</p><ul>
 <li>Argument 1: <code>string</code> <code>expected_revision</code> (required, including zero/false/empty)</li>
 <li>Argument 2: <code>string</code> <code>question_id</code> (required, including zero/false/empty)</li>
@@ -242,10 +255,10 @@
 <div class="wrap"><table>
 <thead><tr><th>kind</th><th>types</th></tr></thead>
 <tbody>
-<tr><td>built in</td><td><code>ActionEditOutcome</code> <code>BatchCheckOutcome</code> <code>DecisionOutcome</code> <code>DecisionSource</code> <code>PermissionFirstUse</code> <code>PolicyEditOutcome</code> <code>PolicyObservationMechanism</code> <code>PolicyObservationOutcome</code> <code>PolicyPageOutcome</code> <code>RefusalAsk</code> <code>RefusalDecision</code> <code>RefusalSource</code> <code>ResourceSelectorKind</code> <code>RuleReadOutcome</code> <code>binary</code> <code>bool</code> <code>i64</code> <code>string</code></td></tr>
-<tr><td>declared below</td><td><code>AccountDefault</code> <code>ActionDescription</code> <code>AppMetadata</code> <code>BundleExpansion</code> <code>BundleOrigin</code> <code>CatalogEntry</code> <code>ConcreteResource</code> <code>Decision</code> <code>DescribedAction</code> <code>PermissionDefinition</code> <code>PermissionKey</code> <code>PermissionSelection</code> <code>PolicyRule</code> <code>ResourceSelector</code> <code>RuleRecord</code> <code>SelectorRule</code> <code>SelectorRuleRecord</code> <code>Subject</code></td></tr>
+<tr><td>built in</td><td><code>ActionEditOutcome</code> <code>BatchCheckOutcome</code> <code>ChangeKind</code> <code>ChangeRequestOutcome</code> <code>DecisionOutcome</code> <code>DecisionSource</code> <code>PermissionFirstUse</code> <code>PolicyEditOutcome</code> <code>PolicyObservationMechanism</code> <code>PolicyObservationOutcome</code> <code>PolicyPageOutcome</code> <code>RefusalAsk</code> <code>RefusalDecision</code> <code>RefusalSource</code> <code>ResourceSelectorKind</code> <code>RuleReadOutcome</code> <code>binary</code> <code>bool</code> <code>i64</code> <code>string</code></td></tr>
+<tr><td>declared below</td><td><code>AccountDefault</code> <code>ActionDescription</code> <code>AppMetadata</code> <code>BundleExpansion</code> <code>BundleOrigin</code> <code>CatalogEntry</code> <code>ConcreteResource</code> <code>Decision</code> <code>DescribedAction</code> <code>PermissionDefinition</code> <code>PermissionKey</code> <code>PermissionSelection</code> <code>PolicyChange</code> <code>PolicyRule</code> <code>ResourceSelector</code> <code>RuleRecord</code> <code>SelectorRule</code> <code>SelectorRuleRecord</code> <code>Subject</code></td></tr>
 <tr><td>container <span class="tag">[DEF-T3]</span></td><td><code>list&lt;DecisionOutcome&gt;</code> <code>list&lt;ResourceSelectorKind&gt;</code> <code>list&lt;string&gt;</code></td></tr>
-<tr><td>repeated record <span class="tag">[DEF-A9]</span></td><td><code>list&lt;AccountDefault&gt;</code> <code>list&lt;AppMetadata&gt;</code> <code>list&lt;ConcreteResource&gt;</code> <code>list&lt;DescribedAction&gt;</code> <code>list&lt;HoldMetadata&gt;</code> <code>list&lt;PermissionBundleDefinition&gt;</code> <code>list&lt;PermissionKey&gt;</code> <code>list&lt;PermissionSelection&gt;</code> <code>list&lt;PolicyRule&gt;</code> <code>list&lt;SelectorPermissionDefinition&gt;</code> <code>list&lt;SelectorRuleRecord&gt;</code></td></tr>
+<tr><td>repeated record <span class="tag">[DEF-A9]</span></td><td><code>list&lt;AccountDefault&gt;</code> <code>list&lt;AppMetadata&gt;</code> <code>list&lt;ChangeRequestState&gt;</code> <code>list&lt;ConcreteResource&gt;</code> <code>list&lt;DescribedAction&gt;</code> <code>list&lt;HoldMetadata&gt;</code> <code>list&lt;PermissionBundleDefinition&gt;</code> <code>list&lt;PermissionKey&gt;</code> <code>list&lt;PermissionSelection&gt;</code> <code>list&lt;PolicyRule&gt;</code> <code>list&lt;SelectorPermissionDefinition&gt;</code> <code>list&lt;SelectorRuleRecord&gt;</code></td></tr>
 </tbody></table></div>
 <h2 id="structs">Structs <span class="tag">[DEF-T1]</span></h2>
 <p class="meta">A field is required, or says when it is omitted <span class="tag">[DEF-A4]</span>. Each struct says on its own what it does with a field name it has never heard of <span class="tag">[DEF-A7]</span>. A wire name never moves; where a language must spell it differently the field says so <span class="tag">[DEF-A2]</span>.</p>
@@ -514,6 +527,43 @@
 <tr><td>2</td><td><code>policy_revision</code></td><td><code>string</code></td><td>optional · omitted when absent</td><td>—</td></tr>
 <tr><td>3</td><td><code>source</code></td><td><code>DecisionSource</code></td><td>optional · omitted when absent</td><td>—</td></tr>
 <tr><td>4</td><td><code>default_name</code></td><td><code>string</code></td><td>optional · omitted when absent</td><td>—</td></tr>
+</tbody></table></div>
+<h3 id="struct-PolicyChange"><code>PolicyChange</code></h3>
+<p class="meta">unknown fields <code>refuse</code></p>
+<div class="wrap"><table>
+<thead><tr><th>id</th><th>field</th><th>type</th><th>presence</th><th>named elsewhere</th></tr></thead>
+<tbody>
+<tr><td>1</td><td><code>kind</code></td><td><code>ChangeKind</code></td><td>required</td><td>—</td></tr>
+<tr><td>2</td><td><code>expected_revision</code></td><td><code>string</code></td><td>required; length ..128 UTF-8 bytes; pattern no_control; refusal <code>bad_value</code></td><td>—</td></tr>
+<tr><td>3</td><td><code>rule</code></td><td><code>PolicyRule</code></td><td>optional · omitted when absent</td><td>—</td></tr>
+<tr><td>4</td><td><code>ttl_ms</code></td><td><code>i64</code></td><td>optional · omitted when zero; range 0..31536000000; refusal <code>bad_value</code></td><td>—</td></tr>
+<tr><td>5</td><td><code>why</code></td><td><code>string</code></td><td>optional · omitted when zero; length ..256 UTF-8 bytes; pattern no_control; refusal <code>bad_value</code></td><td>—</td></tr>
+<tr><td>6</td><td><code>name</code></td><td><code>string</code></td><td>optional · omitted when zero; length ..64 UTF-8 bytes; pattern no_control; refusal <code>bad_value</code></td><td>—</td></tr>
+<tr><td>7</td><td><code>on</code></td><td><code>bool</code></td><td>optional · omitted when zero</td><td>—</td></tr>
+<tr><td>8</td><td><code>action</code></td><td><code>string</code></td><td>optional · omitted when zero; length ..128 UTF-8 bytes; pattern no_control; refusal <code>bad_value</code></td><td>—</td></tr>
+<tr><td>9</td><td><code>program</code></td><td><code>string</code></td><td>optional · omitted when zero; length ..4096 UTF-8 bytes; pattern no_control; refusal <code>bad_value</code></td><td>—</td></tr>
+<tr><td>10</td><td><code>rules</code></td><td><code>list&lt;PolicyRule&gt;</code></td><td>optional · omitted when zero; length ..64 entries; refusal <code>bad_value</code></td><td>—</td></tr>
+<tr><td>11</td><td><code>address</code></td><td><code>string</code></td><td>optional · omitted when zero; length ..2048 UTF-8 bytes; pattern no_control; refusal <code>bad_value</code></td><td>—</td></tr>
+</tbody></table></div>
+<h3 id="struct-ChangeRequestState"><code>ChangeRequestState</code></h3>
+<p class="meta">unknown fields <code>refuse</code></p>
+<div class="wrap"><table>
+<thead><tr><th>id</th><th>field</th><th>type</th><th>presence</th><th>named elsewhere</th></tr></thead>
+<tbody>
+<tr><td>1</td><td><code>outcome</code></td><td><code>ChangeRequestOutcome</code></td><td>required</td><td>—</td></tr>
+<tr><td>2</td><td><code>id</code></td><td><code>string</code></td><td>required; length ..128 UTF-8 bytes; pattern no_control; refusal <code>bad_value</code></td><td>—</td></tr>
+<tr><td>3</td><td><code>revision</code></td><td><code>string</code></td><td>required; length ..128 UTF-8 bytes; pattern no_control; refusal <code>bad_value</code></td><td>—</td></tr>
+<tr><td>4</td><td><code>change</code></td><td><code>PolicyChange</code></td><td>optional · omitted when absent</td><td>—</td></tr>
+<tr><td>5</td><td><code>expires</code></td><td><code>string</code></td><td>required; length ..64 UTF-8 bytes; pattern no_control; refusal <code>bad_value</code></td><td>—</td></tr>
+<tr><td>6</td><td><code>exempt</code></td><td><code>bool</code></td><td>required</td><td>—</td></tr>
+</tbody></table></div>
+<h3 id="struct-ChangeRequestPage"><code>ChangeRequestPage</code></h3>
+<p class="meta">unknown fields <code>refuse</code></p>
+<div class="wrap"><table>
+<thead><tr><th>id</th><th>field</th><th>type</th><th>presence</th><th>named elsewhere</th></tr></thead>
+<tbody>
+<tr><td>1</td><td><code>outcome</code></td><td><code>PolicyPageOutcome</code></td><td>required</td><td>—</td></tr>
+<tr><td>2</td><td><code>requests</code></td><td><code>list&lt;ChangeRequestState&gt;</code></td><td>required; length ..64 entries; refusal <code>bad_value</code></td><td>—</td></tr>
 </tbody></table></div>
 <h3 id="struct-PermissionKey"><code>PermissionKey</code></h3>
 <p class="meta">unknown fields <code>refuse</code></p>
@@ -833,6 +883,33 @@
 <tr><td>4</td><td><code>account_default</code></td><td><code>account_default</code></td></tr>
 <tr><td>5</td><td><code>default_excluded</code></td><td><code>default_excluded</code></td></tr>
 </tbody></table></div>
+<h3 id="enum-ChangeKind"><code>ChangeKind</code></h3>
+<p class="meta">a member this reader does not know is <code>refuse</code></p>
+<div class="wrap"><table>
+<thead><tr><th>id</th><th>member</th><th>wire</th></tr></thead>
+<tbody>
+<tr><td>1</td><td><code>set_rule</code></td><td><code>set_rule</code></td></tr>
+<tr><td>2</td><td><code>revoke_rule</code></td><td><code>revoke_rule</code></td></tr>
+<tr><td>3</td><td><code>set_default</code></td><td><code>set_default</code></td></tr>
+<tr><td>4</td><td><code>register_action</code></td><td><code>register_action</code></td></tr>
+<tr><td>5</td><td><code>retire_action</code></td><td><code>retire_action</code></td></tr>
+<tr><td>6</td><td><code>declaration</code></td><td><code>declaration</code></td></tr>
+</tbody></table></div>
+<h3 id="enum-ChangeRequestOutcome"><code>ChangeRequestOutcome</code></h3>
+<p class="meta">a member this reader does not know is <code>refuse</code></p>
+<div class="wrap"><table>
+<thead><tr><th>id</th><th>member</th><th>wire</th></tr></thead>
+<tbody>
+<tr><td>1</td><td><code>applied</code></td><td><code>applied</code></td></tr>
+<tr><td>2</td><td><code>pending</code></td><td><code>pending</code></td></tr>
+<tr><td>3</td><td><code>refused</code></td><td><code>refused</code></td></tr>
+<tr><td>4</td><td><code>expired</code></td><td><code>expired</code></td></tr>
+<tr><td>5</td><td><code>conflict</code></td><td><code>conflict</code></td></tr>
+<tr><td>6</td><td><code>unknown</code></td><td><code>unknown</code></td></tr>
+<tr><td>7</td><td><code>invalid</code></td><td><code>invalid</code></td></tr>
+<tr><td>8</td><td><code>forbidden</code></td><td><code>forbidden</code></td></tr>
+<tr><td>9</td><td><code>unavailable</code></td><td><code>unavailable</code></td></tr>
+</tbody></table></div>
 <h3 id="enum-ResourceSelectorKind"><code>ResourceSelectorKind</code></h3>
 <p class="meta">a member this reader does not know is <code>refuse</code></p>
 <div class="wrap"><table>
@@ -883,6 +960,6 @@
 <footer>
 <p><a href="index.html">Overview</a> · <a href="cases.html">Cases</a> · <a href="reference.html">Reference</a> · <a href="evidence.html">Evidence</a> · <a href="coverage.html">Coverage</a> · <a href="adopt.html">Adopt</a> ·
 <a href="https://github.com/openabstractions">github.com/openabstractions</a></p>
-</footer>
+<a href="threat-model.html">Security</a></footer>
 </main>
 </html>

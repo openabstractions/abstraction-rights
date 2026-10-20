@@ -710,6 +710,133 @@ impl ::std::cmp::PartialEq<&str> for DecisionSource {
     }
 }
 
+/// The closed vocabulary ChangeKind. A reader refuses a name it does not list.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub enum ChangeKind {
+    SetRule,
+    RevokeRule,
+    SetDefault,
+    RegisterAction,
+    RetireAction,
+    Declaration,
+}
+
+impl ChangeKind {
+    /// Every member, in declaration order.
+    pub const ALL: [Self; 6] = [Self::SetRule, Self::RevokeRule, Self::SetDefault, Self::RegisterAction, Self::RetireAction, Self::Declaration];
+
+    /// The member's name on the wire.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::SetRule => "set_rule",
+            Self::RevokeRule => "revoke_rule",
+            Self::SetDefault => "set_default",
+            Self::RegisterAction => "register_action",
+            Self::RetireAction => "retire_action",
+            Self::Declaration => "declaration",
+        }
+    }
+
+    /// The member a wire name spells, or `None` for a name this vocabulary refuses.
+    pub fn from_wire(name: &str) -> ::std::option::Option<Self> {
+        match name {
+            "set_rule" => Some(Self::SetRule),
+            "revoke_rule" => Some(Self::RevokeRule),
+            "set_default" => Some(Self::SetDefault),
+            "register_action" => Some(Self::RegisterAction),
+            "retire_action" => Some(Self::RetireAction),
+            "declaration" => Some(Self::Declaration),
+            _ => None,
+        }
+    }
+}
+
+impl ::std::fmt::Display for ChangeKind {
+    fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+impl ::std::cmp::PartialEq<str> for ChangeKind {
+    fn eq(&self, other: &str) -> bool {
+        self.as_str() == other
+    }
+}
+
+impl ::std::cmp::PartialEq<&str> for ChangeKind {
+    fn eq(&self, other: &&str) -> bool {
+        self.as_str() == *other
+    }
+}
+
+/// The closed vocabulary ChangeRequestOutcome. A reader refuses a name it does not list.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub enum ChangeRequestOutcome {
+    Applied,
+    Pending,
+    Refused,
+    Expired,
+    Conflict,
+    Unknown,
+    Invalid,
+    Forbidden,
+    Unavailable,
+}
+
+impl ChangeRequestOutcome {
+    /// Every member, in declaration order.
+    pub const ALL: [Self; 9] = [Self::Applied, Self::Pending, Self::Refused, Self::Expired, Self::Conflict, Self::Unknown, Self::Invalid, Self::Forbidden, Self::Unavailable];
+
+    /// The member's name on the wire.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Applied => "applied",
+            Self::Pending => "pending",
+            Self::Refused => "refused",
+            Self::Expired => "expired",
+            Self::Conflict => "conflict",
+            Self::Unknown => "unknown",
+            Self::Invalid => "invalid",
+            Self::Forbidden => "forbidden",
+            Self::Unavailable => "unavailable",
+        }
+    }
+
+    /// The member a wire name spells, or `None` for a name this vocabulary refuses.
+    pub fn from_wire(name: &str) -> ::std::option::Option<Self> {
+        match name {
+            "applied" => Some(Self::Applied),
+            "pending" => Some(Self::Pending),
+            "refused" => Some(Self::Refused),
+            "expired" => Some(Self::Expired),
+            "conflict" => Some(Self::Conflict),
+            "unknown" => Some(Self::Unknown),
+            "invalid" => Some(Self::Invalid),
+            "forbidden" => Some(Self::Forbidden),
+            "unavailable" => Some(Self::Unavailable),
+            _ => None,
+        }
+    }
+}
+
+impl ::std::fmt::Display for ChangeRequestOutcome {
+    fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+impl ::std::cmp::PartialEq<str> for ChangeRequestOutcome {
+    fn eq(&self, other: &str) -> bool {
+        self.as_str() == other
+    }
+}
+
+impl ::std::cmp::PartialEq<&str> for ChangeRequestOutcome {
+    fn eq(&self, other: &&str) -> bool {
+        self.as_str() == *other
+    }
+}
+
 /// The closed vocabulary ResourceSelectorKind. A reader refuses a name it does not list.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum ResourceSelectorKind {
@@ -1231,6 +1358,60 @@ pub struct DecisionExplanation {
     pub default_name: ::std::string::String,
 }
 
+/// One typed rights change an operator program requests (RIGHTS-O17). set_rule
+/// carries rule, and optionally ttl_ms and why with SetRuleFor's bounds;
+/// revoke_rule carries rule, whose permit is ignored; set_default carries name
+/// and on; register_action and retire_action carry action. declaration is a
+/// provider declaration or inference host add the registry or inference service
+/// admitted for the caller: name is the declared name, program its program
+/// (empty for a hosted server), address the server address it reaches (a hosted
+/// server's base URL or a remote runtime's endpoint; empty for a local program)
+/// and rules the exact rule set it writes on Allow; RequestChange refuses it as
+/// invalid. Other fields are absent. An empty expected_revision applies at the
+/// policy revision current when the change is applied; a nonempty one conflicts
+/// when the policy changed. The request is never free text: the service words
+/// the person's question from its own catalogue.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct PolicyChange {
+    pub kind: ChangeKind,
+    pub expected_revision: ::std::string::String,
+    pub rule: ::std::option::Option<PolicyRule>,
+    pub ttl_ms: i64,
+    pub why: ::std::string::String,
+    pub name: ::std::string::String,
+    pub on: bool,
+    pub action: ::std::string::String,
+    pub program: ::std::string::String,
+    pub rules: ::std::vec::Vec<PolicyRule>,
+    pub address: ::std::string::String,
+}
+
+/// One change request as the service holds it (RIGHTS-O17). pending waits for
+/// the person's answer in the service's popup until expires, a UTC RFC 3339
+/// instant ten minutes after the request. applied means the service applied
+/// exactly this change, once, and carries the policy revision after it; exempt
+/// marks a change applied without a question for an elevated caller. refused is
+/// the person's Not now; expired is a request nobody answered in time, which
+/// changes nothing; conflict is an expected revision the policy no longer had.
+/// unknown, invalid, forbidden and unavailable carry no id, change or revision.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ChangeRequestState {
+    pub outcome: ChangeRequestOutcome,
+    pub id: ::std::string::String,
+    pub revision: ::std::string::String,
+    pub change: ::std::option::Option<PolicyChange>,
+    pub expires: ::std::string::String,
+    pub exempt: bool,
+}
+
+/// The requests this operator program made that the service still holds, newest
+/// first, at most 64. Refusals carry none.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ChangeRequestPage {
+    pub outcome: PolicyPageOutcome,
+    pub requests: ::std::vec::Vec<ChangeRequestState>,
+}
+
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct PermissionKey {
     pub action: ::std::string::String,
@@ -1550,6 +1731,22 @@ struct OAAuthorizationOperatorExplainForArguments {
 struct OAAuthorizationOperatorListDefaultsArguments {
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct OAAuthorizationOperatorRequestChangeArguments {
+    change: PolicyChange,
+    wait_ms: i64,
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+struct OAAuthorizationOperatorObserveChangeRequestArguments {
+    id: ::std::string::String,
+    wait_ms: i64,
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+struct OAAuthorizationOperatorListChangeRequestsArguments {
+}
+
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 struct OAAuthorizationOperatorSetDefaultArguments {
     expected_revision: ::std::string::String,
@@ -1758,6 +1955,21 @@ struct OAAuthorizationOperatorExplainForResult {
 #[derive(Clone, Debug, PartialEq, Eq)]
 struct OAAuthorizationOperatorListDefaultsResult {
     value: DefaultPage,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct OAAuthorizationOperatorRequestChangeResult {
+    value: ChangeRequestState,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct OAAuthorizationOperatorObserveChangeRequestResult {
+    value: ChangeRequestState,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct OAAuthorizationOperatorListChangeRequestsResult {
+    value: ChangeRequestPage,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -2792,6 +3004,190 @@ fn enc_decision_explanation(out: &mut ::std::vec::Vec<u8>, v: &DecisionExplanati
     out.push(b'}');
 }
 
+fn enc_policy_change(out: &mut ::std::vec::Vec<u8>, v: &PolicyChange, depth: i32) {
+    let n = v.expected_revision.len();
+    if n > 128 { std::panic::panic_any(Refusal{word:"bad_value",offset:0}); }
+    if v.expected_revision.chars().any(char::is_control) { std::panic::panic_any(Refusal{word:"bad_value",offset:0}); }
+    if !(0..=31536000000).contains(&v.ttl_ms) { std::panic::panic_any(Refusal{word:"bad_value",offset:0}); }
+    let n = v.why.len();
+    if n > 256 { std::panic::panic_any(Refusal{word:"bad_value",offset:0}); }
+    if v.why.chars().any(char::is_control) { std::panic::panic_any(Refusal{word:"bad_value",offset:0}); }
+    let n = v.name.len();
+    if n > 64 { std::panic::panic_any(Refusal{word:"bad_value",offset:0}); }
+    if v.name.chars().any(char::is_control) { std::panic::panic_any(Refusal{word:"bad_value",offset:0}); }
+    let n = v.action.len();
+    if n > 128 { std::panic::panic_any(Refusal{word:"bad_value",offset:0}); }
+    if v.action.chars().any(char::is_control) { std::panic::panic_any(Refusal{word:"bad_value",offset:0}); }
+    let n = v.program.len();
+    if n > 4096 { std::panic::panic_any(Refusal{word:"bad_value",offset:0}); }
+    if v.program.chars().any(char::is_control) { std::panic::panic_any(Refusal{word:"bad_value",offset:0}); }
+    let n = v.rules.len();
+    if n > 64 { std::panic::panic_any(Refusal{word:"bad_value",offset:0}); }
+    let n = v.address.len();
+    if n > 2048 { std::panic::panic_any(Refusal{word:"bad_value",offset:0}); }
+    if v.address.chars().any(char::is_control) { std::panic::panic_any(Refusal{word:"bad_value",offset:0}); }
+    out.push(b'{');
+    out.push(b'\n');
+    pad(out, depth + 1);
+    esc(out, "kind");
+    out.extend_from_slice(b": ");
+    esc(out, v.kind.as_str());
+    out.push(b',');
+    out.push(b'\n');
+    pad(out, depth + 1);
+    esc(out, "expected_revision");
+    out.extend_from_slice(b": ");
+    esc(out, &v.expected_revision);
+    if let Some(value) = &v.rule {
+        out.push(b',');
+        out.push(b'\n');
+        pad(out, depth + 1);
+        esc(out, "rule");
+        out.extend_from_slice(b": ");
+        enc_policy_rule(out, value, depth + 1);
+    }
+    if v.ttl_ms != 0 {
+        out.push(b',');
+        out.push(b'\n');
+        pad(out, depth + 1);
+        esc(out, "ttl_ms");
+        out.extend_from_slice(b": ");
+        num(out, v.ttl_ms);
+    }
+    if !v.why.is_empty() {
+        out.push(b',');
+        out.push(b'\n');
+        pad(out, depth + 1);
+        esc(out, "why");
+        out.extend_from_slice(b": ");
+        esc(out, &v.why);
+    }
+    if !v.name.is_empty() {
+        out.push(b',');
+        out.push(b'\n');
+        pad(out, depth + 1);
+        esc(out, "name");
+        out.extend_from_slice(b": ");
+        esc(out, &v.name);
+    }
+    if v.on {
+        out.push(b',');
+        out.push(b'\n');
+        pad(out, depth + 1);
+        esc(out, "on");
+        out.extend_from_slice(b": ");
+        out.extend_from_slice(if v.on { b"true" } else { b"false" });
+    }
+    if !v.action.is_empty() {
+        out.push(b',');
+        out.push(b'\n');
+        pad(out, depth + 1);
+        esc(out, "action");
+        out.extend_from_slice(b": ");
+        esc(out, &v.action);
+    }
+    if !v.program.is_empty() {
+        out.push(b',');
+        out.push(b'\n');
+        pad(out, depth + 1);
+        esc(out, "program");
+        out.extend_from_slice(b": ");
+        esc(out, &v.program);
+    }
+    if !v.rules.is_empty() {
+        out.push(b',');
+        out.push(b'\n');
+        pad(out, depth + 1);
+        esc(out, "rules");
+        out.extend_from_slice(b": ");
+        enc_list(out, &v.rules, depth + 1, enc_policy_rule);
+    }
+    if !v.address.is_empty() {
+        out.push(b',');
+        out.push(b'\n');
+        pad(out, depth + 1);
+        esc(out, "address");
+        out.extend_from_slice(b": ");
+        esc(out, &v.address);
+    }
+    out.push(b'\n');
+    pad(out, depth);
+    out.push(b'}');
+}
+
+fn enc_change_request_state(out: &mut ::std::vec::Vec<u8>, v: &ChangeRequestState, depth: i32) {
+    let n = v.id.len();
+    if n > 128 { std::panic::panic_any(Refusal{word:"bad_value",offset:0}); }
+    if v.id.chars().any(char::is_control) { std::panic::panic_any(Refusal{word:"bad_value",offset:0}); }
+    let n = v.revision.len();
+    if n > 128 { std::panic::panic_any(Refusal{word:"bad_value",offset:0}); }
+    if v.revision.chars().any(char::is_control) { std::panic::panic_any(Refusal{word:"bad_value",offset:0}); }
+    let n = v.expires.len();
+    if n > 64 { std::panic::panic_any(Refusal{word:"bad_value",offset:0}); }
+    if v.expires.chars().any(char::is_control) { std::panic::panic_any(Refusal{word:"bad_value",offset:0}); }
+    out.push(b'{');
+    out.push(b'\n');
+    pad(out, depth + 1);
+    esc(out, "outcome");
+    out.extend_from_slice(b": ");
+    esc(out, v.outcome.as_str());
+    out.push(b',');
+    out.push(b'\n');
+    pad(out, depth + 1);
+    esc(out, "id");
+    out.extend_from_slice(b": ");
+    esc(out, &v.id);
+    out.push(b',');
+    out.push(b'\n');
+    pad(out, depth + 1);
+    esc(out, "revision");
+    out.extend_from_slice(b": ");
+    esc(out, &v.revision);
+    if let Some(value) = &v.change {
+        out.push(b',');
+        out.push(b'\n');
+        pad(out, depth + 1);
+        esc(out, "change");
+        out.extend_from_slice(b": ");
+        enc_policy_change(out, value, depth + 1);
+    }
+    out.push(b',');
+    out.push(b'\n');
+    pad(out, depth + 1);
+    esc(out, "expires");
+    out.extend_from_slice(b": ");
+    esc(out, &v.expires);
+    out.push(b',');
+    out.push(b'\n');
+    pad(out, depth + 1);
+    esc(out, "exempt");
+    out.extend_from_slice(b": ");
+    out.extend_from_slice(if v.exempt { b"true" } else { b"false" });
+    out.push(b'\n');
+    pad(out, depth);
+    out.push(b'}');
+}
+
+fn enc_change_request_page(out: &mut ::std::vec::Vec<u8>, v: &ChangeRequestPage, depth: i32) {
+    let n = v.requests.len();
+    if n > 64 { std::panic::panic_any(Refusal{word:"bad_value",offset:0}); }
+    out.push(b'{');
+    out.push(b'\n');
+    pad(out, depth + 1);
+    esc(out, "outcome");
+    out.extend_from_slice(b": ");
+    esc(out, v.outcome.as_str());
+    out.push(b',');
+    out.push(b'\n');
+    pad(out, depth + 1);
+    esc(out, "requests");
+    out.extend_from_slice(b": ");
+    enc_list(out, &v.requests, depth + 1, enc_change_request_state);
+    out.push(b'\n');
+    pad(out, depth);
+    out.push(b'}');
+}
+
 fn enc_permission_key(out: &mut ::std::vec::Vec<u8>, v: &PermissionKey, depth: i32) {
     out.push(b'{');
     out.push(b'\n');
@@ -3803,6 +4199,52 @@ fn enc_oa_authorization_operator_explain_for_arguments(out: &mut ::std::vec::Vec
 }
 
 fn enc_oa_authorization_operator_list_defaults_arguments(out: &mut ::std::vec::Vec<u8>, _v: &OAAuthorizationOperatorListDefaultsArguments, _depth: i32) {
+    out.push(b'{');
+    out.push(b'}');
+}
+
+fn enc_oa_authorization_operator_request_change_arguments(out: &mut ::std::vec::Vec<u8>, v: &OAAuthorizationOperatorRequestChangeArguments, depth: i32) {
+    if !(0..=30000).contains(&v.wait_ms) { std::panic::panic_any(Refusal{word:"bad_value",offset:0}); }
+    out.push(b'{');
+    out.push(b'\n');
+    pad(out, depth + 1);
+    esc(out, "change");
+    out.extend_from_slice(b": ");
+    enc_policy_change(out, &v.change, depth + 1);
+    out.push(b',');
+    out.push(b'\n');
+    pad(out, depth + 1);
+    esc(out, "wait_ms");
+    out.extend_from_slice(b": ");
+    num(out, v.wait_ms);
+    out.push(b'\n');
+    pad(out, depth);
+    out.push(b'}');
+}
+
+fn enc_oa_authorization_operator_observe_change_request_arguments(out: &mut ::std::vec::Vec<u8>, v: &OAAuthorizationOperatorObserveChangeRequestArguments, depth: i32) {
+    let n = v.id.len();
+    if !(1..=128).contains(&n) { std::panic::panic_any(Refusal{word:"bad_value",offset:0}); }
+    if v.id.chars().any(char::is_control) { std::panic::panic_any(Refusal{word:"bad_value",offset:0}); }
+    if !(0..=30000).contains(&v.wait_ms) { std::panic::panic_any(Refusal{word:"bad_value",offset:0}); }
+    out.push(b'{');
+    out.push(b'\n');
+    pad(out, depth + 1);
+    esc(out, "id");
+    out.extend_from_slice(b": ");
+    esc(out, &v.id);
+    out.push(b',');
+    out.push(b'\n');
+    pad(out, depth + 1);
+    esc(out, "wait_ms");
+    out.extend_from_slice(b": ");
+    num(out, v.wait_ms);
+    out.push(b'\n');
+    pad(out, depth);
+    out.push(b'}');
+}
+
+fn enc_oa_authorization_operator_list_change_requests_arguments(out: &mut ::std::vec::Vec<u8>, _v: &OAAuthorizationOperatorListChangeRequestsArguments, _depth: i32) {
     out.push(b'{');
     out.push(b'}');
 }
@@ -6823,6 +7265,353 @@ fn decode_decision_explanation(r: &mut Reader) -> ::std::result::Result<Decision
     })
 }
 
+fn decode_policy_change(r: &mut Reader) -> ::std::result::Result<PolicyChange, Refusal> {
+    if r.at() != b'{' {
+        return r.refuse("wrong_type");
+    }
+    r.enter()?;
+    r.pos += 1;
+    let mut field_kind: ::std::option::Option<::std::string::String> = None;
+    let mut field_expected_revision: ::std::string::String = ::std::default::Default::default();
+    let mut field_rule: ::std::option::Option<PolicyRule> = None;
+    let mut field_ttl_ms: i64 = ::std::default::Default::default();
+    let mut field_why: ::std::string::String = ::std::default::Default::default();
+    let mut field_name: ::std::string::String = ::std::default::Default::default();
+    let mut field_on: bool = ::std::default::Default::default();
+    let mut field_action: ::std::string::String = ::std::default::Default::default();
+    let mut field_program: ::std::string::String = ::std::default::Default::default();
+    let mut field_rules: ::std::vec::Vec<PolicyRule> = ::std::default::Default::default();
+    let mut field_address: ::std::string::String = ::std::default::Default::default();
+    let mut seen: u32 = 0;
+    r.skip_ws();
+    if r.at() != b'}' {
+        loop {
+            r.skip_ws();
+            if r.at() != b'"' {
+                return r.refuse("malformed");
+            }
+            let key = r.string()?;
+            r.skip_ws();
+            if r.at() != b':' {
+                return r.refuse("malformed");
+            }
+            r.pos += 1;
+            r.skip_ws();
+            match key.as_str() {
+                "kind" => {
+                    if seen & 1 != 0 {
+                        return r.refuse("duplicate_field");
+                    }
+                    seen |= 1;
+                    field_kind = Some(r.string()?);
+                }
+                "expected_revision" => {
+                    if seen & 2 != 0 {
+                        return r.refuse("duplicate_field");
+                    }
+                    seen |= 2;
+                    field_expected_revision = r.string()?;
+                }
+                "rule" => {
+                    if seen & 4 != 0 {
+                        return r.refuse("duplicate_field");
+                    }
+                    seen |= 4;
+                    field_rule = Some(decode_policy_rule(r)?);
+                }
+                "ttl_ms" => {
+                    if seen & 8 != 0 {
+                        return r.refuse("duplicate_field");
+                    }
+                    seen |= 8;
+                    field_ttl_ms = r.integer(i64::MIN, i64::MAX)?;
+                }
+                "why" => {
+                    if seen & 16 != 0 {
+                        return r.refuse("duplicate_field");
+                    }
+                    seen |= 16;
+                    field_why = r.string()?;
+                }
+                "name" => {
+                    if seen & 32 != 0 {
+                        return r.refuse("duplicate_field");
+                    }
+                    seen |= 32;
+                    field_name = r.string()?;
+                }
+                "on" => {
+                    if seen & 64 != 0 {
+                        return r.refuse("duplicate_field");
+                    }
+                    seen |= 64;
+                    field_on = r.boolean()?;
+                }
+                "action" => {
+                    if seen & 128 != 0 {
+                        return r.refuse("duplicate_field");
+                    }
+                    seen |= 128;
+                    field_action = r.string()?;
+                }
+                "program" => {
+                    if seen & 256 != 0 {
+                        return r.refuse("duplicate_field");
+                    }
+                    seen |= 256;
+                    field_program = r.string()?;
+                }
+                "rules" => {
+                    if seen & 512 != 0 {
+                        return r.refuse("duplicate_field");
+                    }
+                    seen |= 512;
+                    field_rules = decode_list(r, decode_policy_rule)?;
+                }
+                "address" => {
+                    if seen & 1024 != 0 {
+                        return r.refuse("duplicate_field");
+                    }
+                    seen |= 1024;
+                    field_address = r.string()?;
+                }
+                _ => {
+                    return r.refuse("unknown_field");
+                }
+            }
+            r.skip_ws();
+            if r.at() != b',' {
+                break;
+            }
+            r.pos += 1;
+        }
+    }
+    if r.at() != b'}' {
+        return r.refuse("malformed");
+    }
+    r.pos += 1;
+    r.depth -= 1;
+    if seen & 3 != 3 {
+        return r.refuse("missing_field");
+    }
+    let n = field_expected_revision.len();
+    if n > 128 { return r.refuse("bad_value"); }
+    if field_expected_revision.chars().any(char::is_control) { return r.refuse("bad_value"); }
+    if !(0..=31536000000).contains(&field_ttl_ms) { return r.refuse("bad_value"); }
+    let n = field_why.len();
+    if n > 256 { return r.refuse("bad_value"); }
+    if field_why.chars().any(char::is_control) { return r.refuse("bad_value"); }
+    let n = field_name.len();
+    if n > 64 { return r.refuse("bad_value"); }
+    if field_name.chars().any(char::is_control) { return r.refuse("bad_value"); }
+    let n = field_action.len();
+    if n > 128 { return r.refuse("bad_value"); }
+    if field_action.chars().any(char::is_control) { return r.refuse("bad_value"); }
+    let n = field_program.len();
+    if n > 4096 { return r.refuse("bad_value"); }
+    if field_program.chars().any(char::is_control) { return r.refuse("bad_value"); }
+    let n = field_rules.len();
+    if n > 64 { return r.refuse("bad_value"); }
+    let n = field_address.len();
+    if n > 2048 { return r.refuse("bad_value"); }
+    if field_address.chars().any(char::is_control) { return r.refuse("bad_value"); }
+    let Some(field_kind) = field_kind.as_deref().and_then(ChangeKind::from_wire) else {
+        return r.refuse("bad_enum");
+    };
+    Ok(PolicyChange {
+        kind: field_kind,
+        expected_revision: field_expected_revision,
+        rule: field_rule,
+        ttl_ms: field_ttl_ms,
+        why: field_why,
+        name: field_name,
+        on: field_on,
+        action: field_action,
+        program: field_program,
+        rules: field_rules,
+        address: field_address,
+    })
+}
+
+fn decode_change_request_state(r: &mut Reader) -> ::std::result::Result<ChangeRequestState, Refusal> {
+    if r.at() != b'{' {
+        return r.refuse("wrong_type");
+    }
+    r.enter()?;
+    r.pos += 1;
+    let mut field_outcome: ::std::option::Option<::std::string::String> = None;
+    let mut field_id: ::std::string::String = ::std::default::Default::default();
+    let mut field_revision: ::std::string::String = ::std::default::Default::default();
+    let mut field_change: ::std::option::Option<PolicyChange> = None;
+    let mut field_expires: ::std::string::String = ::std::default::Default::default();
+    let mut field_exempt: bool = ::std::default::Default::default();
+    let mut seen: u32 = 0;
+    r.skip_ws();
+    if r.at() != b'}' {
+        loop {
+            r.skip_ws();
+            if r.at() != b'"' {
+                return r.refuse("malformed");
+            }
+            let key = r.string()?;
+            r.skip_ws();
+            if r.at() != b':' {
+                return r.refuse("malformed");
+            }
+            r.pos += 1;
+            r.skip_ws();
+            match key.as_str() {
+                "outcome" => {
+                    if seen & 1 != 0 {
+                        return r.refuse("duplicate_field");
+                    }
+                    seen |= 1;
+                    field_outcome = Some(r.string()?);
+                }
+                "id" => {
+                    if seen & 2 != 0 {
+                        return r.refuse("duplicate_field");
+                    }
+                    seen |= 2;
+                    field_id = r.string()?;
+                }
+                "revision" => {
+                    if seen & 4 != 0 {
+                        return r.refuse("duplicate_field");
+                    }
+                    seen |= 4;
+                    field_revision = r.string()?;
+                }
+                "change" => {
+                    if seen & 8 != 0 {
+                        return r.refuse("duplicate_field");
+                    }
+                    seen |= 8;
+                    field_change = Some(decode_policy_change(r)?);
+                }
+                "expires" => {
+                    if seen & 16 != 0 {
+                        return r.refuse("duplicate_field");
+                    }
+                    seen |= 16;
+                    field_expires = r.string()?;
+                }
+                "exempt" => {
+                    if seen & 32 != 0 {
+                        return r.refuse("duplicate_field");
+                    }
+                    seen |= 32;
+                    field_exempt = r.boolean()?;
+                }
+                _ => {
+                    return r.refuse("unknown_field");
+                }
+            }
+            r.skip_ws();
+            if r.at() != b',' {
+                break;
+            }
+            r.pos += 1;
+        }
+    }
+    if r.at() != b'}' {
+        return r.refuse("malformed");
+    }
+    r.pos += 1;
+    r.depth -= 1;
+    if seen & 55 != 55 {
+        return r.refuse("missing_field");
+    }
+    let n = field_id.len();
+    if n > 128 { return r.refuse("bad_value"); }
+    if field_id.chars().any(char::is_control) { return r.refuse("bad_value"); }
+    let n = field_revision.len();
+    if n > 128 { return r.refuse("bad_value"); }
+    if field_revision.chars().any(char::is_control) { return r.refuse("bad_value"); }
+    let n = field_expires.len();
+    if n > 64 { return r.refuse("bad_value"); }
+    if field_expires.chars().any(char::is_control) { return r.refuse("bad_value"); }
+    let Some(field_outcome) = field_outcome.as_deref().and_then(ChangeRequestOutcome::from_wire) else {
+        return r.refuse("bad_enum");
+    };
+    Ok(ChangeRequestState {
+        outcome: field_outcome,
+        id: field_id,
+        revision: field_revision,
+        change: field_change,
+        expires: field_expires,
+        exempt: field_exempt,
+    })
+}
+
+fn decode_change_request_page(r: &mut Reader) -> ::std::result::Result<ChangeRequestPage, Refusal> {
+    if r.at() != b'{' {
+        return r.refuse("wrong_type");
+    }
+    r.enter()?;
+    r.pos += 1;
+    let mut field_outcome: ::std::option::Option<::std::string::String> = None;
+    let mut field_requests: ::std::vec::Vec<ChangeRequestState> = ::std::default::Default::default();
+    let mut seen: u32 = 0;
+    r.skip_ws();
+    if r.at() != b'}' {
+        loop {
+            r.skip_ws();
+            if r.at() != b'"' {
+                return r.refuse("malformed");
+            }
+            let key = r.string()?;
+            r.skip_ws();
+            if r.at() != b':' {
+                return r.refuse("malformed");
+            }
+            r.pos += 1;
+            r.skip_ws();
+            match key.as_str() {
+                "outcome" => {
+                    if seen & 1 != 0 {
+                        return r.refuse("duplicate_field");
+                    }
+                    seen |= 1;
+                    field_outcome = Some(r.string()?);
+                }
+                "requests" => {
+                    if seen & 2 != 0 {
+                        return r.refuse("duplicate_field");
+                    }
+                    seen |= 2;
+                    field_requests = decode_list(r, decode_change_request_state)?;
+                }
+                _ => {
+                    return r.refuse("unknown_field");
+                }
+            }
+            r.skip_ws();
+            if r.at() != b',' {
+                break;
+            }
+            r.pos += 1;
+        }
+    }
+    if r.at() != b'}' {
+        return r.refuse("malformed");
+    }
+    r.pos += 1;
+    r.depth -= 1;
+    if seen & 3 != 3 {
+        return r.refuse("missing_field");
+    }
+    let n = field_requests.len();
+    if n > 64 { return r.refuse("bad_value"); }
+    let Some(field_outcome) = field_outcome.as_deref().and_then(PolicyPageOutcome::from_wire) else {
+        return r.refuse("bad_enum");
+    };
+    Ok(ChangeRequestPage {
+        outcome: field_outcome,
+        requests: field_requests,
+    })
+}
+
 fn decode_permission_key(r: &mut Reader) -> ::std::result::Result<PermissionKey, Refusal> {
     if r.at() != b'{' {
         return r.refuse("wrong_type");
@@ -9722,6 +10511,166 @@ fn decode_oa_authorization_operator_list_defaults_arguments(r: &mut Reader) -> :
     Ok(OAAuthorizationOperatorListDefaultsArguments {})
 }
 
+fn decode_oa_authorization_operator_request_change_arguments(r: &mut Reader) -> ::std::result::Result<OAAuthorizationOperatorRequestChangeArguments, Refusal> {
+    if r.at() != b'{' {
+        return r.refuse("wrong_type");
+    }
+    r.enter()?;
+    r.pos += 1;
+    let mut field_change: ::std::option::Option<PolicyChange> = None;
+    let mut field_wait_ms: i64 = ::std::default::Default::default();
+    let mut seen: u32 = 0;
+    r.skip_ws();
+    if r.at() != b'}' {
+        loop {
+            r.skip_ws();
+            if r.at() != b'"' {
+                return r.refuse("malformed");
+            }
+            let key = r.string()?;
+            r.skip_ws();
+            if r.at() != b':' {
+                return r.refuse("malformed");
+            }
+            r.pos += 1;
+            r.skip_ws();
+            match key.as_str() {
+                "change" => {
+                    if seen & 1 != 0 {
+                        return r.refuse("duplicate_field");
+                    }
+                    seen |= 1;
+                    field_change = Some(decode_policy_change(r)?);
+                }
+                "wait_ms" => {
+                    if seen & 2 != 0 {
+                        return r.refuse("duplicate_field");
+                    }
+                    seen |= 2;
+                    field_wait_ms = r.integer(i64::MIN, i64::MAX)?;
+                }
+                _ => {
+                    return r.refuse("unknown_field");
+                }
+            }
+            r.skip_ws();
+            if r.at() != b',' {
+                break;
+            }
+            r.pos += 1;
+        }
+    }
+    if r.at() != b'}' {
+        return r.refuse("malformed");
+    }
+    r.pos += 1;
+    r.depth -= 1;
+    if seen & 3 != 3 {
+        return r.refuse("missing_field");
+    }
+    let Some(field_change) = field_change else {
+        return r.refuse("missing_field");
+    };
+    if !(0..=30000).contains(&field_wait_ms) { return r.refuse("bad_value"); }
+    Ok(OAAuthorizationOperatorRequestChangeArguments {
+        change: field_change,
+        wait_ms: field_wait_ms,
+    })
+}
+
+fn decode_oa_authorization_operator_observe_change_request_arguments(r: &mut Reader) -> ::std::result::Result<OAAuthorizationOperatorObserveChangeRequestArguments, Refusal> {
+    if r.at() != b'{' {
+        return r.refuse("wrong_type");
+    }
+    r.enter()?;
+    r.pos += 1;
+    let mut field_id: ::std::string::String = ::std::default::Default::default();
+    let mut field_wait_ms: i64 = ::std::default::Default::default();
+    let mut seen: u32 = 0;
+    r.skip_ws();
+    if r.at() != b'}' {
+        loop {
+            r.skip_ws();
+            if r.at() != b'"' {
+                return r.refuse("malformed");
+            }
+            let key = r.string()?;
+            r.skip_ws();
+            if r.at() != b':' {
+                return r.refuse("malformed");
+            }
+            r.pos += 1;
+            r.skip_ws();
+            match key.as_str() {
+                "id" => {
+                    if seen & 1 != 0 {
+                        return r.refuse("duplicate_field");
+                    }
+                    seen |= 1;
+                    field_id = r.string()?;
+                }
+                "wait_ms" => {
+                    if seen & 2 != 0 {
+                        return r.refuse("duplicate_field");
+                    }
+                    seen |= 2;
+                    field_wait_ms = r.integer(i64::MIN, i64::MAX)?;
+                }
+                _ => {
+                    return r.refuse("unknown_field");
+                }
+            }
+            r.skip_ws();
+            if r.at() != b',' {
+                break;
+            }
+            r.pos += 1;
+        }
+    }
+    if r.at() != b'}' {
+        return r.refuse("malformed");
+    }
+    r.pos += 1;
+    r.depth -= 1;
+    if seen & 3 != 3 {
+        return r.refuse("missing_field");
+    }
+    let n = field_id.len();
+    if !(1..=128).contains(&n) { return r.refuse("bad_value"); }
+    if field_id.chars().any(char::is_control) { return r.refuse("bad_value"); }
+    if !(0..=30000).contains(&field_wait_ms) { return r.refuse("bad_value"); }
+    Ok(OAAuthorizationOperatorObserveChangeRequestArguments {
+        id: field_id,
+        wait_ms: field_wait_ms,
+    })
+}
+
+fn decode_oa_authorization_operator_list_change_requests_arguments(r: &mut Reader) -> ::std::result::Result<OAAuthorizationOperatorListChangeRequestsArguments, Refusal> {
+    if r.at() != b'{' {
+        return r.refuse("wrong_type");
+    }
+    r.enter()?;
+    r.pos += 1;
+    r.skip_ws();
+    if r.at() != b'}' {
+        if r.at() != b'"' {
+            return r.refuse("malformed");
+        }
+        r.string()?;
+        r.skip_ws();
+        if r.at() != b':' {
+            return r.refuse("malformed");
+        }
+        return r.refuse("unknown_field");
+    }
+    if r.at() != b'}' {
+        return r.refuse("malformed");
+    }
+    r.pos += 1;
+    r.depth -= 1;
+    Ok(OAAuthorizationOperatorListChangeRequestsArguments {})
+}
+
 fn decode_oa_authorization_operator_set_default_arguments(r: &mut Reader) -> ::std::result::Result<OAAuthorizationOperatorSetDefaultArguments, Refusal> {
     if r.at() != b'{' {
         return r.refuse("wrong_type");
@@ -12005,6 +12954,177 @@ fn decode_oa_authorization_operator_list_defaults_result(r: &mut Reader) -> ::st
     })
 }
 
+fn decode_oa_authorization_operator_request_change_result(r: &mut Reader) -> ::std::result::Result<OAAuthorizationOperatorRequestChangeResult, Refusal> {
+    if r.at() != b'{' {
+        return r.refuse("wrong_type");
+    }
+    r.enter()?;
+    r.pos += 1;
+    let mut field_value: ::std::option::Option<ChangeRequestState> = None;
+    let mut seen: u32 = 0;
+    r.skip_ws();
+    if r.at() != b'}' {
+        loop {
+            r.skip_ws();
+            if r.at() != b'"' {
+                return r.refuse("malformed");
+            }
+            let key = r.string()?;
+            r.skip_ws();
+            if r.at() != b':' {
+                return r.refuse("malformed");
+            }
+            r.pos += 1;
+            r.skip_ws();
+            match key.as_str() {
+                "value" => {
+                    if seen & 1 != 0 {
+                        return r.refuse("duplicate_field");
+                    }
+                    seen |= 1;
+                    field_value = Some(decode_change_request_state(r)?);
+                }
+                _ => {
+                    return r.refuse("unknown_field");
+                }
+            }
+            r.skip_ws();
+            if r.at() != b',' {
+                break;
+            }
+            r.pos += 1;
+        }
+    }
+    if r.at() != b'}' {
+        return r.refuse("malformed");
+    }
+    r.pos += 1;
+    r.depth -= 1;
+    if seen & 1 != 1 {
+        return r.refuse("missing_field");
+    }
+    let Some(field_value) = field_value else {
+        return r.refuse("missing_field");
+    };
+    Ok(OAAuthorizationOperatorRequestChangeResult {
+        value: field_value,
+    })
+}
+
+fn decode_oa_authorization_operator_observe_change_request_result(r: &mut Reader) -> ::std::result::Result<OAAuthorizationOperatorObserveChangeRequestResult, Refusal> {
+    if r.at() != b'{' {
+        return r.refuse("wrong_type");
+    }
+    r.enter()?;
+    r.pos += 1;
+    let mut field_value: ::std::option::Option<ChangeRequestState> = None;
+    let mut seen: u32 = 0;
+    r.skip_ws();
+    if r.at() != b'}' {
+        loop {
+            r.skip_ws();
+            if r.at() != b'"' {
+                return r.refuse("malformed");
+            }
+            let key = r.string()?;
+            r.skip_ws();
+            if r.at() != b':' {
+                return r.refuse("malformed");
+            }
+            r.pos += 1;
+            r.skip_ws();
+            match key.as_str() {
+                "value" => {
+                    if seen & 1 != 0 {
+                        return r.refuse("duplicate_field");
+                    }
+                    seen |= 1;
+                    field_value = Some(decode_change_request_state(r)?);
+                }
+                _ => {
+                    return r.refuse("unknown_field");
+                }
+            }
+            r.skip_ws();
+            if r.at() != b',' {
+                break;
+            }
+            r.pos += 1;
+        }
+    }
+    if r.at() != b'}' {
+        return r.refuse("malformed");
+    }
+    r.pos += 1;
+    r.depth -= 1;
+    if seen & 1 != 1 {
+        return r.refuse("missing_field");
+    }
+    let Some(field_value) = field_value else {
+        return r.refuse("missing_field");
+    };
+    Ok(OAAuthorizationOperatorObserveChangeRequestResult {
+        value: field_value,
+    })
+}
+
+fn decode_oa_authorization_operator_list_change_requests_result(r: &mut Reader) -> ::std::result::Result<OAAuthorizationOperatorListChangeRequestsResult, Refusal> {
+    if r.at() != b'{' {
+        return r.refuse("wrong_type");
+    }
+    r.enter()?;
+    r.pos += 1;
+    let mut field_value: ::std::option::Option<ChangeRequestPage> = None;
+    let mut seen: u32 = 0;
+    r.skip_ws();
+    if r.at() != b'}' {
+        loop {
+            r.skip_ws();
+            if r.at() != b'"' {
+                return r.refuse("malformed");
+            }
+            let key = r.string()?;
+            r.skip_ws();
+            if r.at() != b':' {
+                return r.refuse("malformed");
+            }
+            r.pos += 1;
+            r.skip_ws();
+            match key.as_str() {
+                "value" => {
+                    if seen & 1 != 0 {
+                        return r.refuse("duplicate_field");
+                    }
+                    seen |= 1;
+                    field_value = Some(decode_change_request_page(r)?);
+                }
+                _ => {
+                    return r.refuse("unknown_field");
+                }
+            }
+            r.skip_ws();
+            if r.at() != b',' {
+                break;
+            }
+            r.pos += 1;
+        }
+    }
+    if r.at() != b'}' {
+        return r.refuse("malformed");
+    }
+    r.pos += 1;
+    r.depth -= 1;
+    if seen & 1 != 1 {
+        return r.refuse("missing_field");
+    }
+    let Some(field_value) = field_value else {
+        return r.refuse("missing_field");
+    };
+    Ok(OAAuthorizationOperatorListChangeRequestsResult {
+        value: field_value,
+    })
+}
+
 fn decode_oa_authorization_operator_set_default_result(r: &mut Reader) -> ::std::result::Result<OAAuthorizationOperatorSetDefaultResult, Refusal> {
     if r.at() != b'{' {
         return r.refuse("wrong_type");
@@ -13271,6 +14391,60 @@ impl JsonRecord for DecisionExplanation {
     }
 }
 
+impl JsonRecord for PolicyChange {
+    fn to_json(&self) -> ::std::vec::Vec<u8> {
+        let mut out = ::std::vec::Vec::new();
+        enc_policy_change(&mut out, self, 0);
+        out
+    }
+    fn from_json(data: &[u8]) -> ::std::result::Result<Self, Refusal> {
+        let mut r = Reader { buf: data, pos: 0, depth: 0, limit: DEPTH_LIMIT };
+        r.skip_ws();
+        let v = decode_policy_change(&mut r)?;
+        r.skip_ws();
+        if r.pos < r.buf.len() {
+            return r.refuse("trailing_bytes");
+        }
+        Ok(v)
+    }
+}
+
+impl JsonRecord for ChangeRequestState {
+    fn to_json(&self) -> ::std::vec::Vec<u8> {
+        let mut out = ::std::vec::Vec::new();
+        enc_change_request_state(&mut out, self, 0);
+        out
+    }
+    fn from_json(data: &[u8]) -> ::std::result::Result<Self, Refusal> {
+        let mut r = Reader { buf: data, pos: 0, depth: 0, limit: DEPTH_LIMIT };
+        r.skip_ws();
+        let v = decode_change_request_state(&mut r)?;
+        r.skip_ws();
+        if r.pos < r.buf.len() {
+            return r.refuse("trailing_bytes");
+        }
+        Ok(v)
+    }
+}
+
+impl JsonRecord for ChangeRequestPage {
+    fn to_json(&self) -> ::std::vec::Vec<u8> {
+        let mut out = ::std::vec::Vec::new();
+        enc_change_request_page(&mut out, self, 0);
+        out
+    }
+    fn from_json(data: &[u8]) -> ::std::result::Result<Self, Refusal> {
+        let mut r = Reader { buf: data, pos: 0, depth: 0, limit: DEPTH_LIMIT };
+        r.skip_ws();
+        let v = decode_change_request_page(&mut r)?;
+        r.skip_ws();
+        if r.pos < r.buf.len() {
+            return r.refuse("trailing_bytes");
+        }
+        Ok(v)
+    }
+}
+
 impl JsonRecord for PermissionKey {
     fn to_json(&self) -> ::std::vec::Vec<u8> {
         let mut out = ::std::vec::Vec::new();
@@ -13627,6 +14801,38 @@ fn service_check_action_description(v: &ActionDescription) -> ::std::result::Res
     Ok(())
 }
 
+fn service_check_policy_change(v: &PolicyChange) -> ::std::result::Result<(), Refusal> {
+    let r = Reader { buf: &[], pos: 0, depth: 0, limit: DEPTH_LIMIT };
+    let n = v.expected_revision.len();
+    if n > 128 { return r.refuse("bad_value"); }
+    if v.expected_revision.chars().any(char::is_control) { return r.refuse("bad_value"); }
+    if !(0..=31536000000).contains(&v.ttl_ms) { return r.refuse("bad_value"); }
+    let n = v.why.len();
+    if n > 256 { return r.refuse("bad_value"); }
+    if v.why.chars().any(char::is_control) { return r.refuse("bad_value"); }
+    let n = v.name.len();
+    if n > 64 { return r.refuse("bad_value"); }
+    if v.name.chars().any(char::is_control) { return r.refuse("bad_value"); }
+    let n = v.action.len();
+    if n > 128 { return r.refuse("bad_value"); }
+    if v.action.chars().any(char::is_control) { return r.refuse("bad_value"); }
+    let n = v.program.len();
+    if n > 4096 { return r.refuse("bad_value"); }
+    if v.program.chars().any(char::is_control) { return r.refuse("bad_value"); }
+    let n = v.rules.len();
+    if n > 64 { return r.refuse("bad_value"); }
+    let n = v.address.len();
+    if n > 2048 { return r.refuse("bad_value"); }
+    if v.address.chars().any(char::is_control) { return r.refuse("bad_value"); }
+    if let Some(value) = &v.rule {
+        service_check_policy_rule(value)?;
+    }
+    for value in &v.rules {
+        service_check_policy_rule(value)?;
+    }
+    Ok(())
+}
+
 fn service_check_permission_key(_v: &PermissionKey) -> ::std::result::Result<(), Refusal> {
     Ok(())
 }
@@ -13771,6 +14977,26 @@ fn service_check_oa_authorization_operator_explain_for_arguments(v: &OAAuthoriza
 }
 
 fn service_check_oa_authorization_operator_list_defaults_arguments(_v: &OAAuthorizationOperatorListDefaultsArguments) -> ::std::result::Result<(), Refusal> {
+    Ok(())
+}
+
+fn service_check_oa_authorization_operator_request_change_arguments(v: &OAAuthorizationOperatorRequestChangeArguments) -> ::std::result::Result<(), Refusal> {
+    let r = Reader { buf: &[], pos: 0, depth: 0, limit: DEPTH_LIMIT };
+    if !(0..=30000).contains(&v.wait_ms) { return r.refuse("bad_value"); }
+    service_check_policy_change(&v.change)?;
+    Ok(())
+}
+
+fn service_check_oa_authorization_operator_observe_change_request_arguments(v: &OAAuthorizationOperatorObserveChangeRequestArguments) -> ::std::result::Result<(), Refusal> {
+    let r = Reader { buf: &[], pos: 0, depth: 0, limit: DEPTH_LIMIT };
+    let n = v.id.len();
+    if !(1..=128).contains(&n) { return r.refuse("bad_value"); }
+    if v.id.chars().any(char::is_control) { return r.refuse("bad_value"); }
+    if !(0..=30000).contains(&v.wait_ms) { return r.refuse("bad_value"); }
+    Ok(())
+}
+
+fn service_check_oa_authorization_operator_list_change_requests_arguments(_v: &OAAuthorizationOperatorListChangeRequestsArguments) -> ::std::result::Result<(), Refusal> {
     Ok(())
 }
 
@@ -14146,6 +15372,25 @@ pub trait AuthorizationOperator {
     /// authorization, rechecked before returning. An earlier operator@1 service
     /// returns unknown_method.
     fn list_defaults(&self) -> ::std::result::Result<DefaultPage, Self::Error>;
+    /// Request one typed rights change (RIGHTS-O17). The Panel window applies
+    /// its changes through the direct methods. Any other operator program's
+    /// change becomes a pending request the person confirms in a person-only
+    /// popup the service words; the call waits up to wait_ms for the answer and
+    /// then returns pending with the request id. A request expires ten minutes
+    /// after it was made. Allow applies exactly that change, once. A caller
+    /// whose own connection-bound token is elevated is exempt while the
+    /// elevated-callers default is on: its change applies at once. Every
+    /// applied change writes an Activity line with Undo. An earlier operator@1
+    /// service returns unknown_method; a caller must not fall back to a direct
+    /// edit.
+    fn request_change(&self, change: PolicyChange, wait_ms: i64) -> ::std::result::Result<ChangeRequestState, Self::Error>;
+    /// Wait up to wait_ms for one request this operator program made to settle
+    /// and report its state (RIGHTS-O17). A request of another program, or one
+    /// the service no longer holds, is unknown.
+    fn observe_change_request(&self, id: ::std::string::String, wait_ms: i64) -> ::std::result::Result<ChangeRequestState, Self::Error>;
+    /// List the change requests this operator program made that the service
+    /// still holds (RIGHTS-O17).
+    fn list_change_requests(&self) -> ::std::result::Result<ChangeRequestPage, Self::Error>;
     /// Atomically compare the expected durable revision and turn one configured
     /// account-wide default on or off, recording the operator subject and
     /// service time. An unconfigured name is invalid. Authorization and
@@ -14531,6 +15776,78 @@ impl<T: FrameTransport> AuthorizationOperator for AuthorizationOperatorClient<T>
         Ok(result.value)
     }
 
+    fn request_change(&self, change: PolicyChange, wait_ms: i64) -> ::std::result::Result<ChangeRequestState, Self::Error> {
+        let args = OAAuthorizationOperatorRequestChangeArguments { change, wait_ms };
+        let arguments = service_encode(&args, service_check_oa_authorization_operator_request_change_arguments, enc_oa_authorization_operator_request_change_arguments, decode_oa_authorization_operator_request_change_arguments).map_err(CallError::Refusal)?;
+        let request = OAServiceFrame { version: 1, service: "abstraction.rights/operator@1".into(), method: "RequestChange".into(), arguments };
+        let frame = service_encode(&request, service_check_oa_service_frame, enc_oa_service_frame, decode_oa_service_frame).map_err(CallError::Refusal)?;
+        let reply = self.transport.exchange_frame(&frame).map_err(CallError::Transport)?;
+        let reply = service_decode(&reply, decode_oa_service_reply).map_err(CallError::Refusal)?;
+        if reply.version != 1 {
+            return Err(CallError::Dispatch("unknown_version"));
+        }
+        if reply.service != "abstraction.rights/operator@1" || reply.method != "RequestChange" {
+            return Err(CallError::Dispatch("mismatched_response"));
+        }
+        if !reply.ok {
+            let error = service_decode(&reply.payload, decode_oa_service_error).map_err(CallError::Refusal)?;
+            if error.code.is_empty() {
+                return Err(CallError::Dispatch("invalid_error"));
+            }
+            return Err(CallError::Service(ServiceError { code: error.code, message: error.message }));
+        }
+        let result = service_decode(&reply.payload, decode_oa_authorization_operator_request_change_result).map_err(CallError::Refusal)?;
+        Ok(result.value)
+    }
+
+    fn observe_change_request(&self, id: ::std::string::String, wait_ms: i64) -> ::std::result::Result<ChangeRequestState, Self::Error> {
+        let args = OAAuthorizationOperatorObserveChangeRequestArguments { id, wait_ms };
+        let arguments = service_encode(&args, service_check_oa_authorization_operator_observe_change_request_arguments, enc_oa_authorization_operator_observe_change_request_arguments, decode_oa_authorization_operator_observe_change_request_arguments).map_err(CallError::Refusal)?;
+        let request = OAServiceFrame { version: 1, service: "abstraction.rights/operator@1".into(), method: "ObserveChangeRequest".into(), arguments };
+        let frame = service_encode(&request, service_check_oa_service_frame, enc_oa_service_frame, decode_oa_service_frame).map_err(CallError::Refusal)?;
+        let reply = self.transport.exchange_frame(&frame).map_err(CallError::Transport)?;
+        let reply = service_decode(&reply, decode_oa_service_reply).map_err(CallError::Refusal)?;
+        if reply.version != 1 {
+            return Err(CallError::Dispatch("unknown_version"));
+        }
+        if reply.service != "abstraction.rights/operator@1" || reply.method != "ObserveChangeRequest" {
+            return Err(CallError::Dispatch("mismatched_response"));
+        }
+        if !reply.ok {
+            let error = service_decode(&reply.payload, decode_oa_service_error).map_err(CallError::Refusal)?;
+            if error.code.is_empty() {
+                return Err(CallError::Dispatch("invalid_error"));
+            }
+            return Err(CallError::Service(ServiceError { code: error.code, message: error.message }));
+        }
+        let result = service_decode(&reply.payload, decode_oa_authorization_operator_observe_change_request_result).map_err(CallError::Refusal)?;
+        Ok(result.value)
+    }
+
+    fn list_change_requests(&self) -> ::std::result::Result<ChangeRequestPage, Self::Error> {
+        let args = OAAuthorizationOperatorListChangeRequestsArguments {};
+        let arguments = service_encode(&args, service_check_oa_authorization_operator_list_change_requests_arguments, enc_oa_authorization_operator_list_change_requests_arguments, decode_oa_authorization_operator_list_change_requests_arguments).map_err(CallError::Refusal)?;
+        let request = OAServiceFrame { version: 1, service: "abstraction.rights/operator@1".into(), method: "ListChangeRequests".into(), arguments };
+        let frame = service_encode(&request, service_check_oa_service_frame, enc_oa_service_frame, decode_oa_service_frame).map_err(CallError::Refusal)?;
+        let reply = self.transport.exchange_frame(&frame).map_err(CallError::Transport)?;
+        let reply = service_decode(&reply, decode_oa_service_reply).map_err(CallError::Refusal)?;
+        if reply.version != 1 {
+            return Err(CallError::Dispatch("unknown_version"));
+        }
+        if reply.service != "abstraction.rights/operator@1" || reply.method != "ListChangeRequests" {
+            return Err(CallError::Dispatch("mismatched_response"));
+        }
+        if !reply.ok {
+            let error = service_decode(&reply.payload, decode_oa_service_error).map_err(CallError::Refusal)?;
+            if error.code.is_empty() {
+                return Err(CallError::Dispatch("invalid_error"));
+            }
+            return Err(CallError::Service(ServiceError { code: error.code, message: error.message }));
+        }
+        let result = service_decode(&reply.payload, decode_oa_authorization_operator_list_change_requests_result).map_err(CallError::Refusal)?;
+        Ok(result.value)
+    }
+
     fn set_default(&self, expected_revision: ::std::string::String, name: ::std::string::String, on: bool) -> ::std::result::Result<DefaultEdit, Self::Error> {
         let args = OAAuthorizationOperatorSetDefaultArguments { expected_revision, name, on };
         let arguments = service_encode(&args, service_check_oa_authorization_operator_set_default_arguments, enc_oa_authorization_operator_set_default_arguments, decode_oa_authorization_operator_set_default_arguments).map_err(CallError::Refusal)?;
@@ -14569,12 +15886,44 @@ impl<T: FrameTransport> AuthorizationOperatorClient<T> {
     }
 }
 
+/// Typed authorization: permissions keyed by action and resource profile,
+/// decided for One resources and All collections from one snapshot.
+/// authorization@1 decides exact action and resource strings; a program uses
+/// this service for typed selectors. The Go client type rights.Client serves
+/// both services: ResolveRights binds authorization@1 for Decide, DecideFor,
+/// DecideForAtLeastRevision, Require and ListActionDescriptions, and
+/// ResolveRightsSelector binds this service for ListPermissionDefinitions,
+/// ListPermissionBundles, CheckBatch, CheckBatchFor and
+/// CheckLegacyOperationFor. A method of the other service answers
+/// unknown_method.
 pub trait SelectorAuthorization {
     type Error;
+    /// List the typed permission definitions the catalogue serves: each action
+    /// with its resource profile and the selectors it supports. Callers of the
+    /// runtime's own account only. A page binds one policy revision; a cursor
+    /// from another revision reads gap.
     fn list_permission_definitions(&self, cursor: ::std::string::String, limit: i64) -> ::std::result::Result<PermissionDefinitionPage, Self::Error>;
+    /// List the named permission bundles an operator can apply as one consent,
+    /// each an immutable version with its member permissions. Callers of the
+    /// runtime's own account only. A page binds one policy revision.
     fn list_permission_bundles(&self, cursor: ::std::string::String, limit: i64) -> ::std::result::Result<PermissionBundlePage, Self::Error>;
+    /// Decide the calling program's own typed permissions for 1..256 resources
+    /// and an optional All collection admission, from one policy snapshot
+    /// (RIGHTS-R19). Each target is the owning capability's document for the
+    /// resource, which this service prepares; a caller supplies no captured
+    /// evidence. The result is advisory to the caller: a resource service
+    /// decides with CheckBatchFor. Asks nobody and writes nothing.
     fn check_batch(&self, request: CheckBatchRequest) -> ::std::result::Result<BatchDecision, Self::Error>;
+    /// Decide a subject's typed permissions as CheckBatch does. The receiving
+    /// host must designate the calling program as the enforcer of every
+    /// requested permission and of the collection admission; otherwise
+    /// forbidden. Subject and caller belong to the runtime's own account, and
+    /// subject is the enforcer's assertion. Asks nobody and writes nothing.
     fn check_batch_for(&self, subject: Subject, request: CheckBatchRequest) -> ::std::result::Result<BatchDecision, Self::Error>;
+    /// Decide one exact authorization@1 action and resource for a subject with
+    /// live typed blocks carried across known equivalence (RIGHTS-R20). The
+    /// caller enforces the legacy action, and the concrete operation when one
+    /// is supplied. It grants no typed permit.
     fn check_legacy_operation_for(&self, subject: Subject, request: LegacyOperationRequest) -> ::std::result::Result<Decision, Self::Error>;
 }
 
@@ -14722,13 +16071,37 @@ impl<T: FrameTransport> SelectorAuthorization for SelectorAuthorizationClient<T>
 /// original semantics.
 pub trait SelectorAuthorizationOperator {
     type Error;
+    /// List every typed rule with its setter, time, reason, expiry and bundle
+    /// origin. Operator programs only. A page binds one policy revision.
     fn list_selector_rules(&self, cursor: ::std::string::String, limit: i64) -> ::std::result::Result<SelectorRulePage, Self::Error>;
+    /// Read the one rule for a subject and an exact permission selection,
+    /// addressed by the selection's retained bytes with no new target
+    /// preparation. Operator programs only.
     fn read_selector_rule(&self, subject: Subject, selection: PermissionSelection) -> ::std::result::Result<SelectorRuleRead, Self::Error>;
+    /// Set one typed permit or block at expected_revision; a stale revision
+    /// conflicts. ttl_ms 0 keeps the rule until removed, and at most one year
+    /// bounds it. Replacing a row detaches its bundle origin (RIGHTS-O12). The
+    /// Panel window's edit only (RIGHTS-O17).
     fn set_selector_rule(&self, expected_revision: ::std::string::String, rule: SelectorRule, ttl_ms: i64, why: ::std::string::String) -> ::std::result::Result<SelectorEdit, Self::Error>;
+    /// Remove the rule for a subject and an exact permission selection at
+    /// expected_revision. The Panel window's edit only (RIGHTS-O17).
     fn remove_selector_rule(&self, expected_revision: ::std::string::String, subject: Subject, selection: PermissionSelection) -> ::std::result::Result<SelectorEdit, Self::Error>;
+    /// Expand one immutable bundle version into explicit permits for a subject,
+    /// atomically, with one setter and expiry and a retained bundle origin
+    /// (RIGHTS-O12). New members of a later version need new consent. The Panel
+    /// window's edit only (RIGHTS-O17).
     fn apply_bundle(&self, expected_revision: ::std::string::String, subject: Subject, bundle_ref: ::std::string::String, selector: ResourceSelector, ttl_ms: i64, why: ::std::string::String) -> ::std::result::Result<SelectorEdit, Self::Error>;
+    /// Remove a subject's rules that still carry bundle origin origin_id. Rows
+    /// replaced since keep their later independent edits. The Panel window's
+    /// edit only (RIGHTS-O17).
     fn remove_bundle(&self, expected_revision: ::std::string::String, subject: Subject, origin_id: ::std::string::String) -> ::std::result::Result<SelectorEdit, Self::Error>;
+    /// Write the typed effect pinned by the asks permission@1 question
+    /// question_id after an operator Allow on it. The effect comes from the
+    /// question, never from the caller. The Panel window and the Asks presenter
+    /// only (RIGHTS-O17). A revoked or expired occurrence refuses replay.
     fn apply_permission_allow(&self, expected_revision: ::std::string::String, question_id: ::std::string::String) -> ::std::result::Result<SelectorEdit, Self::Error>;
+    /// Remove the still-current rules that question_id's Allow wrote, keeping
+    /// later edits and blocks. The Panel window's edit only (RIGHTS-O17).
     fn undo_permission_effect(&self, expected_revision: ::std::string::String, question_id: ::std::string::String) -> ::std::result::Result<SelectorEdit, Self::Error>;
 }
 
@@ -16366,6 +17739,177 @@ pub fn decode_decision_explanation_document(data: &[u8]) -> ::std::result::Resul
     Ok(v)
 }
 
+fn named_encode_policy_change(v: &PolicyChange, depth: i32) -> ::std::result::Result<::std::vec::Vec<u8>, Refusal> {
+    match ::std::panic::catch_unwind(::std::panic::AssertUnwindSafe(|| {
+        let mut out = ::std::vec::Vec::new();
+        enc_policy_change(&mut out, v, depth);
+        out
+    })) {
+        Ok(out) => Ok(out),
+        Err(p) => match p.downcast::<Refusal>() {
+            Ok(e) => Err(*e),
+            Err(p) => ::std::panic::resume_unwind(p),
+        },
+    }
+}
+
+fn decode_policy_change_at(data: &[u8], depth: i32, limit: i32) -> ::std::result::Result<(PolicyChange, usize), Refusal> {
+    let mut r = Reader { buf: data, pos: 0, depth, limit: if limit < DEPTH_LIMIT { limit } else { DEPTH_LIMIT } };
+    if depth < 0 || limit < 1 {
+        return r.refuse("depth_exceeded");
+    }
+    r.skip_ws();
+    let v = decode_policy_change(&mut r)?;
+    Ok((v, r.pos))
+}
+
+fn check_policy_change(v: &PolicyChange, depth: i32, limit: i32) -> ::std::result::Result<(), Refusal> {
+    if depth < 0 || limit < 1 {
+        return Err(Refusal { word: "depth_exceeded", offset: 0 });
+    }
+    let out = named_encode_policy_change(v, depth)?;
+    decode_policy_change_at(&out, depth, limit).map(|_| ())
+}
+
+fn encode_policy_change_at(v: &PolicyChange, depth: i32) -> ::std::result::Result<::std::vec::Vec<u8>, Refusal> {
+    if !(0..DEPTH_LIMIT).contains(&depth) {
+        return Err(Refusal { word: "depth_exceeded", offset: 0 });
+    }
+    let out = named_encode_policy_change(v, depth)?;
+    decode_policy_change_at(&out, depth, DEPTH_LIMIT)?;
+    Ok(out)
+}
+
+pub fn encode_policy_change_document(v: &PolicyChange) -> ::std::result::Result<::std::vec::Vec<u8>, Refusal> {
+    let mut out = encode_policy_change_at(v, 0)?;
+    out.push(b'\n');
+    Ok(out)
+}
+
+pub fn decode_policy_change_document(data: &[u8]) -> ::std::result::Result<PolicyChange, Refusal> {
+    let (v, n) = decode_policy_change_at(data, 0, DEPTH_LIMIT)?;
+    let mut r = Reader { buf: data, pos: n, depth: 0, limit: DEPTH_LIMIT };
+    r.skip_ws();
+    if r.pos != data.len() {
+        return r.refuse("trailing_bytes");
+    }
+    Ok(v)
+}
+
+fn named_encode_change_request_state(v: &ChangeRequestState, depth: i32) -> ::std::result::Result<::std::vec::Vec<u8>, Refusal> {
+    match ::std::panic::catch_unwind(::std::panic::AssertUnwindSafe(|| {
+        let mut out = ::std::vec::Vec::new();
+        enc_change_request_state(&mut out, v, depth);
+        out
+    })) {
+        Ok(out) => Ok(out),
+        Err(p) => match p.downcast::<Refusal>() {
+            Ok(e) => Err(*e),
+            Err(p) => ::std::panic::resume_unwind(p),
+        },
+    }
+}
+
+fn decode_change_request_state_at(data: &[u8], depth: i32, limit: i32) -> ::std::result::Result<(ChangeRequestState, usize), Refusal> {
+    let mut r = Reader { buf: data, pos: 0, depth, limit: if limit < DEPTH_LIMIT { limit } else { DEPTH_LIMIT } };
+    if depth < 0 || limit < 1 {
+        return r.refuse("depth_exceeded");
+    }
+    r.skip_ws();
+    let v = decode_change_request_state(&mut r)?;
+    Ok((v, r.pos))
+}
+
+fn check_change_request_state(v: &ChangeRequestState, depth: i32, limit: i32) -> ::std::result::Result<(), Refusal> {
+    if depth < 0 || limit < 1 {
+        return Err(Refusal { word: "depth_exceeded", offset: 0 });
+    }
+    let out = named_encode_change_request_state(v, depth)?;
+    decode_change_request_state_at(&out, depth, limit).map(|_| ())
+}
+
+fn encode_change_request_state_at(v: &ChangeRequestState, depth: i32) -> ::std::result::Result<::std::vec::Vec<u8>, Refusal> {
+    if !(0..DEPTH_LIMIT).contains(&depth) {
+        return Err(Refusal { word: "depth_exceeded", offset: 0 });
+    }
+    let out = named_encode_change_request_state(v, depth)?;
+    decode_change_request_state_at(&out, depth, DEPTH_LIMIT)?;
+    Ok(out)
+}
+
+pub fn encode_change_request_state_document(v: &ChangeRequestState) -> ::std::result::Result<::std::vec::Vec<u8>, Refusal> {
+    let mut out = encode_change_request_state_at(v, 0)?;
+    out.push(b'\n');
+    Ok(out)
+}
+
+pub fn decode_change_request_state_document(data: &[u8]) -> ::std::result::Result<ChangeRequestState, Refusal> {
+    let (v, n) = decode_change_request_state_at(data, 0, DEPTH_LIMIT)?;
+    let mut r = Reader { buf: data, pos: n, depth: 0, limit: DEPTH_LIMIT };
+    r.skip_ws();
+    if r.pos != data.len() {
+        return r.refuse("trailing_bytes");
+    }
+    Ok(v)
+}
+
+fn named_encode_change_request_page(v: &ChangeRequestPage, depth: i32) -> ::std::result::Result<::std::vec::Vec<u8>, Refusal> {
+    match ::std::panic::catch_unwind(::std::panic::AssertUnwindSafe(|| {
+        let mut out = ::std::vec::Vec::new();
+        enc_change_request_page(&mut out, v, depth);
+        out
+    })) {
+        Ok(out) => Ok(out),
+        Err(p) => match p.downcast::<Refusal>() {
+            Ok(e) => Err(*e),
+            Err(p) => ::std::panic::resume_unwind(p),
+        },
+    }
+}
+
+fn decode_change_request_page_at(data: &[u8], depth: i32, limit: i32) -> ::std::result::Result<(ChangeRequestPage, usize), Refusal> {
+    let mut r = Reader { buf: data, pos: 0, depth, limit: if limit < DEPTH_LIMIT { limit } else { DEPTH_LIMIT } };
+    if depth < 0 || limit < 1 {
+        return r.refuse("depth_exceeded");
+    }
+    r.skip_ws();
+    let v = decode_change_request_page(&mut r)?;
+    Ok((v, r.pos))
+}
+
+fn check_change_request_page(v: &ChangeRequestPage, depth: i32, limit: i32) -> ::std::result::Result<(), Refusal> {
+    if depth < 0 || limit < 1 {
+        return Err(Refusal { word: "depth_exceeded", offset: 0 });
+    }
+    let out = named_encode_change_request_page(v, depth)?;
+    decode_change_request_page_at(&out, depth, limit).map(|_| ())
+}
+
+fn encode_change_request_page_at(v: &ChangeRequestPage, depth: i32) -> ::std::result::Result<::std::vec::Vec<u8>, Refusal> {
+    if !(0..DEPTH_LIMIT).contains(&depth) {
+        return Err(Refusal { word: "depth_exceeded", offset: 0 });
+    }
+    let out = named_encode_change_request_page(v, depth)?;
+    decode_change_request_page_at(&out, depth, DEPTH_LIMIT)?;
+    Ok(out)
+}
+
+pub fn encode_change_request_page_document(v: &ChangeRequestPage) -> ::std::result::Result<::std::vec::Vec<u8>, Refusal> {
+    let mut out = encode_change_request_page_at(v, 0)?;
+    out.push(b'\n');
+    Ok(out)
+}
+
+pub fn decode_change_request_page_document(data: &[u8]) -> ::std::result::Result<ChangeRequestPage, Refusal> {
+    let (v, n) = decode_change_request_page_at(data, 0, DEPTH_LIMIT)?;
+    let mut r = Reader { buf: data, pos: n, depth: 0, limit: DEPTH_LIMIT };
+    r.skip_ws();
+    if r.pos != data.len() {
+        return r.refuse("trailing_bytes");
+    }
+    Ok(v)
+}
+
 fn named_encode_permission_key(v: &PermissionKey, depth: i32) -> ::std::result::Result<::std::vec::Vec<u8>, Refusal> {
     match ::std::panic::catch_unwind(::std::panic::AssertUnwindSafe(|| {
         let mut out = ::std::vec::Vec::new();
@@ -17750,6 +19294,42 @@ pub mod internal {
 
     pub fn encode_decision_explanation_at(v: &super::DecisionExplanation, depth: i32) -> ::std::result::Result<::std::vec::Vec<u8>, super::Refusal> {
         super::encode_decision_explanation_at(v, depth)
+    }
+
+    pub fn decode_policy_change_at(data: &[u8], depth: i32, limit: i32) -> ::std::result::Result<(super::PolicyChange, usize), super::Refusal> {
+        super::decode_policy_change_at(data, depth, limit)
+    }
+
+    pub fn check_policy_change(v: &super::PolicyChange, depth: i32, limit: i32) -> ::std::result::Result<(), super::Refusal> {
+        super::check_policy_change(v, depth, limit)
+    }
+
+    pub fn encode_policy_change_at(v: &super::PolicyChange, depth: i32) -> ::std::result::Result<::std::vec::Vec<u8>, super::Refusal> {
+        super::encode_policy_change_at(v, depth)
+    }
+
+    pub fn decode_change_request_state_at(data: &[u8], depth: i32, limit: i32) -> ::std::result::Result<(super::ChangeRequestState, usize), super::Refusal> {
+        super::decode_change_request_state_at(data, depth, limit)
+    }
+
+    pub fn check_change_request_state(v: &super::ChangeRequestState, depth: i32, limit: i32) -> ::std::result::Result<(), super::Refusal> {
+        super::check_change_request_state(v, depth, limit)
+    }
+
+    pub fn encode_change_request_state_at(v: &super::ChangeRequestState, depth: i32) -> ::std::result::Result<::std::vec::Vec<u8>, super::Refusal> {
+        super::encode_change_request_state_at(v, depth)
+    }
+
+    pub fn decode_change_request_page_at(data: &[u8], depth: i32, limit: i32) -> ::std::result::Result<(super::ChangeRequestPage, usize), super::Refusal> {
+        super::decode_change_request_page_at(data, depth, limit)
+    }
+
+    pub fn check_change_request_page(v: &super::ChangeRequestPage, depth: i32, limit: i32) -> ::std::result::Result<(), super::Refusal> {
+        super::check_change_request_page(v, depth, limit)
+    }
+
+    pub fn encode_change_request_page_at(v: &super::ChangeRequestPage, depth: i32) -> ::std::result::Result<::std::vec::Vec<u8>, super::Refusal> {
+        super::encode_change_request_page_at(v, depth)
     }
 
     pub fn decode_permission_key_at(data: &[u8], depth: i32, limit: i32) -> ::std::result::Result<(super::PermissionKey, usize), super::Refusal> {

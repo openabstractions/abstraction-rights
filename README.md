@@ -309,6 +309,18 @@ outcome refuses. A resource service deciding on another program's behalf
 calls `Require(ctx, peer, action, resource)` instead, over the peer it bound
 at its own receiving boundary.
 
+One Go type, `*rights.Client`, calls either decision service, and the
+resolver chooses which:
+
+| Resolver | Service | Methods |
+|---|---|---|
+| `ResolveRights` | `authorization@1`: exact action and resource strings | `DecideContext`, `DecideForContext`, `DecideForAtLeastRevisionContext`, `Require`, `ListActionDescriptionsContext` |
+| `ResolveRightsSelector` | `authorization@2`: typed permissions and selectors | `ListPermissionDefinitionsContext`, `ListPermissionBundlesContext`, `CheckBatchContext`, `CheckBatchForContext`, `CheckLegacyOperationForContext` |
+
+A method of the other service fails at run time with `unknown_method`. A
+separate selector client type, which turns that mistake into a compile error,
+is planned for 0.9.0.
+
 ## Deprecated token service (removed in Train B (expected 0.9.0), W2-01a)
 
 This section describes the deprecated native token service (`rights`,

@@ -118,6 +118,12 @@ export declare class AuthorizationOperatorClient {
   explainFor(subject: Subject, action: string, resource: string): Promise<DecisionExplanation>;
   /** Read every configured account-wide default and its switch under operator authorization, rechecked before returning. An earlier operator@1 service returns unknown_method. */
   listDefaults(): Promise<DefaultPage>;
+  /** Request one typed rights change (RIGHTS-O17). The Panel window applies its changes through the direct methods. Any other operator program's change becomes a pending request the person confirms in a person-only popup the service words; the call waits up to wait_ms for the answer and then returns pending with the request id. A request expires ten minutes after it was made. Allow applies exactly that change, once. A caller whose own connection-bound token is elevated is exempt while the elevated-callers default is on: its change applies at once. Every applied change writes an Activity line with Undo. An earlier operator@1 service returns unknown_method; a caller must not fall back to a direct edit. */
+  requestChange(change: PolicyChange, waitMs: bigint): Promise<ChangeRequestState>;
+  /** Wait up to wait_ms for one request this operator program made to settle and report its state (RIGHTS-O17). A request of another program, or one the service no longer holds, is unknown. */
+  observeChangeRequest(id: string, waitMs: bigint): Promise<ChangeRequestState>;
+  /** List the change requests this operator program made that the service still holds (RIGHTS-O17). */
+  listChangeRequests(): Promise<ChangeRequestPage>;
   /** Atomically compare the expected durable revision and turn one configured account-wide default on or off, recording the operator subject and service time. An unconfigured name is invalid. Authorization and revision are rechecked after lock waiting. The next fresh decision observes the switch. No rule is written or removed. An earlier operator@1 service returns unknown_method. */
   setDefault(expectedRevision: string, name: string, on: boolean): Promise<DefaultEdit>;
 }
@@ -167,6 +173,36 @@ export interface CatalogEntry {
   action: string;
   registeredBy: Subject;
   registeredAt: string;
+}
+
+export type ChangeKind = (typeof ChangeKind)[keyof typeof ChangeKind];
+export declare const ChangeKind: Readonly<{ SetRule: "set_rule"; RevokeRule: "revoke_rule"; SetDefault: "set_default"; RegisterAction: "register_action"; RetireAction: "retire_action"; Declaration: "declaration" }>;
+
+export type ChangeRequestOutcome = (typeof ChangeRequestOutcome)[keyof typeof ChangeRequestOutcome];
+export declare const ChangeRequestOutcome: Readonly<{ Applied: "applied"; Pending: "pending"; Refused: "refused"; Expired: "expired"; Conflict: "conflict"; Unknown: "unknown"; Invalid: "invalid"; Forbidden: "forbidden"; Unavailable: "unavailable" }>;
+
+// The requests this operator program made that the service still holds, newest
+// first, at most 64. Refusals carry none.
+export interface ChangeRequestPage {
+  outcome: PolicyPageOutcome;
+  requests: ChangeRequestState[];
+}
+
+// One change request as the service holds it (RIGHTS-O17). pending waits for
+// the person's answer in the service's popup until expires, a UTC RFC 3339
+// instant ten minutes after the request. applied means the service applied
+// exactly this change, once, and carries the policy revision after it; exempt
+// marks a change applied without a question for an elevated caller. refused is
+// the person's Not now; expired is a request nobody answered in time, which
+// changes nothing; conflict is an expected revision the policy no longer had.
+// unknown, invalid, forbidden and unavailable carry no id, change or revision.
+export interface ChangeRequestState {
+  outcome: ChangeRequestOutcome;
+  id: string;
+  revision: string;
+  change: PolicyChange | null;
+  expires: string;
+  exempt: boolean;
 }
 
 export interface CheckBatchRequest {
@@ -320,6 +356,9 @@ export interface JsonRecords {
   DefaultPage: DefaultPage;
   DefaultEdit: DefaultEdit;
   DecisionExplanation: DecisionExplanation;
+  PolicyChange: PolicyChange;
+  ChangeRequestState: ChangeRequestState;
+  ChangeRequestPage: ChangeRequestPage;
   PermissionKey: PermissionKey;
   ResourceSelector: ResourceSelector;
   PermissionSelection: PermissionSelection;
@@ -433,6 +472,33 @@ export interface PermissionKey {
 export interface PermissionSelection {
   permission: PermissionKey;
   selector: ResourceSelector;
+}
+
+// One typed rights change an operator program requests (RIGHTS-O17). set_rule
+// carries rule, and optionally ttl_ms and why with SetRuleFor's bounds;
+// revoke_rule carries rule, whose permit is ignored; set_default carries name
+// and on; register_action and retire_action carry action. declaration is a
+// provider declaration or inference host add the registry or inference service
+// admitted for the caller: name is the declared name, program its program
+// (empty for a hosted server), address the server address it reaches (a hosted
+// server's base URL or a remote runtime's endpoint; empty for a local program)
+// and rules the exact rule set it writes on Allow; RequestChange refuses it as
+// invalid. Other fields are absent. An empty expected_revision applies at the
+// policy revision current when the change is applied; a nonempty one conflicts
+// when the policy changed. The request is never free text: the service words
+// the person's question from its own catalogue.
+export interface PolicyChange {
+  kind: ChangeKind;
+  expectedRevision: string;
+  rule: PolicyRule | null;
+  ttlMs: bigint;
+  why: string;
+  name: string;
+  on: boolean;
+  action: string;
+  program: string;
+  rules: PolicyRule[];
+  address: string;
 }
 
 // Applied/conflict carry the revision and optional exact current rule observed
@@ -633,25 +699,39 @@ export interface RuleRecord {
   expires: string;
 }
 
+/** Typed authorization: permissions keyed by action and resource profile, decided for One resources and All collections from one snapshot. authorization@1 decides exact action and resource strings; a program uses this service for typed selectors. The Go client type rights.Client serves both services: ResolveRights binds authorization@1 for Decide, DecideFor, DecideForAtLeastRevision, Require and ListActionDescriptions, and ResolveRightsSelector binds this service for ListPermissionDefinitions, ListPermissionBundles, CheckBatch, CheckBatchFor and CheckLegacyOperationFor. A method of the other service answers unknown_method. */
 export declare class SelectorAuthorizationClient {
   constructor(transport: FrameTransport);
+  /** List the typed permission definitions the catalogue serves: each action with its resource profile and the selectors it supports. Callers of the runtime's own account only. A page binds one policy revision; a cursor from another revision reads gap. */
   listPermissionDefinitions(cursor: string, limit: bigint): Promise<PermissionDefinitionPage>;
+  /** List the named permission bundles an operator can apply as one consent, each an immutable version with its member permissions. Callers of the runtime's own account only. A page binds one policy revision. */
   listPermissionBundles(cursor: string, limit: bigint): Promise<PermissionBundlePage>;
+  /** Decide the calling program's own typed permissions for 1..256 resources and an optional All collection admission, from one policy snapshot (RIGHTS-R19). Each target is the owning capability's document for the resource, which this service prepares; a caller supplies no captured evidence. The result is advisory to the caller: a resource service decides with CheckBatchFor. Asks nobody and writes nothing. */
   checkBatch(request: CheckBatchRequest): Promise<BatchDecision>;
+  /** Decide a subject's typed permissions as CheckBatch does. The receiving host must designate the calling program as the enforcer of every requested permission and of the collection admission; otherwise forbidden. Subject and caller belong to the runtime's own account, and subject is the enforcer's assertion. Asks nobody and writes nothing. */
   checkBatchFor(subject: Subject, request: CheckBatchRequest): Promise<BatchDecision>;
+  /** Decide one exact authorization@1 action and resource for a subject with live typed blocks carried across known equivalence (RIGHTS-R20). The caller enforces the legacy action, and the concrete operation when one is supplied. It grants no typed permit. */
   checkLegacyOperationFor(subject: Subject, request: LegacyOperationRequest): Promise<Decision>;
 }
 
 /** Existing explicit operator admission, receiving provenance and in-lock authority recheck apply. First-use methods accept no caller-supplied targets: trusted composition resolves and pins the new typed Book occurrence. Existing operator@1 completion records are preserved with their original semantics. */
 export declare class SelectorAuthorizationOperatorClient {
   constructor(transport: FrameTransport);
+  /** List every typed rule with its setter, time, reason, expiry and bundle origin. Operator programs only. A page binds one policy revision. */
   listSelectorRules(cursor: string, limit: bigint): Promise<SelectorRulePage>;
+  /** Read the one rule for a subject and an exact permission selection, addressed by the selection's retained bytes with no new target preparation. Operator programs only. */
   readSelectorRule(subject: Subject, selection: PermissionSelection): Promise<SelectorRuleRead>;
+  /** Set one typed permit or block at expected_revision; a stale revision conflicts. ttl_ms 0 keeps the rule until removed, and at most one year bounds it. Replacing a row detaches its bundle origin (RIGHTS-O12). The Panel window's edit only (RIGHTS-O17). */
   setSelectorRule(expectedRevision: string, rule: SelectorRule, ttlMs: bigint, why: string): Promise<SelectorEdit>;
+  /** Remove the rule for a subject and an exact permission selection at expected_revision. The Panel window's edit only (RIGHTS-O17). */
   removeSelectorRule(expectedRevision: string, subject: Subject, selection: PermissionSelection): Promise<SelectorEdit>;
+  /** Expand one immutable bundle version into explicit permits for a subject, atomically, with one setter and expiry and a retained bundle origin (RIGHTS-O12). New members of a later version need new consent. The Panel window's edit only (RIGHTS-O17). */
   applyBundle(expectedRevision: string, subject: Subject, bundleRef: string, selector: ResourceSelector, ttlMs: bigint, why: string): Promise<SelectorEdit>;
+  /** Remove a subject's rules that still carry bundle origin origin_id. Rows replaced since keep their later independent edits. The Panel window's edit only (RIGHTS-O17). */
   removeBundle(expectedRevision: string, subject: Subject, originId: string): Promise<SelectorEdit>;
+  /** Write the typed effect pinned by the asks permission@1 question question_id after an operator Allow on it. The effect comes from the question, never from the caller. The Panel window and the Asks presenter only (RIGHTS-O17). A revoked or expired occurrence refuses replay. */
   applyPermissionAllow(expectedRevision: string, questionId: string): Promise<SelectorEdit>;
+  /** Remove the still-current rules that question_id's Allow wrote, keeping later edits and blocks. The Panel window's edit only (RIGHTS-O17). */
   undoPermissionEffect(expectedRevision: string, questionId: string): Promise<SelectorEdit>;
 }
 
@@ -757,6 +837,10 @@ export declare function decodeBundleOrigin(data: Uint8Array): BundleOrigin;
 
 export declare function decodeCatalogEntry(data: Uint8Array): CatalogEntry;
 
+export declare function decodeChangeRequestPage(data: Uint8Array): ChangeRequestPage;
+
+export declare function decodeChangeRequestState(data: Uint8Array): ChangeRequestState;
+
 export declare function decodeCheckBatchRequest(data: Uint8Array): CheckBatchRequest;
 
 export declare function decodeConcreteResource(data: Uint8Array): ConcreteResource;
@@ -792,6 +876,8 @@ export declare function decodePermissionEffect(data: Uint8Array): PermissionEffe
 export declare function decodePermissionKey(data: Uint8Array): PermissionKey;
 
 export declare function decodePermissionSelection(data: Uint8Array): PermissionSelection;
+
+export declare function decodePolicyChange(data: Uint8Array): PolicyChange;
 
 export declare function decodePolicyEdit(data: Uint8Array): PolicyEdit;
 
@@ -847,6 +933,10 @@ export declare function encodeBundleOrigin(v: BundleOrigin): Uint8Array;
 
 export declare function encodeCatalogEntry(v: CatalogEntry): Uint8Array;
 
+export declare function encodeChangeRequestPage(v: ChangeRequestPage): Uint8Array;
+
+export declare function encodeChangeRequestState(v: ChangeRequestState): Uint8Array;
+
 export declare function encodeCheckBatchRequest(v: CheckBatchRequest): Uint8Array;
 
 export declare function encodeConcreteResource(v: ConcreteResource): Uint8Array;
@@ -882,6 +972,8 @@ export declare function encodePermissionEffect(v: PermissionEffect): Uint8Array;
 export declare function encodePermissionKey(v: PermissionKey): Uint8Array;
 
 export declare function encodePermissionSelection(v: PermissionSelection): Uint8Array;
+
+export declare function encodePolicyChange(v: PolicyChange): Uint8Array;
 
 export declare function encodePolicyEdit(v: PolicyEdit): Uint8Array;
 
@@ -939,6 +1031,10 @@ export declare function newBundleOrigin(): BundleOrigin;
 
 export declare function newCatalogEntry(): CatalogEntry;
 
+export declare function newChangeRequestPage(): ChangeRequestPage;
+
+export declare function newChangeRequestState(): ChangeRequestState;
+
 export declare function newCheckBatchRequest(): CheckBatchRequest;
 
 export declare function newConcreteResource(): ConcreteResource;
@@ -974,6 +1070,8 @@ export declare function newPermissionEffect(): PermissionEffect;
 export declare function newPermissionKey(): PermissionKey;
 
 export declare function newPermissionSelection(): PermissionSelection;
+
+export declare function newPolicyChange(): PolicyChange;
 
 export declare function newPolicyEdit(): PolicyEdit;
 

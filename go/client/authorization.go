@@ -14,6 +14,16 @@ import (
 type Subject = wire.Subject
 type Decision = wire.Decision
 type RevisionDecision = wire.RevisionDecision
+// Client calls one of two decision services, chosen by the endpoint it was
+// bound to. Bound to authorization@1 (facade ResolveRights), it serves
+// DecideContext, DecideForContext, DecideForAtLeastRevisionContext, Require
+// and ListActionDescriptionsContext: exact action and resource strings. Bound
+// to authorization@2 (facade ResolveRightsSelector), it serves
+// ListPermissionDefinitionsContext, ListPermissionBundlesContext,
+// CheckBatchContext, CheckBatchForContext and CheckLegacyOperationForContext:
+// typed permissions and selectors. A method of the other service fails at run
+// time with unknown_method. A separate selector client type is planned for
+// 0.9.0.
 type Client struct{ transport listen.FrameClient }
 
 func New(endpoint string) *Client {

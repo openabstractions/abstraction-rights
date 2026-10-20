@@ -43,6 +43,7 @@ type Host struct {
 	firstUseAllow     ApplyFirstUseAllow
 	permissionAllow   ApplyPermissionAllow
 	permissionUndo    UndoPermissionEffect
+	changes           OperatorChanges
 	operatorEpoch     string
 	observationGate   *watch.Gate
 	removeObservation func()

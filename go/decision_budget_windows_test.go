@@ -3,6 +3,8 @@ package rights
 import (
 	"context"
 	"errors"
+	"os"
+	"os/exec"
 	"syscall"
 	"testing"
 	"time"
@@ -45,5 +47,38 @@ func TestPolicyReadFollowsTheCallersDeadline(t *testing.T) {
 	err = f.p.CheckState(ctx)
 	if took := time.Since(start); !errors.Is(err, context.DeadlineExceeded) || took < wait-50*time.Millisecond || took > wait+time.Second {
 		t.Fatalf("blocked read with a %s caller deadline: %v after %s", wait, err, took)
+	}
+}
+
+// A policy file whose ACL denies the read answers within DecisionDeniedRetry
+// and some slack, inside a five-second caller deadline: the decision is
+// unavailable, never permitted. A held file still follows the caller's
+// deadline (above).
+func TestAnACLDeniedPolicyReadFailsFast(t *testing.T) {
+	f := newMetaFixture(t)
+	f.enroll(t, MetaRuleLapse)
+	if err := f.p.Set(f.appA, decisionAction, "content", true); err != nil {
+		t.Fatal(err)
+	}
+	if out, err := exec.Command("icacls", f.p.path, "/deny", "*S-1-1-0:(RD)").CombinedOutput(); err != nil {
+		t.Fatalf("icacls deny: %v: %s", err, out)
+	}
+	t.Cleanup(func() { exec.Command("icacls", f.p.path, "/reset").Run() })
+	if file, err := os.Open(f.p.path); err == nil {
+		file.Close()
+		t.Skip("this account reads the policy despite the deny")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	start := time.Now()
+	err := f.p.CheckState(ctx)
+	took := time.Since(start)
+	if !errors.Is(err, os.ErrPermission) || took > DecisionDeniedRetry+time.Second {
+		t.Fatalf("ACL-denied read: %v after %s, want access denied within %s", err, took, DecisionDeniedRetry+time.Second)
+	}
+	start = time.Now()
+	d := f.p.DecideContext(ctx, f.appA, decisionAction, "content")
+	if took := time.Since(start); d.Outcome.String() != "unavailable" || took > DecisionDeniedRetry+time.Second {
+		t.Fatalf("decision on an ACL-denied policy: %v after %s, want unavailable promptly", d.Outcome, took)
 	}
 }

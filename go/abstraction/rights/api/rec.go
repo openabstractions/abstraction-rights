@@ -4,6 +4,8 @@ package api
 
 import "time"
 
+import "runtime/debug"
+
 type Raw = string
 
 func escByte(out []byte, c byte) []byte {
@@ -1490,6 +1492,265 @@ func (v DecisionSource) Known() bool {
 	return ok
 }
 
+// ChangeKind is a closed vocabulary. Its numeric values are private implementation
+// tags; String and ParseChangeKind preserve the exact wire words.
+type ChangeKind uint32
+
+const (
+	ChangeKindSetRule        ChangeKind = 1
+	ChangeKindRevokeRule     ChangeKind = 2
+	ChangeKindSetDefault     ChangeKind = 3
+	ChangeKindRegisterAction ChangeKind = 4
+	ChangeKindRetireAction   ChangeKind = 5
+	ChangeKindDeclaration    ChangeKind = 6
+)
+
+// String returns v's exact wire word, or the empty string for an invalid value.
+func (v ChangeKind) String() string {
+	word, _ := v.WireName()
+	return word
+}
+
+// WireName returns v's exact wire word and whether v names a member.
+func (v ChangeKind) WireName() (string, bool) {
+	switch v {
+	case ChangeKindSetRule:
+		return "set_rule", true
+	case ChangeKindRevokeRule:
+		return "revoke_rule", true
+	case ChangeKindSetDefault:
+		return "set_default", true
+	case ChangeKindRegisterAction:
+		return "register_action", true
+	case ChangeKindRetireAction:
+		return "retire_action", true
+	case ChangeKindDeclaration:
+		return "declaration", true
+	}
+	return "", false
+}
+
+// ParseChangeKind returns the member named by an exact wire word.
+func ParseChangeKind(word string) (ChangeKind, bool) {
+	switch word {
+	case "set_rule":
+		return ChangeKindSetRule, true
+	case "revoke_rule":
+		return ChangeKindRevokeRule, true
+	case "set_default":
+		return ChangeKindSetDefault, true
+	case "register_action":
+		return ChangeKindRegisterAction, true
+	case "retire_action":
+		return ChangeKindRetireAction, true
+	case "declaration":
+		return ChangeKindDeclaration, true
+	}
+	return ChangeKind(0), false
+}
+
+// MarshalText preserves the member's exact wire word for standard text users,
+// including JSON object keys. Invalid and zero values are refused.
+func (v ChangeKind) MarshalText() ([]byte, error) {
+	word, ok := v.WireName()
+	if !ok {
+		return nil, &Refusal{Word: "bad_enum", Offset: 0}
+	}
+	return []byte(word), nil
+}
+
+// UnmarshalText accepts an exact wire word and refuses unknown text.
+func (v *ChangeKind) UnmarshalText(text []byte) error {
+	word, ok := ParseChangeKind(string(text))
+	if !ok {
+		return &Refusal{Word: "bad_enum", Offset: 0}
+	}
+	*v = word
+	return nil
+}
+
+// MarshalJSON keeps closed vocabularies as JSON strings rather than their
+// private numeric implementation tags.
+func (v ChangeKind) MarshalJSON() ([]byte, error) {
+	word, ok := v.WireName()
+	if !ok {
+		return nil, &Refusal{Word: "bad_enum", Offset: 0}
+	}
+	return esc(nil, word), nil
+}
+
+// UnmarshalJSON accepts only an exact JSON string member. Numbers, null and
+// unknown strings are refused by the same codec rules as generated records.
+func (v *ChangeKind) UnmarshalJSON(data []byte) error {
+	r := reader{buf: data}
+	r.ws()
+	word, err := r.str()
+	if err != nil {
+		return err
+	}
+	r.ws()
+	if r.pos != len(r.buf) {
+		return r.refuse("trailing_bytes")
+	}
+	parsed, ok := ParseChangeKind(word)
+	if !ok {
+		return r.refuse("bad_enum")
+	}
+	*v = parsed
+	return nil
+}
+
+// ChangeKindValues returns every member of ChangeKind in declaration order, in a new slice.
+func ChangeKindValues() []ChangeKind {
+	return []ChangeKind{ChangeKindSetRule, ChangeKindRevokeRule, ChangeKindSetDefault, ChangeKindRegisterAction, ChangeKindRetireAction, ChangeKindDeclaration}
+}
+
+// IsKnown reports whether v is a declared member of ChangeKind.
+func (v ChangeKind) IsKnown() bool { return v.Known() }
+
+// Known reports whether v is a member of ChangeKind.
+func (v ChangeKind) Known() bool {
+	_, ok := v.WireName()
+	return ok
+}
+
+// ChangeRequestOutcome is a closed vocabulary. Its numeric values are private implementation
+// tags; String and ParseChangeRequestOutcome preserve the exact wire words.
+type ChangeRequestOutcome uint32
+
+const (
+	ChangeRequestOutcomeApplied     ChangeRequestOutcome = 1
+	ChangeRequestOutcomePending     ChangeRequestOutcome = 2
+	ChangeRequestOutcomeRefused     ChangeRequestOutcome = 3
+	ChangeRequestOutcomeExpired     ChangeRequestOutcome = 4
+	ChangeRequestOutcomeConflict    ChangeRequestOutcome = 5
+	ChangeRequestOutcomeUnknown     ChangeRequestOutcome = 6
+	ChangeRequestOutcomeInvalid     ChangeRequestOutcome = 7
+	ChangeRequestOutcomeForbidden   ChangeRequestOutcome = 8
+	ChangeRequestOutcomeUnavailable ChangeRequestOutcome = 9
+)
+
+// String returns v's exact wire word, or the empty string for an invalid value.
+func (v ChangeRequestOutcome) String() string {
+	word, _ := v.WireName()
+	return word
+}
+
+// WireName returns v's exact wire word and whether v names a member.
+func (v ChangeRequestOutcome) WireName() (string, bool) {
+	switch v {
+	case ChangeRequestOutcomeApplied:
+		return "applied", true
+	case ChangeRequestOutcomePending:
+		return "pending", true
+	case ChangeRequestOutcomeRefused:
+		return "refused", true
+	case ChangeRequestOutcomeExpired:
+		return "expired", true
+	case ChangeRequestOutcomeConflict:
+		return "conflict", true
+	case ChangeRequestOutcomeUnknown:
+		return "unknown", true
+	case ChangeRequestOutcomeInvalid:
+		return "invalid", true
+	case ChangeRequestOutcomeForbidden:
+		return "forbidden", true
+	case ChangeRequestOutcomeUnavailable:
+		return "unavailable", true
+	}
+	return "", false
+}
+
+// ParseChangeRequestOutcome returns the member named by an exact wire word.
+func ParseChangeRequestOutcome(word string) (ChangeRequestOutcome, bool) {
+	switch word {
+	case "applied":
+		return ChangeRequestOutcomeApplied, true
+	case "pending":
+		return ChangeRequestOutcomePending, true
+	case "refused":
+		return ChangeRequestOutcomeRefused, true
+	case "expired":
+		return ChangeRequestOutcomeExpired, true
+	case "conflict":
+		return ChangeRequestOutcomeConflict, true
+	case "unknown":
+		return ChangeRequestOutcomeUnknown, true
+	case "invalid":
+		return ChangeRequestOutcomeInvalid, true
+	case "forbidden":
+		return ChangeRequestOutcomeForbidden, true
+	case "unavailable":
+		return ChangeRequestOutcomeUnavailable, true
+	}
+	return ChangeRequestOutcome(0), false
+}
+
+// MarshalText preserves the member's exact wire word for standard text users,
+// including JSON object keys. Invalid and zero values are refused.
+func (v ChangeRequestOutcome) MarshalText() ([]byte, error) {
+	word, ok := v.WireName()
+	if !ok {
+		return nil, &Refusal{Word: "bad_enum", Offset: 0}
+	}
+	return []byte(word), nil
+}
+
+// UnmarshalText accepts an exact wire word and refuses unknown text.
+func (v *ChangeRequestOutcome) UnmarshalText(text []byte) error {
+	word, ok := ParseChangeRequestOutcome(string(text))
+	if !ok {
+		return &Refusal{Word: "bad_enum", Offset: 0}
+	}
+	*v = word
+	return nil
+}
+
+// MarshalJSON keeps closed vocabularies as JSON strings rather than their
+// private numeric implementation tags.
+func (v ChangeRequestOutcome) MarshalJSON() ([]byte, error) {
+	word, ok := v.WireName()
+	if !ok {
+		return nil, &Refusal{Word: "bad_enum", Offset: 0}
+	}
+	return esc(nil, word), nil
+}
+
+// UnmarshalJSON accepts only an exact JSON string member. Numbers, null and
+// unknown strings are refused by the same codec rules as generated records.
+func (v *ChangeRequestOutcome) UnmarshalJSON(data []byte) error {
+	r := reader{buf: data}
+	r.ws()
+	word, err := r.str()
+	if err != nil {
+		return err
+	}
+	r.ws()
+	if r.pos != len(r.buf) {
+		return r.refuse("trailing_bytes")
+	}
+	parsed, ok := ParseChangeRequestOutcome(word)
+	if !ok {
+		return r.refuse("bad_enum")
+	}
+	*v = parsed
+	return nil
+}
+
+// ChangeRequestOutcomeValues returns every member of ChangeRequestOutcome in declaration order, in a new slice.
+func ChangeRequestOutcomeValues() []ChangeRequestOutcome {
+	return []ChangeRequestOutcome{ChangeRequestOutcomeApplied, ChangeRequestOutcomePending, ChangeRequestOutcomeRefused, ChangeRequestOutcomeExpired, ChangeRequestOutcomeConflict, ChangeRequestOutcomeUnknown, ChangeRequestOutcomeInvalid, ChangeRequestOutcomeForbidden, ChangeRequestOutcomeUnavailable}
+}
+
+// IsKnown reports whether v is a declared member of ChangeRequestOutcome.
+func (v ChangeRequestOutcome) IsKnown() bool { return v.Known() }
+
+// Known reports whether v is a member of ChangeRequestOutcome.
+func (v ChangeRequestOutcome) Known() bool {
+	_, ok := v.WireName()
+	return ok
+}
+
 // ResourceSelectorKind is a closed vocabulary. Its numeric values are private implementation
 // tags; String and ParseResourceSelectorKind preserve the exact wire words.
 type ResourceSelectorKind uint32
@@ -2698,6 +2959,57 @@ type DecisionExplanation struct {
 	DefaultName    string
 }
 
+// One typed rights change an operator program requests (RIGHTS-O17). set_rule
+// carries rule, and optionally ttl_ms and why with SetRuleFor's bounds;
+// revoke_rule carries rule, whose permit is ignored; set_default carries name
+// and on; register_action and retire_action carry action. declaration is a
+// provider declaration or inference host add the registry or inference service
+// admitted for the caller: name is the declared name, program its program
+// (empty for a hosted server), address the server address it reaches (a hosted
+// server's base URL or a remote runtime's endpoint; empty for a local program)
+// and rules the exact rule set it writes on Allow; RequestChange refuses it as
+// invalid. Other fields are absent. An empty expected_revision applies at the
+// policy revision current when the change is applied; a nonempty one conflicts
+// when the policy changed. The request is never free text: the service words
+// the person's question from its own catalogue.
+type PolicyChange struct {
+	Kind             ChangeKind
+	ExpectedRevision string
+	Rule             *PolicyRule
+	TTLMs            int64
+	Why              string
+	Name             string
+	On               bool
+	Action           string
+	Program          string
+	Rules            []PolicyRule
+	Address          string
+}
+
+// One change request as the service holds it (RIGHTS-O17). pending waits for
+// the person's answer in the service's popup until expires, a UTC RFC 3339
+// instant ten minutes after the request. applied means the service applied
+// exactly this change, once, and carries the policy revision after it; exempt
+// marks a change applied without a question for an elevated caller. refused is
+// the person's Not now; expired is a request nobody answered in time, which
+// changes nothing; conflict is an expected revision the policy no longer had.
+// unknown, invalid, forbidden and unavailable carry no id, change or revision.
+type ChangeRequestState struct {
+	Outcome  ChangeRequestOutcome
+	ID       string
+	Revision string
+	Change   *PolicyChange
+	Expires  string
+	Exempt   bool
+}
+
+// The requests this operator program made that the service still holds, newest
+// first, at most 64. Refusals carry none.
+type ChangeRequestPage struct {
+	Outcome  PolicyPageOutcome
+	Requests []ChangeRequestState
+}
+
 type PermissionKey struct {
 	Action          string
 	ResourceProfile string
@@ -3054,6 +3366,19 @@ type oaAuthorizationOperatorExplainForArguments struct {
 type oaAuthorizationOperatorListDefaultsArguments struct {
 }
 
+type oaAuthorizationOperatorRequestChangeArguments struct {
+	Change PolicyChange
+	WaitMs int64
+}
+
+type oaAuthorizationOperatorObserveChangeRequestArguments struct {
+	ID     string
+	WaitMs int64
+}
+
+type oaAuthorizationOperatorListChangeRequestsArguments struct {
+}
+
 type oaAuthorizationOperatorSetDefaultArguments struct {
 	ExpectedRevision string
 	Name             string
@@ -3226,6 +3551,18 @@ type oaAuthorizationOperatorExplainForResult struct {
 
 type oaAuthorizationOperatorListDefaultsResult struct {
 	Value DefaultPage
+}
+
+type oaAuthorizationOperatorRequestChangeResult struct {
+	Value ChangeRequestState
+}
+
+type oaAuthorizationOperatorObserveChangeRequestResult struct {
+	Value ChangeRequestState
+}
+
+type oaAuthorizationOperatorListChangeRequestsResult struct {
+	Value ChangeRequestPage
 }
 
 type oaAuthorizationOperatorSetDefaultResult struct {
@@ -4335,6 +4672,256 @@ func encDecisionExplanation(out []byte, v *DecisionExplanation, depth int) []byt
 		out = append(out, ':', ' ')
 		out = esc(out, v.DefaultName)
 	}
+	out = append(out, '\n')
+	out = pad(out, depth)
+	return append(out, '}')
+}
+
+func encPolicyChange(out []byte, v *PolicyChange, depth int) []byte {
+	if n := len(v.ExpectedRevision); n > 128 {
+		panic(&Refusal{Word: "bad_value", Offset: 0})
+	}
+	for _, c := range v.ExpectedRevision {
+		if c < 0x20 || c >= 0x7f && c <= 0x9f {
+			panic(&Refusal{Word: "bad_value", Offset: 0})
+		}
+	}
+	if v.TTLMs < 0 || v.TTLMs > 31536000000 {
+		panic(&Refusal{Word: "bad_value", Offset: 0})
+	}
+	if n := len(v.Why); n > 256 {
+		panic(&Refusal{Word: "bad_value", Offset: 0})
+	}
+	for _, c := range v.Why {
+		if c < 0x20 || c >= 0x7f && c <= 0x9f {
+			panic(&Refusal{Word: "bad_value", Offset: 0})
+		}
+	}
+	if n := len(v.Name); n > 64 {
+		panic(&Refusal{Word: "bad_value", Offset: 0})
+	}
+	for _, c := range v.Name {
+		if c < 0x20 || c >= 0x7f && c <= 0x9f {
+			panic(&Refusal{Word: "bad_value", Offset: 0})
+		}
+	}
+	if n := len(v.Action); n > 128 {
+		panic(&Refusal{Word: "bad_value", Offset: 0})
+	}
+	for _, c := range v.Action {
+		if c < 0x20 || c >= 0x7f && c <= 0x9f {
+			panic(&Refusal{Word: "bad_value", Offset: 0})
+		}
+	}
+	if n := len(v.Program); n > 4096 {
+		panic(&Refusal{Word: "bad_value", Offset: 0})
+	}
+	for _, c := range v.Program {
+		if c < 0x20 || c >= 0x7f && c <= 0x9f {
+			panic(&Refusal{Word: "bad_value", Offset: 0})
+		}
+	}
+	if n := len(v.Rules); n > 64 {
+		panic(&Refusal{Word: "bad_value", Offset: 0})
+	}
+	if n := len(v.Address); n > 2048 {
+		panic(&Refusal{Word: "bad_value", Offset: 0})
+	}
+	for _, c := range v.Address {
+		if c < 0x20 || c >= 0x7f && c <= 0x9f {
+			panic(&Refusal{Word: "bad_value", Offset: 0})
+		}
+	}
+	if !(v.Kind).Known() {
+		panic(&Refusal{Word: "bad_enum", Offset: 0})
+	}
+	out = append(out, '{')
+	out = append(out, '\n')
+	out = pad(out, depth+1)
+	out = esc(out, "kind")
+	out = append(out, ':', ' ')
+	out = esc(out, v.Kind.String())
+	out = append(out, ',')
+	out = append(out, '\n')
+	out = pad(out, depth+1)
+	out = esc(out, "expected_revision")
+	out = append(out, ':', ' ')
+	out = esc(out, v.ExpectedRevision)
+	if v.Rule != nil {
+		out = append(out, ',')
+		out = append(out, '\n')
+		out = pad(out, depth+1)
+		out = esc(out, "rule")
+		out = append(out, ':', ' ')
+		out = encPolicyRule(out, v.Rule, depth+1)
+	}
+	if v.TTLMs != 0 {
+		out = append(out, ',')
+		out = append(out, '\n')
+		out = pad(out, depth+1)
+		out = esc(out, "ttl_ms")
+		out = append(out, ':', ' ')
+		out = num(out, v.TTLMs)
+	}
+	if v.Why != "" {
+		out = append(out, ',')
+		out = append(out, '\n')
+		out = pad(out, depth+1)
+		out = esc(out, "why")
+		out = append(out, ':', ' ')
+		out = esc(out, v.Why)
+	}
+	if v.Name != "" {
+		out = append(out, ',')
+		out = append(out, '\n')
+		out = pad(out, depth+1)
+		out = esc(out, "name")
+		out = append(out, ':', ' ')
+		out = esc(out, v.Name)
+	}
+	if v.On {
+		out = append(out, ',')
+		out = append(out, '\n')
+		out = pad(out, depth+1)
+		out = esc(out, "on")
+		out = append(out, ':', ' ')
+		if v.On {
+			out = append(out, 't', 'r', 'u', 'e')
+		} else {
+			out = append(out, 'f', 'a', 'l', 's', 'e')
+		}
+	}
+	if v.Action != "" {
+		out = append(out, ',')
+		out = append(out, '\n')
+		out = pad(out, depth+1)
+		out = esc(out, "action")
+		out = append(out, ':', ' ')
+		out = esc(out, v.Action)
+	}
+	if v.Program != "" {
+		out = append(out, ',')
+		out = append(out, '\n')
+		out = pad(out, depth+1)
+		out = esc(out, "program")
+		out = append(out, ':', ' ')
+		out = esc(out, v.Program)
+	}
+	if len(v.Rules) != 0 {
+		out = append(out, ',')
+		out = append(out, '\n')
+		out = pad(out, depth+1)
+		out = esc(out, "rules")
+		out = append(out, ':', ' ')
+		out = encList(out, v.Rules, depth+1, encPolicyRule)
+	}
+	if v.Address != "" {
+		out = append(out, ',')
+		out = append(out, '\n')
+		out = pad(out, depth+1)
+		out = esc(out, "address")
+		out = append(out, ':', ' ')
+		out = esc(out, v.Address)
+	}
+	out = append(out, '\n')
+	out = pad(out, depth)
+	return append(out, '}')
+}
+
+func encChangeRequestState(out []byte, v *ChangeRequestState, depth int) []byte {
+	if n := len(v.ID); n > 128 {
+		panic(&Refusal{Word: "bad_value", Offset: 0})
+	}
+	for _, c := range v.ID {
+		if c < 0x20 || c >= 0x7f && c <= 0x9f {
+			panic(&Refusal{Word: "bad_value", Offset: 0})
+		}
+	}
+	if n := len(v.Revision); n > 128 {
+		panic(&Refusal{Word: "bad_value", Offset: 0})
+	}
+	for _, c := range v.Revision {
+		if c < 0x20 || c >= 0x7f && c <= 0x9f {
+			panic(&Refusal{Word: "bad_value", Offset: 0})
+		}
+	}
+	if n := len(v.Expires); n > 64 {
+		panic(&Refusal{Word: "bad_value", Offset: 0})
+	}
+	for _, c := range v.Expires {
+		if c < 0x20 || c >= 0x7f && c <= 0x9f {
+			panic(&Refusal{Word: "bad_value", Offset: 0})
+		}
+	}
+	if !(v.Outcome).Known() {
+		panic(&Refusal{Word: "bad_enum", Offset: 0})
+	}
+	out = append(out, '{')
+	out = append(out, '\n')
+	out = pad(out, depth+1)
+	out = esc(out, "outcome")
+	out = append(out, ':', ' ')
+	out = esc(out, v.Outcome.String())
+	out = append(out, ',')
+	out = append(out, '\n')
+	out = pad(out, depth+1)
+	out = esc(out, "id")
+	out = append(out, ':', ' ')
+	out = esc(out, v.ID)
+	out = append(out, ',')
+	out = append(out, '\n')
+	out = pad(out, depth+1)
+	out = esc(out, "revision")
+	out = append(out, ':', ' ')
+	out = esc(out, v.Revision)
+	if v.Change != nil {
+		out = append(out, ',')
+		out = append(out, '\n')
+		out = pad(out, depth+1)
+		out = esc(out, "change")
+		out = append(out, ':', ' ')
+		out = encPolicyChange(out, v.Change, depth+1)
+	}
+	out = append(out, ',')
+	out = append(out, '\n')
+	out = pad(out, depth+1)
+	out = esc(out, "expires")
+	out = append(out, ':', ' ')
+	out = esc(out, v.Expires)
+	out = append(out, ',')
+	out = append(out, '\n')
+	out = pad(out, depth+1)
+	out = esc(out, "exempt")
+	out = append(out, ':', ' ')
+	if v.Exempt {
+		out = append(out, 't', 'r', 'u', 'e')
+	} else {
+		out = append(out, 'f', 'a', 'l', 's', 'e')
+	}
+	out = append(out, '\n')
+	out = pad(out, depth)
+	return append(out, '}')
+}
+
+func encChangeRequestPage(out []byte, v *ChangeRequestPage, depth int) []byte {
+	if n := len(v.Requests); n > 64 {
+		panic(&Refusal{Word: "bad_value", Offset: 0})
+	}
+	if !(v.Outcome).Known() {
+		panic(&Refusal{Word: "bad_enum", Offset: 0})
+	}
+	out = append(out, '{')
+	out = append(out, '\n')
+	out = pad(out, depth+1)
+	out = esc(out, "outcome")
+	out = append(out, ':', ' ')
+	out = esc(out, v.Outcome.String())
+	out = append(out, ',')
+	out = append(out, '\n')
+	out = pad(out, depth+1)
+	out = esc(out, "requests")
+	out = append(out, ':', ' ')
+	out = encList(out, v.Requests, depth+1, encChangeRequestState)
 	out = append(out, '\n')
 	out = pad(out, depth)
 	return append(out, '}')
@@ -5793,6 +6380,61 @@ func encOAAuthorizationOperatorListDefaultsArguments(out []byte, v *oaAuthorizat
 	return append(out, '}')
 }
 
+func encOAAuthorizationOperatorRequestChangeArguments(out []byte, v *oaAuthorizationOperatorRequestChangeArguments, depth int) []byte {
+	if v.WaitMs < 0 || v.WaitMs > 30000 {
+		panic(&Refusal{Word: "bad_value", Offset: 0})
+	}
+	out = append(out, '{')
+	out = append(out, '\n')
+	out = pad(out, depth+1)
+	out = esc(out, "change")
+	out = append(out, ':', ' ')
+	out = encPolicyChange(out, &v.Change, depth+1)
+	out = append(out, ',')
+	out = append(out, '\n')
+	out = pad(out, depth+1)
+	out = esc(out, "wait_ms")
+	out = append(out, ':', ' ')
+	out = num(out, v.WaitMs)
+	out = append(out, '\n')
+	out = pad(out, depth)
+	return append(out, '}')
+}
+
+func encOAAuthorizationOperatorObserveChangeRequestArguments(out []byte, v *oaAuthorizationOperatorObserveChangeRequestArguments, depth int) []byte {
+	if n := len(v.ID); n < 1 || n > 128 {
+		panic(&Refusal{Word: "bad_value", Offset: 0})
+	}
+	for _, c := range v.ID {
+		if c < 0x20 || c >= 0x7f && c <= 0x9f {
+			panic(&Refusal{Word: "bad_value", Offset: 0})
+		}
+	}
+	if v.WaitMs < 0 || v.WaitMs > 30000 {
+		panic(&Refusal{Word: "bad_value", Offset: 0})
+	}
+	out = append(out, '{')
+	out = append(out, '\n')
+	out = pad(out, depth+1)
+	out = esc(out, "id")
+	out = append(out, ':', ' ')
+	out = esc(out, v.ID)
+	out = append(out, ',')
+	out = append(out, '\n')
+	out = pad(out, depth+1)
+	out = esc(out, "wait_ms")
+	out = append(out, ':', ' ')
+	out = num(out, v.WaitMs)
+	out = append(out, '\n')
+	out = pad(out, depth)
+	return append(out, '}')
+}
+
+func encOAAuthorizationOperatorListChangeRequestsArguments(out []byte, v *oaAuthorizationOperatorListChangeRequestsArguments, depth int) []byte {
+	out = append(out, '{')
+	return append(out, '}')
+}
+
 func encOAAuthorizationOperatorSetDefaultArguments(out []byte, v *oaAuthorizationOperatorSetDefaultArguments, depth int) []byte {
 	out = append(out, '{')
 	out = append(out, '\n')
@@ -6408,6 +7050,42 @@ func encOAAuthorizationOperatorListDefaultsResult(out []byte, v *oaAuthorization
 	out = esc(out, "value")
 	out = append(out, ':', ' ')
 	out = encDefaultPage(out, &v.Value, depth+1)
+	out = append(out, '\n')
+	out = pad(out, depth)
+	return append(out, '}')
+}
+
+func encOAAuthorizationOperatorRequestChangeResult(out []byte, v *oaAuthorizationOperatorRequestChangeResult, depth int) []byte {
+	out = append(out, '{')
+	out = append(out, '\n')
+	out = pad(out, depth+1)
+	out = esc(out, "value")
+	out = append(out, ':', ' ')
+	out = encChangeRequestState(out, &v.Value, depth+1)
+	out = append(out, '\n')
+	out = pad(out, depth)
+	return append(out, '}')
+}
+
+func encOAAuthorizationOperatorObserveChangeRequestResult(out []byte, v *oaAuthorizationOperatorObserveChangeRequestResult, depth int) []byte {
+	out = append(out, '{')
+	out = append(out, '\n')
+	out = pad(out, depth+1)
+	out = esc(out, "value")
+	out = append(out, ':', ' ')
+	out = encChangeRequestState(out, &v.Value, depth+1)
+	out = append(out, '\n')
+	out = pad(out, depth)
+	return append(out, '}')
+}
+
+func encOAAuthorizationOperatorListChangeRequestsResult(out []byte, v *oaAuthorizationOperatorListChangeRequestsResult, depth int) []byte {
+	out = append(out, '{')
+	out = append(out, '\n')
+	out = pad(out, depth+1)
+	out = esc(out, "value")
+	out = append(out, ':', ' ')
+	out = encChangeRequestPage(out, &v.Value, depth+1)
 	out = append(out, '\n')
 	out = pad(out, depth)
 	return append(out, '}')
@@ -9946,6 +10624,445 @@ func (r *reader) decodeDecisionExplanation() (*DecisionExplanation, error) {
 		if !(*v.Source).Known() {
 			return nil, r.refuse("bad_enum")
 		}
+	}
+	return v, nil
+}
+
+func (r *reader) decodePolicyChange() (*PolicyChange, error) {
+	if r.at() != '{' {
+		return nil, r.refuse("wrong_type")
+	}
+	if err := r.enter(); err != nil {
+		return nil, err
+	}
+	r.pos++
+	v := &PolicyChange{}
+	var seen uint32
+	r.ws()
+	if r.at() != '}' {
+		for {
+			r.ws()
+			if r.at() != '"' {
+				return nil, r.refuse("malformed")
+			}
+			key, err := r.str()
+			if err != nil {
+				return nil, err
+			}
+			r.ws()
+			if r.at() != ':' {
+				return nil, r.refuse("malformed")
+			}
+			r.pos++
+			r.ws()
+			switch key {
+			case "kind":
+				if seen&1 != 0 {
+					return nil, r.refuse("duplicate_field")
+				}
+				seen |= 1
+				x, err := r.str()
+				if err != nil {
+					return nil, err
+				}
+				word, ok := ParseChangeKind(x)
+				if !ok {
+					return nil, r.refuse("bad_enum")
+				}
+				v.Kind = word
+			case "expected_revision":
+				if seen&2 != 0 {
+					return nil, r.refuse("duplicate_field")
+				}
+				seen |= 2
+				x, err := r.str()
+				if err != nil {
+					return nil, err
+				}
+				v.ExpectedRevision = x
+			case "rule":
+				if seen&4 != 0 {
+					return nil, r.refuse("duplicate_field")
+				}
+				seen |= 4
+				x, err := r.decodePolicyRule()
+				if err != nil {
+					return nil, err
+				}
+				v.Rule = x
+			case "ttl_ms":
+				if seen&8 != 0 {
+					return nil, r.refuse("duplicate_field")
+				}
+				seen |= 8
+				x, err := r.integer(-9223372036854775808, 9223372036854775807)
+				if err != nil {
+					return nil, err
+				}
+				v.TTLMs = x
+			case "why":
+				if seen&16 != 0 {
+					return nil, r.refuse("duplicate_field")
+				}
+				seen |= 16
+				x, err := r.str()
+				if err != nil {
+					return nil, err
+				}
+				v.Why = x
+			case "name":
+				if seen&32 != 0 {
+					return nil, r.refuse("duplicate_field")
+				}
+				seen |= 32
+				x, err := r.str()
+				if err != nil {
+					return nil, err
+				}
+				v.Name = x
+			case "on":
+				if seen&64 != 0 {
+					return nil, r.refuse("duplicate_field")
+				}
+				seen |= 64
+				x, err := r.boolean()
+				if err != nil {
+					return nil, err
+				}
+				v.On = x
+			case "action":
+				if seen&128 != 0 {
+					return nil, r.refuse("duplicate_field")
+				}
+				seen |= 128
+				x, err := r.str()
+				if err != nil {
+					return nil, err
+				}
+				v.Action = x
+			case "program":
+				if seen&256 != 0 {
+					return nil, r.refuse("duplicate_field")
+				}
+				seen |= 256
+				x, err := r.str()
+				if err != nil {
+					return nil, err
+				}
+				v.Program = x
+			case "rules":
+				if seen&512 != 0 {
+					return nil, r.refuse("duplicate_field")
+				}
+				seen |= 512
+				x, err := decodeList(r, (*reader).decodePolicyRule)
+				if err != nil {
+					return nil, err
+				}
+				v.Rules = x
+			case "address":
+				if seen&1024 != 0 {
+					return nil, r.refuse("duplicate_field")
+				}
+				seen |= 1024
+				x, err := r.str()
+				if err != nil {
+					return nil, err
+				}
+				v.Address = x
+			default:
+				return nil, r.refuse("unknown_field")
+			}
+			r.ws()
+			if r.at() != ',' {
+				break
+			}
+			r.pos++
+		}
+	}
+	if r.at() != '}' {
+		return nil, r.refuse("malformed")
+	}
+	r.pos++
+	r.depth--
+	if seen&3 != 3 {
+		return nil, r.refuse("missing_field")
+	}
+	if n := len(v.ExpectedRevision); n > 128 {
+		return nil, r.refuse("bad_value")
+	}
+	for _, c := range v.ExpectedRevision {
+		if c < 0x20 || c >= 0x7f && c <= 0x9f {
+			return nil, r.refuse("bad_value")
+		}
+	}
+	if v.TTLMs < 0 || v.TTLMs > 31536000000 {
+		return nil, r.refuse("bad_value")
+	}
+	if n := len(v.Why); n > 256 {
+		return nil, r.refuse("bad_value")
+	}
+	for _, c := range v.Why {
+		if c < 0x20 || c >= 0x7f && c <= 0x9f {
+			return nil, r.refuse("bad_value")
+		}
+	}
+	if n := len(v.Name); n > 64 {
+		return nil, r.refuse("bad_value")
+	}
+	for _, c := range v.Name {
+		if c < 0x20 || c >= 0x7f && c <= 0x9f {
+			return nil, r.refuse("bad_value")
+		}
+	}
+	if n := len(v.Action); n > 128 {
+		return nil, r.refuse("bad_value")
+	}
+	for _, c := range v.Action {
+		if c < 0x20 || c >= 0x7f && c <= 0x9f {
+			return nil, r.refuse("bad_value")
+		}
+	}
+	if n := len(v.Program); n > 4096 {
+		return nil, r.refuse("bad_value")
+	}
+	for _, c := range v.Program {
+		if c < 0x20 || c >= 0x7f && c <= 0x9f {
+			return nil, r.refuse("bad_value")
+		}
+	}
+	if n := len(v.Rules); n > 64 {
+		return nil, r.refuse("bad_value")
+	}
+	if n := len(v.Address); n > 2048 {
+		return nil, r.refuse("bad_value")
+	}
+	for _, c := range v.Address {
+		if c < 0x20 || c >= 0x7f && c <= 0x9f {
+			return nil, r.refuse("bad_value")
+		}
+	}
+	if !(v.Kind).Known() {
+		return nil, r.refuse("bad_enum")
+	}
+	return v, nil
+}
+
+func (r *reader) decodeChangeRequestState() (*ChangeRequestState, error) {
+	if r.at() != '{' {
+		return nil, r.refuse("wrong_type")
+	}
+	if err := r.enter(); err != nil {
+		return nil, err
+	}
+	r.pos++
+	v := &ChangeRequestState{}
+	var seen uint32
+	r.ws()
+	if r.at() != '}' {
+		for {
+			r.ws()
+			if r.at() != '"' {
+				return nil, r.refuse("malformed")
+			}
+			key, err := r.str()
+			if err != nil {
+				return nil, err
+			}
+			r.ws()
+			if r.at() != ':' {
+				return nil, r.refuse("malformed")
+			}
+			r.pos++
+			r.ws()
+			switch key {
+			case "outcome":
+				if seen&1 != 0 {
+					return nil, r.refuse("duplicate_field")
+				}
+				seen |= 1
+				x, err := r.str()
+				if err != nil {
+					return nil, err
+				}
+				word, ok := ParseChangeRequestOutcome(x)
+				if !ok {
+					return nil, r.refuse("bad_enum")
+				}
+				v.Outcome = word
+			case "id":
+				if seen&2 != 0 {
+					return nil, r.refuse("duplicate_field")
+				}
+				seen |= 2
+				x, err := r.str()
+				if err != nil {
+					return nil, err
+				}
+				v.ID = x
+			case "revision":
+				if seen&4 != 0 {
+					return nil, r.refuse("duplicate_field")
+				}
+				seen |= 4
+				x, err := r.str()
+				if err != nil {
+					return nil, err
+				}
+				v.Revision = x
+			case "change":
+				if seen&8 != 0 {
+					return nil, r.refuse("duplicate_field")
+				}
+				seen |= 8
+				x, err := r.decodePolicyChange()
+				if err != nil {
+					return nil, err
+				}
+				v.Change = x
+			case "expires":
+				if seen&16 != 0 {
+					return nil, r.refuse("duplicate_field")
+				}
+				seen |= 16
+				x, err := r.str()
+				if err != nil {
+					return nil, err
+				}
+				v.Expires = x
+			case "exempt":
+				if seen&32 != 0 {
+					return nil, r.refuse("duplicate_field")
+				}
+				seen |= 32
+				x, err := r.boolean()
+				if err != nil {
+					return nil, err
+				}
+				v.Exempt = x
+			default:
+				return nil, r.refuse("unknown_field")
+			}
+			r.ws()
+			if r.at() != ',' {
+				break
+			}
+			r.pos++
+		}
+	}
+	if r.at() != '}' {
+		return nil, r.refuse("malformed")
+	}
+	r.pos++
+	r.depth--
+	if seen&55 != 55 {
+		return nil, r.refuse("missing_field")
+	}
+	if n := len(v.ID); n > 128 {
+		return nil, r.refuse("bad_value")
+	}
+	for _, c := range v.ID {
+		if c < 0x20 || c >= 0x7f && c <= 0x9f {
+			return nil, r.refuse("bad_value")
+		}
+	}
+	if n := len(v.Revision); n > 128 {
+		return nil, r.refuse("bad_value")
+	}
+	for _, c := range v.Revision {
+		if c < 0x20 || c >= 0x7f && c <= 0x9f {
+			return nil, r.refuse("bad_value")
+		}
+	}
+	if n := len(v.Expires); n > 64 {
+		return nil, r.refuse("bad_value")
+	}
+	for _, c := range v.Expires {
+		if c < 0x20 || c >= 0x7f && c <= 0x9f {
+			return nil, r.refuse("bad_value")
+		}
+	}
+	if !(v.Outcome).Known() {
+		return nil, r.refuse("bad_enum")
+	}
+	return v, nil
+}
+
+func (r *reader) decodeChangeRequestPage() (*ChangeRequestPage, error) {
+	if r.at() != '{' {
+		return nil, r.refuse("wrong_type")
+	}
+	if err := r.enter(); err != nil {
+		return nil, err
+	}
+	r.pos++
+	v := &ChangeRequestPage{}
+	var seen uint32
+	r.ws()
+	if r.at() != '}' {
+		for {
+			r.ws()
+			if r.at() != '"' {
+				return nil, r.refuse("malformed")
+			}
+			key, err := r.str()
+			if err != nil {
+				return nil, err
+			}
+			r.ws()
+			if r.at() != ':' {
+				return nil, r.refuse("malformed")
+			}
+			r.pos++
+			r.ws()
+			switch key {
+			case "outcome":
+				if seen&1 != 0 {
+					return nil, r.refuse("duplicate_field")
+				}
+				seen |= 1
+				x, err := r.str()
+				if err != nil {
+					return nil, err
+				}
+				word, ok := ParsePolicyPageOutcome(x)
+				if !ok {
+					return nil, r.refuse("bad_enum")
+				}
+				v.Outcome = word
+			case "requests":
+				if seen&2 != 0 {
+					return nil, r.refuse("duplicate_field")
+				}
+				seen |= 2
+				x, err := decodeList(r, (*reader).decodeChangeRequestState)
+				if err != nil {
+					return nil, err
+				}
+				v.Requests = x
+			default:
+				return nil, r.refuse("unknown_field")
+			}
+			r.ws()
+			if r.at() != ',' {
+				break
+			}
+			r.pos++
+		}
+	}
+	if r.at() != '}' {
+		return nil, r.refuse("malformed")
+	}
+	r.pos++
+	r.depth--
+	if seen&3 != 3 {
+		return nil, r.refuse("missing_field")
+	}
+	if n := len(v.Requests); n > 64 {
+		return nil, r.refuse("bad_value")
+	}
+	if !(v.Outcome).Known() {
+		return nil, r.refuse("bad_enum")
 	}
 	return v, nil
 }
@@ -13874,6 +14991,194 @@ func (r *reader) decodeOAAuthorizationOperatorListDefaultsArguments() (*oaAuthor
 	return v, nil
 }
 
+func (r *reader) decodeOAAuthorizationOperatorRequestChangeArguments() (*oaAuthorizationOperatorRequestChangeArguments, error) {
+	if r.at() != '{' {
+		return nil, r.refuse("wrong_type")
+	}
+	if err := r.enter(); err != nil {
+		return nil, err
+	}
+	r.pos++
+	v := &oaAuthorizationOperatorRequestChangeArguments{}
+	var seen uint32
+	r.ws()
+	if r.at() != '}' {
+		for {
+			r.ws()
+			if r.at() != '"' {
+				return nil, r.refuse("malformed")
+			}
+			key, err := r.str()
+			if err != nil {
+				return nil, err
+			}
+			r.ws()
+			if r.at() != ':' {
+				return nil, r.refuse("malformed")
+			}
+			r.pos++
+			r.ws()
+			switch key {
+			case "change":
+				if seen&1 != 0 {
+					return nil, r.refuse("duplicate_field")
+				}
+				seen |= 1
+				x, err := r.decodePolicyChange()
+				if err != nil {
+					return nil, err
+				}
+				v.Change = *x
+			case "wait_ms":
+				if seen&2 != 0 {
+					return nil, r.refuse("duplicate_field")
+				}
+				seen |= 2
+				x, err := r.integer(-9223372036854775808, 9223372036854775807)
+				if err != nil {
+					return nil, err
+				}
+				v.WaitMs = x
+			default:
+				return nil, r.refuse("unknown_field")
+			}
+			r.ws()
+			if r.at() != ',' {
+				break
+			}
+			r.pos++
+		}
+	}
+	if r.at() != '}' {
+		return nil, r.refuse("malformed")
+	}
+	r.pos++
+	r.depth--
+	if seen&3 != 3 {
+		return nil, r.refuse("missing_field")
+	}
+	if v.WaitMs < 0 || v.WaitMs > 30000 {
+		return nil, r.refuse("bad_value")
+	}
+	return v, nil
+}
+
+func (r *reader) decodeOAAuthorizationOperatorObserveChangeRequestArguments() (*oaAuthorizationOperatorObserveChangeRequestArguments, error) {
+	if r.at() != '{' {
+		return nil, r.refuse("wrong_type")
+	}
+	if err := r.enter(); err != nil {
+		return nil, err
+	}
+	r.pos++
+	v := &oaAuthorizationOperatorObserveChangeRequestArguments{}
+	var seen uint32
+	r.ws()
+	if r.at() != '}' {
+		for {
+			r.ws()
+			if r.at() != '"' {
+				return nil, r.refuse("malformed")
+			}
+			key, err := r.str()
+			if err != nil {
+				return nil, err
+			}
+			r.ws()
+			if r.at() != ':' {
+				return nil, r.refuse("malformed")
+			}
+			r.pos++
+			r.ws()
+			switch key {
+			case "id":
+				if seen&1 != 0 {
+					return nil, r.refuse("duplicate_field")
+				}
+				seen |= 1
+				x, err := r.str()
+				if err != nil {
+					return nil, err
+				}
+				v.ID = x
+			case "wait_ms":
+				if seen&2 != 0 {
+					return nil, r.refuse("duplicate_field")
+				}
+				seen |= 2
+				x, err := r.integer(-9223372036854775808, 9223372036854775807)
+				if err != nil {
+					return nil, err
+				}
+				v.WaitMs = x
+			default:
+				return nil, r.refuse("unknown_field")
+			}
+			r.ws()
+			if r.at() != ',' {
+				break
+			}
+			r.pos++
+		}
+	}
+	if r.at() != '}' {
+		return nil, r.refuse("malformed")
+	}
+	r.pos++
+	r.depth--
+	if seen&3 != 3 {
+		return nil, r.refuse("missing_field")
+	}
+	if n := len(v.ID); n < 1 || n > 128 {
+		return nil, r.refuse("bad_value")
+	}
+	for _, c := range v.ID {
+		if c < 0x20 || c >= 0x7f && c <= 0x9f {
+			return nil, r.refuse("bad_value")
+		}
+	}
+	if v.WaitMs < 0 || v.WaitMs > 30000 {
+		return nil, r.refuse("bad_value")
+	}
+	return v, nil
+}
+
+func (r *reader) decodeOAAuthorizationOperatorListChangeRequestsArguments() (*oaAuthorizationOperatorListChangeRequestsArguments, error) {
+	if r.at() != '{' {
+		return nil, r.refuse("wrong_type")
+	}
+	if err := r.enter(); err != nil {
+		return nil, err
+	}
+	r.pos++
+	v := &oaAuthorizationOperatorListChangeRequestsArguments{}
+	r.ws()
+	if r.at() != '}' {
+		for {
+			r.ws()
+			if r.at() != '"' {
+				return nil, r.refuse("malformed")
+			}
+			key, err := r.str()
+			if err != nil {
+				return nil, err
+			}
+			r.ws()
+			if r.at() != ':' {
+				return nil, r.refuse("malformed")
+			}
+			_ = key
+			return nil, r.refuse("unknown_field")
+		}
+	}
+	if r.at() != '}' {
+		return nil, r.refuse("malformed")
+	}
+	r.pos++
+	r.depth--
+	return v, nil
+}
+
 func (r *reader) decodeOAAuthorizationOperatorSetDefaultArguments() (*oaAuthorizationOperatorSetDefaultArguments, error) {
 	if r.at() != '{' {
 		return nil, r.refuse("wrong_type")
@@ -16298,6 +17603,183 @@ func (r *reader) decodeOAAuthorizationOperatorListDefaultsResult() (*oaAuthoriza
 	return v, nil
 }
 
+func (r *reader) decodeOAAuthorizationOperatorRequestChangeResult() (*oaAuthorizationOperatorRequestChangeResult, error) {
+	if r.at() != '{' {
+		return nil, r.refuse("wrong_type")
+	}
+	if err := r.enter(); err != nil {
+		return nil, err
+	}
+	r.pos++
+	v := &oaAuthorizationOperatorRequestChangeResult{}
+	var seen uint32
+	r.ws()
+	if r.at() != '}' {
+		for {
+			r.ws()
+			if r.at() != '"' {
+				return nil, r.refuse("malformed")
+			}
+			key, err := r.str()
+			if err != nil {
+				return nil, err
+			}
+			r.ws()
+			if r.at() != ':' {
+				return nil, r.refuse("malformed")
+			}
+			r.pos++
+			r.ws()
+			switch key {
+			case "value":
+				if seen&1 != 0 {
+					return nil, r.refuse("duplicate_field")
+				}
+				seen |= 1
+				x, err := r.decodeChangeRequestState()
+				if err != nil {
+					return nil, err
+				}
+				v.Value = *x
+			default:
+				return nil, r.refuse("unknown_field")
+			}
+			r.ws()
+			if r.at() != ',' {
+				break
+			}
+			r.pos++
+		}
+	}
+	if r.at() != '}' {
+		return nil, r.refuse("malformed")
+	}
+	r.pos++
+	r.depth--
+	if seen&1 != 1 {
+		return nil, r.refuse("missing_field")
+	}
+	return v, nil
+}
+
+func (r *reader) decodeOAAuthorizationOperatorObserveChangeRequestResult() (*oaAuthorizationOperatorObserveChangeRequestResult, error) {
+	if r.at() != '{' {
+		return nil, r.refuse("wrong_type")
+	}
+	if err := r.enter(); err != nil {
+		return nil, err
+	}
+	r.pos++
+	v := &oaAuthorizationOperatorObserveChangeRequestResult{}
+	var seen uint32
+	r.ws()
+	if r.at() != '}' {
+		for {
+			r.ws()
+			if r.at() != '"' {
+				return nil, r.refuse("malformed")
+			}
+			key, err := r.str()
+			if err != nil {
+				return nil, err
+			}
+			r.ws()
+			if r.at() != ':' {
+				return nil, r.refuse("malformed")
+			}
+			r.pos++
+			r.ws()
+			switch key {
+			case "value":
+				if seen&1 != 0 {
+					return nil, r.refuse("duplicate_field")
+				}
+				seen |= 1
+				x, err := r.decodeChangeRequestState()
+				if err != nil {
+					return nil, err
+				}
+				v.Value = *x
+			default:
+				return nil, r.refuse("unknown_field")
+			}
+			r.ws()
+			if r.at() != ',' {
+				break
+			}
+			r.pos++
+		}
+	}
+	if r.at() != '}' {
+		return nil, r.refuse("malformed")
+	}
+	r.pos++
+	r.depth--
+	if seen&1 != 1 {
+		return nil, r.refuse("missing_field")
+	}
+	return v, nil
+}
+
+func (r *reader) decodeOAAuthorizationOperatorListChangeRequestsResult() (*oaAuthorizationOperatorListChangeRequestsResult, error) {
+	if r.at() != '{' {
+		return nil, r.refuse("wrong_type")
+	}
+	if err := r.enter(); err != nil {
+		return nil, err
+	}
+	r.pos++
+	v := &oaAuthorizationOperatorListChangeRequestsResult{}
+	var seen uint32
+	r.ws()
+	if r.at() != '}' {
+		for {
+			r.ws()
+			if r.at() != '"' {
+				return nil, r.refuse("malformed")
+			}
+			key, err := r.str()
+			if err != nil {
+				return nil, err
+			}
+			r.ws()
+			if r.at() != ':' {
+				return nil, r.refuse("malformed")
+			}
+			r.pos++
+			r.ws()
+			switch key {
+			case "value":
+				if seen&1 != 0 {
+					return nil, r.refuse("duplicate_field")
+				}
+				seen |= 1
+				x, err := r.decodeChangeRequestPage()
+				if err != nil {
+					return nil, err
+				}
+				v.Value = *x
+			default:
+				return nil, r.refuse("unknown_field")
+			}
+			r.ws()
+			if r.at() != ',' {
+				break
+			}
+			r.pos++
+		}
+	}
+	if r.at() != '}' {
+		return nil, r.refuse("malformed")
+	}
+	r.pos++
+	r.depth--
+	if seen&1 != 1 {
+		return nil, r.refuse("missing_field")
+	}
+	return v, nil
+}
+
 func (r *reader) decodeOAAuthorizationOperatorSetDefaultResult() (*oaAuthorizationOperatorSetDefaultResult, error) {
 	if r.at() != '{' {
 		return nil, r.refuse("wrong_type")
@@ -17327,6 +18809,27 @@ func ToJSON(v any) (out []byte, err error) {
 			return nil, &Refusal{Word: "wrong_type"}
 		}
 		return encDecisionExplanation(nil, v, 0), nil
+	case PolicyChange:
+		return encPolicyChange(nil, &v, 0), nil
+	case *PolicyChange:
+		if v == nil {
+			return nil, &Refusal{Word: "wrong_type"}
+		}
+		return encPolicyChange(nil, v, 0), nil
+	case ChangeRequestState:
+		return encChangeRequestState(nil, &v, 0), nil
+	case *ChangeRequestState:
+		if v == nil {
+			return nil, &Refusal{Word: "wrong_type"}
+		}
+		return encChangeRequestState(nil, v, 0), nil
+	case ChangeRequestPage:
+		return encChangeRequestPage(nil, &v, 0), nil
+	case *ChangeRequestPage:
+		if v == nil {
+			return nil, &Refusal{Word: "wrong_type"}
+		}
+		return encChangeRequestPage(nil, v, 0), nil
 	case PermissionKey:
 		return encPermissionKey(nil, &v, 0), nil
 	case *PermissionKey:
@@ -17846,6 +19349,48 @@ func FromJSON(data []byte, v any) error {
 			return &Refusal{Word: "wrong_type"}
 		}
 		x, err := r.decodeDecisionExplanation()
+		if err != nil {
+			return err
+		}
+		r.ws()
+		if r.pos < len(r.buf) {
+			return r.refuse("trailing_bytes")
+		}
+		*p = *x
+		return nil
+	case *PolicyChange:
+		if p == nil {
+			return &Refusal{Word: "wrong_type"}
+		}
+		x, err := r.decodePolicyChange()
+		if err != nil {
+			return err
+		}
+		r.ws()
+		if r.pos < len(r.buf) {
+			return r.refuse("trailing_bytes")
+		}
+		*p = *x
+		return nil
+	case *ChangeRequestState:
+		if p == nil {
+			return &Refusal{Word: "wrong_type"}
+		}
+		x, err := r.decodeChangeRequestState()
+		if err != nil {
+			return err
+		}
+		r.ws()
+		if r.pos < len(r.buf) {
+			return r.refuse("trailing_bytes")
+		}
+		*p = *x
+		return nil
+	case *ChangeRequestPage:
+		if p == nil {
+			return &Refusal{Word: "wrong_type"}
+		}
+		x, err := r.decodeChangeRequestPage()
 		if err != nil {
 			return err
 		}
@@ -18422,6 +19967,23 @@ func serviceReply(v *oaServiceFrame, payload Raw, err error) (frame []byte, outE
 	return frame, nil
 }
 
+// handlerPanic writes a recovered handler panic and its stack to standard error.
+func handlerPanic(service, method string, p interface{}) {
+	value := "a value that is neither a string nor an error"
+	func() {
+		defer func() { _ = recover() }()
+		switch v := p.(type) {
+		case string:
+			value = v
+		case error:
+			value = v.Error()
+		case interface{ String() string }:
+			value = v.String()
+		}
+	}()
+	print(service, " ", method, ": handler panic: ", value, "\n", string(debug.Stack()))
+}
+
 // EndpointContract is abstraction.facade/endpoint@1, which every dispatcher
 // answers beside its own service.
 const EndpointContract = "abstraction.facade/endpoint@1"
@@ -18629,7 +20191,8 @@ func ServeEndpointRemote(frame []byte, program, version string, admit func(contr
 			return &ServiceError{Code: "forbidden", Message: "remote admission required"}
 		}
 		defer func() {
-			if recover() != nil {
+			if p := recover(); p != nil {
+				handlerPanic(v.Service, v.Method+" admission", p)
 				err = &ServiceError{Code: ServiceErrorCodeHandlerError, Message: "handler failed"}
 			}
 		}()
@@ -19031,6 +20594,7 @@ func (d *AuthorizationDispatcher) invokeDecideForAtLeastRevision(args *oaAuthori
 			if _, ok := p.(*Refusal); ok {
 				err = &ServiceError{Code: ServiceErrorCodeInvalidResult}
 			} else {
+				handlerPanic("abstraction.rights/authorization@1", "DecideForAtLeastRevision", p)
 				err = &ServiceError{Code: ServiceErrorCodeHandlerError, Message: "handler failed"}
 			}
 		}
@@ -19063,6 +20627,7 @@ func (d *AuthorizationDispatcher) invokeListActionDescriptions(args *oaAuthoriza
 			if _, ok := p.(*Refusal); ok {
 				err = &ServiceError{Code: ServiceErrorCodeInvalidResult}
 			} else {
+				handlerPanic("abstraction.rights/authorization@1", "ListActionDescriptions", p)
 				err = &ServiceError{Code: ServiceErrorCodeHandlerError, Message: "handler failed"}
 			}
 		}
@@ -19095,6 +20660,7 @@ func (d *AuthorizationDispatcher) invokeDecide(args *oaAuthorizationDecideArgume
 			if _, ok := p.(*Refusal); ok {
 				err = &ServiceError{Code: ServiceErrorCodeInvalidResult}
 			} else {
+				handlerPanic("abstraction.rights/authorization@1", "Decide", p)
 				err = &ServiceError{Code: ServiceErrorCodeHandlerError, Message: "handler failed"}
 			}
 		}
@@ -19127,6 +20693,7 @@ func (d *AuthorizationDispatcher) invokeDecideFor(args *oaAuthorizationDecideFor
 			if _, ok := p.(*Refusal); ok {
 				err = &ServiceError{Code: ServiceErrorCodeInvalidResult}
 			} else {
+				handlerPanic("abstraction.rights/authorization@1", "DecideFor", p)
 				err = &ServiceError{Code: ServiceErrorCodeHandlerError, Message: "handler failed"}
 			}
 		}
@@ -19169,6 +20736,9 @@ type AuthorizationOperator interface {
 	RetireAction(expectedRevision, action string) (ActionEdit, error)
 	ExplainFor(subject Subject, action, resource string) (DecisionExplanation, error)
 	ListDefaults() (DefaultPage, error)
+	RequestChange(change PolicyChange, waitMs int64) (ChangeRequestState, error)
+	ObserveChangeRequest(id string, waitMs int64) (ChangeRequestState, error)
+	ListChangeRequests() (ChangeRequestPage, error)
 	SetDefault(expectedRevision, name string, on bool) (DefaultEdit, error)
 }
 type AuthorizationOperatorTransport interface {
@@ -19224,6 +20794,12 @@ func (d *AuthorizationOperatorDispatcher) RemoteMethodProfile(contract, method s
 	case "ExplainFor":
 		return "local", true
 	case "ListDefaults":
+		return "local", true
+	case "RequestChange":
+		return "local", true
+	case "ObserveChangeRequest":
+		return "local", true
+	case "ListChangeRequests":
 		return "local", true
 	case "SetDefault":
 		return "local", true
@@ -19881,6 +21457,132 @@ func (c *AuthorizationOperatorClient) ListDefaults() (result DefaultPage, err er
 	result = decoded.Value
 	return
 }
+func (c *AuthorizationOperatorClient) RequestChange(change PolicyChange, waitMs int64) (result ChangeRequestState, err error) {
+	defer func() {
+		if p := recover(); p != nil {
+			if e, ok := p.(*Refusal); ok {
+				err = e
+			} else {
+				panic(p)
+			}
+		}
+	}()
+	args := oaAuthorizationOperatorRequestChangeArguments{Change: change, WaitMs: waitMs}
+	v := oaServiceFrame{Version: 1, Service: "abstraction.rights/operator@1", Method: "RequestChange", Arguments: Raw(encOAAuthorizationOperatorRequestChangeArguments(nil, &args, 1))}
+	frame := encOAServiceFrame(nil, &v, 0)
+	if _, err = servicePayload(frame); err != nil {
+		return
+	}
+	var response []byte
+	response, err = c.transport.ExchangeFrame(frame)
+	if err != nil {
+		return
+	}
+	var payload Raw
+	payload, err = serviceResponse(response, v.Service, v.Method)
+	if err != nil {
+		return
+	}
+	r := &reader{buf: []byte(payload), depth: 1}
+	r.ws()
+	var decoded *oaAuthorizationOperatorRequestChangeResult
+	decoded, err = r.decodeOAAuthorizationOperatorRequestChangeResult()
+	if err != nil {
+		return
+	}
+	_ = decoded
+	r.ws()
+	if r.pos != len(r.buf) {
+		err = r.refuse("trailing_bytes")
+		return
+	}
+	result = decoded.Value
+	return
+}
+func (c *AuthorizationOperatorClient) ObserveChangeRequest(id string, waitMs int64) (result ChangeRequestState, err error) {
+	defer func() {
+		if p := recover(); p != nil {
+			if e, ok := p.(*Refusal); ok {
+				err = e
+			} else {
+				panic(p)
+			}
+		}
+	}()
+	args := oaAuthorizationOperatorObserveChangeRequestArguments{ID: id, WaitMs: waitMs}
+	v := oaServiceFrame{Version: 1, Service: "abstraction.rights/operator@1", Method: "ObserveChangeRequest", Arguments: Raw(encOAAuthorizationOperatorObserveChangeRequestArguments(nil, &args, 1))}
+	frame := encOAServiceFrame(nil, &v, 0)
+	if _, err = servicePayload(frame); err != nil {
+		return
+	}
+	var response []byte
+	response, err = c.transport.ExchangeFrame(frame)
+	if err != nil {
+		return
+	}
+	var payload Raw
+	payload, err = serviceResponse(response, v.Service, v.Method)
+	if err != nil {
+		return
+	}
+	r := &reader{buf: []byte(payload), depth: 1}
+	r.ws()
+	var decoded *oaAuthorizationOperatorObserveChangeRequestResult
+	decoded, err = r.decodeOAAuthorizationOperatorObserveChangeRequestResult()
+	if err != nil {
+		return
+	}
+	_ = decoded
+	r.ws()
+	if r.pos != len(r.buf) {
+		err = r.refuse("trailing_bytes")
+		return
+	}
+	result = decoded.Value
+	return
+}
+func (c *AuthorizationOperatorClient) ListChangeRequests() (result ChangeRequestPage, err error) {
+	defer func() {
+		if p := recover(); p != nil {
+			if e, ok := p.(*Refusal); ok {
+				err = e
+			} else {
+				panic(p)
+			}
+		}
+	}()
+	args := oaAuthorizationOperatorListChangeRequestsArguments{}
+	v := oaServiceFrame{Version: 1, Service: "abstraction.rights/operator@1", Method: "ListChangeRequests", Arguments: Raw(encOAAuthorizationOperatorListChangeRequestsArguments(nil, &args, 1))}
+	frame := encOAServiceFrame(nil, &v, 0)
+	if _, err = servicePayload(frame); err != nil {
+		return
+	}
+	var response []byte
+	response, err = c.transport.ExchangeFrame(frame)
+	if err != nil {
+		return
+	}
+	var payload Raw
+	payload, err = serviceResponse(response, v.Service, v.Method)
+	if err != nil {
+		return
+	}
+	r := &reader{buf: []byte(payload), depth: 1}
+	r.ws()
+	var decoded *oaAuthorizationOperatorListChangeRequestsResult
+	decoded, err = r.decodeOAAuthorizationOperatorListChangeRequestsResult()
+	if err != nil {
+		return
+	}
+	_ = decoded
+	r.ws()
+	if r.pos != len(r.buf) {
+		err = r.refuse("trailing_bytes")
+		return
+	}
+	result = decoded.Value
+	return
+}
 func (c *AuthorizationOperatorClient) SetDefault(expectedRevision, name string, on bool) (result DefaultEdit, err error) {
 	defer func() {
 		if p := recover(); p != nil {
@@ -19954,7 +21656,7 @@ func (d *AuthorizationOperatorDispatcher) ServiceContract() string {
 
 // DescribeServiceDefinitionHash is gen --hash over the canonical service definition.
 func (d *AuthorizationOperatorDispatcher) DescribeServiceDefinitionHash() string {
-	return "sha256:25e83138975aa53bfa85eedc696dba7e5fff243a3118d0e45621e20c1e058546"
+	return "sha256:ce2cb03fe39562443081f045714cde4406f0d508249086bbe194f3dab9dd5c71"
 }
 func (d *AuthorizationOperatorDispatcher) WriteFrame(frame []byte) error {
 	v, err := servicePayload(frame)
@@ -19994,6 +21696,12 @@ func (d *AuthorizationOperatorDispatcher) WriteFrame(frame []byte) error {
 	case "ExplainFor":
 		return DispatchError("wrong_mode")
 	case "ListDefaults":
+		return DispatchError("wrong_mode")
+	case "RequestChange":
+		return DispatchError("wrong_mode")
+	case "ObserveChangeRequest":
+		return DispatchError("wrong_mode")
+	case "ListChangeRequests":
 		return DispatchError("wrong_mode")
 	case "SetDefault":
 		return DispatchError("wrong_mode")
@@ -20211,6 +21919,45 @@ func (d *AuthorizationOperatorDispatcher) ExchangeFrame(frame []byte) ([]byte, e
 		}
 		payload, err := d.invokeListDefaults(args)
 		return serviceReply(v, payload, err)
+	case "RequestChange":
+		r := &reader{buf: []byte(v.Arguments), depth: 1}
+		r.ws()
+		args, err := r.decodeOAAuthorizationOperatorRequestChangeArguments()
+		if err != nil {
+			return serviceReply(v, "", err)
+		}
+		r.ws()
+		if r.pos != len(r.buf) {
+			return serviceReply(v, "", r.refuse("trailing_bytes"))
+		}
+		payload, err := d.invokeRequestChange(args)
+		return serviceReply(v, payload, err)
+	case "ObserveChangeRequest":
+		r := &reader{buf: []byte(v.Arguments), depth: 1}
+		r.ws()
+		args, err := r.decodeOAAuthorizationOperatorObserveChangeRequestArguments()
+		if err != nil {
+			return serviceReply(v, "", err)
+		}
+		r.ws()
+		if r.pos != len(r.buf) {
+			return serviceReply(v, "", r.refuse("trailing_bytes"))
+		}
+		payload, err := d.invokeObserveChangeRequest(args)
+		return serviceReply(v, payload, err)
+	case "ListChangeRequests":
+		r := &reader{buf: []byte(v.Arguments), depth: 1}
+		r.ws()
+		args, err := r.decodeOAAuthorizationOperatorListChangeRequestsArguments()
+		if err != nil {
+			return serviceReply(v, "", err)
+		}
+		r.ws()
+		if r.pos != len(r.buf) {
+			return serviceReply(v, "", r.refuse("trailing_bytes"))
+		}
+		payload, err := d.invokeListChangeRequests(args)
+		return serviceReply(v, payload, err)
 	case "SetDefault":
 		r := &reader{buf: []byte(v.Arguments), depth: 1}
 		r.ws()
@@ -20235,6 +21982,7 @@ func (d *AuthorizationOperatorDispatcher) invokeObservePolicy(args *oaAuthorizat
 			if _, ok := p.(*Refusal); ok {
 				err = &ServiceError{Code: ServiceErrorCodeInvalidResult}
 			} else {
+				handlerPanic("abstraction.rights/operator@1", "ObservePolicy", p)
 				err = &ServiceError{Code: ServiceErrorCodeHandlerError, Message: "handler failed"}
 			}
 		}
@@ -20267,6 +22015,7 @@ func (d *AuthorizationOperatorDispatcher) invokeRegisterDescribedAction(args *oa
 			if _, ok := p.(*Refusal); ok {
 				err = &ServiceError{Code: ServiceErrorCodeInvalidResult}
 			} else {
+				handlerPanic("abstraction.rights/operator@1", "RegisterDescribedAction", p)
 				err = &ServiceError{Code: ServiceErrorCodeHandlerError, Message: "handler failed"}
 			}
 		}
@@ -20299,6 +22048,7 @@ func (d *AuthorizationOperatorDispatcher) invokeApplyFirstUseAllow(args *oaAutho
 			if _, ok := p.(*Refusal); ok {
 				err = &ServiceError{Code: ServiceErrorCodeInvalidResult}
 			} else {
+				handlerPanic("abstraction.rights/operator@1", "ApplyFirstUseAllow", p)
 				err = &ServiceError{Code: ServiceErrorCodeHandlerError, Message: "handler failed"}
 			}
 		}
@@ -20331,6 +22081,7 @@ func (d *AuthorizationOperatorDispatcher) invokeListPolicy(args *oaAuthorization
 			if _, ok := p.(*Refusal); ok {
 				err = &ServiceError{Code: ServiceErrorCodeInvalidResult}
 			} else {
+				handlerPanic("abstraction.rights/operator@1", "ListPolicy", p)
 				err = &ServiceError{Code: ServiceErrorCodeHandlerError, Message: "handler failed"}
 			}
 		}
@@ -20363,6 +22114,7 @@ func (d *AuthorizationOperatorDispatcher) invokeSetRule(args *oaAuthorizationOpe
 			if _, ok := p.(*Refusal); ok {
 				err = &ServiceError{Code: ServiceErrorCodeInvalidResult}
 			} else {
+				handlerPanic("abstraction.rights/operator@1", "SetRule", p)
 				err = &ServiceError{Code: ServiceErrorCodeHandlerError, Message: "handler failed"}
 			}
 		}
@@ -20395,6 +22147,7 @@ func (d *AuthorizationOperatorDispatcher) invokeRevokeRule(args *oaAuthorization
 			if _, ok := p.(*Refusal); ok {
 				err = &ServiceError{Code: ServiceErrorCodeInvalidResult}
 			} else {
+				handlerPanic("abstraction.rights/operator@1", "RevokeRule", p)
 				err = &ServiceError{Code: ServiceErrorCodeHandlerError, Message: "handler failed"}
 			}
 		}
@@ -20427,6 +22180,7 @@ func (d *AuthorizationOperatorDispatcher) invokeStopAnswerer(args *oaAuthorizati
 			if _, ok := p.(*Refusal); ok {
 				err = &ServiceError{Code: ServiceErrorCodeInvalidResult}
 			} else {
+				handlerPanic("abstraction.rights/operator@1", "StopAnswerer", p)
 				err = &ServiceError{Code: ServiceErrorCodeHandlerError, Message: "handler failed"}
 			}
 		}
@@ -20459,6 +22213,7 @@ func (d *AuthorizationOperatorDispatcher) invokeRevokeAnswerPermits(args *oaAuth
 			if _, ok := p.(*Refusal); ok {
 				err = &ServiceError{Code: ServiceErrorCodeInvalidResult}
 			} else {
+				handlerPanic("abstraction.rights/operator@1", "RevokeAnswerPermits", p)
 				err = &ServiceError{Code: ServiceErrorCodeHandlerError, Message: "handler failed"}
 			}
 		}
@@ -20491,6 +22246,7 @@ func (d *AuthorizationOperatorDispatcher) invokeSetRuleFor(args *oaAuthorization
 			if _, ok := p.(*Refusal); ok {
 				err = &ServiceError{Code: ServiceErrorCodeInvalidResult}
 			} else {
+				handlerPanic("abstraction.rights/operator@1", "SetRuleFor", p)
 				err = &ServiceError{Code: ServiceErrorCodeHandlerError, Message: "handler failed"}
 			}
 		}
@@ -20523,6 +22279,7 @@ func (d *AuthorizationOperatorDispatcher) invokeSetRulesFor(args *oaAuthorizatio
 			if _, ok := p.(*Refusal); ok {
 				err = &ServiceError{Code: ServiceErrorCodeInvalidResult}
 			} else {
+				handlerPanic("abstraction.rights/operator@1", "SetRulesFor", p)
 				err = &ServiceError{Code: ServiceErrorCodeHandlerError, Message: "handler failed"}
 			}
 		}
@@ -20555,6 +22312,7 @@ func (d *AuthorizationOperatorDispatcher) invokeReadRule(args *oaAuthorizationOp
 			if _, ok := p.(*Refusal); ok {
 				err = &ServiceError{Code: ServiceErrorCodeInvalidResult}
 			} else {
+				handlerPanic("abstraction.rights/operator@1", "ReadRule", p)
 				err = &ServiceError{Code: ServiceErrorCodeHandlerError, Message: "handler failed"}
 			}
 		}
@@ -20587,6 +22345,7 @@ func (d *AuthorizationOperatorDispatcher) invokeRegisterAction(args *oaAuthoriza
 			if _, ok := p.(*Refusal); ok {
 				err = &ServiceError{Code: ServiceErrorCodeInvalidResult}
 			} else {
+				handlerPanic("abstraction.rights/operator@1", "RegisterAction", p)
 				err = &ServiceError{Code: ServiceErrorCodeHandlerError, Message: "handler failed"}
 			}
 		}
@@ -20619,6 +22378,7 @@ func (d *AuthorizationOperatorDispatcher) invokeRetireAction(args *oaAuthorizati
 			if _, ok := p.(*Refusal); ok {
 				err = &ServiceError{Code: ServiceErrorCodeInvalidResult}
 			} else {
+				handlerPanic("abstraction.rights/operator@1", "RetireAction", p)
 				err = &ServiceError{Code: ServiceErrorCodeHandlerError, Message: "handler failed"}
 			}
 		}
@@ -20651,6 +22411,7 @@ func (d *AuthorizationOperatorDispatcher) invokeExplainFor(args *oaAuthorization
 			if _, ok := p.(*Refusal); ok {
 				err = &ServiceError{Code: ServiceErrorCodeInvalidResult}
 			} else {
+				handlerPanic("abstraction.rights/operator@1", "ExplainFor", p)
 				err = &ServiceError{Code: ServiceErrorCodeHandlerError, Message: "handler failed"}
 			}
 		}
@@ -20683,6 +22444,7 @@ func (d *AuthorizationOperatorDispatcher) invokeListDefaults(args *oaAuthorizati
 			if _, ok := p.(*Refusal); ok {
 				err = &ServiceError{Code: ServiceErrorCodeInvalidResult}
 			} else {
+				handlerPanic("abstraction.rights/operator@1", "ListDefaults", p)
 				err = &ServiceError{Code: ServiceErrorCodeHandlerError, Message: "handler failed"}
 			}
 		}
@@ -20708,6 +22470,105 @@ func (d *AuthorizationOperatorDispatcher) invokeListDefaults(args *oaAuthorizati
 	}
 	return
 }
+func (d *AuthorizationOperatorDispatcher) invokeRequestChange(args *oaAuthorizationOperatorRequestChangeArguments) (payload Raw, err error) {
+	defer func() {
+		if p := recover(); p != nil {
+			payload = ""
+			if _, ok := p.(*Refusal); ok {
+				err = &ServiceError{Code: ServiceErrorCodeInvalidResult}
+			} else {
+				handlerPanic("abstraction.rights/operator@1", "RequestChange", p)
+				err = &ServiceError{Code: ServiceErrorCodeHandlerError, Message: "handler failed"}
+			}
+		}
+	}()
+	var result ChangeRequestState
+	result, err = d.Handler.RequestChange(args.Change, args.WaitMs)
+	if err != nil {
+		return
+	}
+	value := oaAuthorizationOperatorRequestChangeResult{Value: result}
+	payload = Raw(encOAAuthorizationOperatorRequestChangeResult(nil, &value, 1))
+	r := &reader{buf: []byte(payload), depth: 1}
+	r.ws()
+	if _, e := r.decodeOAAuthorizationOperatorRequestChangeResult(); e != nil {
+		payload = ""
+		err = &ServiceError{Code: ServiceErrorCodeInvalidResult}
+		return
+	}
+	r.ws()
+	if r.pos != len(r.buf) {
+		payload = ""
+		err = &ServiceError{Code: ServiceErrorCodeInvalidResult}
+	}
+	return
+}
+func (d *AuthorizationOperatorDispatcher) invokeObserveChangeRequest(args *oaAuthorizationOperatorObserveChangeRequestArguments) (payload Raw, err error) {
+	defer func() {
+		if p := recover(); p != nil {
+			payload = ""
+			if _, ok := p.(*Refusal); ok {
+				err = &ServiceError{Code: ServiceErrorCodeInvalidResult}
+			} else {
+				handlerPanic("abstraction.rights/operator@1", "ObserveChangeRequest", p)
+				err = &ServiceError{Code: ServiceErrorCodeHandlerError, Message: "handler failed"}
+			}
+		}
+	}()
+	var result ChangeRequestState
+	result, err = d.Handler.ObserveChangeRequest(args.ID, args.WaitMs)
+	if err != nil {
+		return
+	}
+	value := oaAuthorizationOperatorObserveChangeRequestResult{Value: result}
+	payload = Raw(encOAAuthorizationOperatorObserveChangeRequestResult(nil, &value, 1))
+	r := &reader{buf: []byte(payload), depth: 1}
+	r.ws()
+	if _, e := r.decodeOAAuthorizationOperatorObserveChangeRequestResult(); e != nil {
+		payload = ""
+		err = &ServiceError{Code: ServiceErrorCodeInvalidResult}
+		return
+	}
+	r.ws()
+	if r.pos != len(r.buf) {
+		payload = ""
+		err = &ServiceError{Code: ServiceErrorCodeInvalidResult}
+	}
+	return
+}
+func (d *AuthorizationOperatorDispatcher) invokeListChangeRequests(args *oaAuthorizationOperatorListChangeRequestsArguments) (payload Raw, err error) {
+	defer func() {
+		if p := recover(); p != nil {
+			payload = ""
+			if _, ok := p.(*Refusal); ok {
+				err = &ServiceError{Code: ServiceErrorCodeInvalidResult}
+			} else {
+				handlerPanic("abstraction.rights/operator@1", "ListChangeRequests", p)
+				err = &ServiceError{Code: ServiceErrorCodeHandlerError, Message: "handler failed"}
+			}
+		}
+	}()
+	var result ChangeRequestPage
+	result, err = d.Handler.ListChangeRequests()
+	if err != nil {
+		return
+	}
+	value := oaAuthorizationOperatorListChangeRequestsResult{Value: result}
+	payload = Raw(encOAAuthorizationOperatorListChangeRequestsResult(nil, &value, 1))
+	r := &reader{buf: []byte(payload), depth: 1}
+	r.ws()
+	if _, e := r.decodeOAAuthorizationOperatorListChangeRequestsResult(); e != nil {
+		payload = ""
+		err = &ServiceError{Code: ServiceErrorCodeInvalidResult}
+		return
+	}
+	r.ws()
+	if r.pos != len(r.buf) {
+		payload = ""
+		err = &ServiceError{Code: ServiceErrorCodeInvalidResult}
+	}
+	return
+}
 func (d *AuthorizationOperatorDispatcher) invokeSetDefault(args *oaAuthorizationOperatorSetDefaultArguments) (payload Raw, err error) {
 	defer func() {
 		if p := recover(); p != nil {
@@ -20715,6 +22576,7 @@ func (d *AuthorizationOperatorDispatcher) invokeSetDefault(args *oaAuthorization
 			if _, ok := p.(*Refusal); ok {
 				err = &ServiceError{Code: ServiceErrorCodeInvalidResult}
 			} else {
+				handlerPanic("abstraction.rights/operator@1", "SetDefault", p)
 				err = &ServiceError{Code: ServiceErrorCodeHandlerError, Message: "handler failed"}
 			}
 		}
@@ -21142,6 +23004,7 @@ func (d *SelectorAuthorizationDispatcher) invokeListPermissionDefinitions(args *
 			if _, ok := p.(*Refusal); ok {
 				err = &ServiceError{Code: ServiceErrorCodeInvalidResult}
 			} else {
+				handlerPanic("abstraction.rights/authorization@2", "ListPermissionDefinitions", p)
 				err = &ServiceError{Code: ServiceErrorCodeHandlerError, Message: "handler failed"}
 			}
 		}
@@ -21174,6 +23037,7 @@ func (d *SelectorAuthorizationDispatcher) invokeListPermissionBundles(args *oaSe
 			if _, ok := p.(*Refusal); ok {
 				err = &ServiceError{Code: ServiceErrorCodeInvalidResult}
 			} else {
+				handlerPanic("abstraction.rights/authorization@2", "ListPermissionBundles", p)
 				err = &ServiceError{Code: ServiceErrorCodeHandlerError, Message: "handler failed"}
 			}
 		}
@@ -21206,6 +23070,7 @@ func (d *SelectorAuthorizationDispatcher) invokeCheckBatch(args *oaSelectorAutho
 			if _, ok := p.(*Refusal); ok {
 				err = &ServiceError{Code: ServiceErrorCodeInvalidResult}
 			} else {
+				handlerPanic("abstraction.rights/authorization@2", "CheckBatch", p)
 				err = &ServiceError{Code: ServiceErrorCodeHandlerError, Message: "handler failed"}
 			}
 		}
@@ -21238,6 +23103,7 @@ func (d *SelectorAuthorizationDispatcher) invokeCheckBatchFor(args *oaSelectorAu
 			if _, ok := p.(*Refusal); ok {
 				err = &ServiceError{Code: ServiceErrorCodeInvalidResult}
 			} else {
+				handlerPanic("abstraction.rights/authorization@2", "CheckBatchFor", p)
 				err = &ServiceError{Code: ServiceErrorCodeHandlerError, Message: "handler failed"}
 			}
 		}
@@ -21270,6 +23136,7 @@ func (d *SelectorAuthorizationDispatcher) invokeCheckLegacyOperationFor(args *oa
 			if _, ok := p.(*Refusal); ok {
 				err = &ServiceError{Code: ServiceErrorCodeInvalidResult}
 			} else {
+				handlerPanic("abstraction.rights/authorization@2", "CheckLegacyOperationFor", p)
 				err = &ServiceError{Code: ServiceErrorCodeHandlerError, Message: "handler failed"}
 			}
 		}
@@ -21877,6 +23744,7 @@ func (d *SelectorAuthorizationOperatorDispatcher) invokeListSelectorRules(args *
 			if _, ok := p.(*Refusal); ok {
 				err = &ServiceError{Code: ServiceErrorCodeInvalidResult}
 			} else {
+				handlerPanic("abstraction.rights/operator@2", "ListSelectorRules", p)
 				err = &ServiceError{Code: ServiceErrorCodeHandlerError, Message: "handler failed"}
 			}
 		}
@@ -21909,6 +23777,7 @@ func (d *SelectorAuthorizationOperatorDispatcher) invokeReadSelectorRule(args *o
 			if _, ok := p.(*Refusal); ok {
 				err = &ServiceError{Code: ServiceErrorCodeInvalidResult}
 			} else {
+				handlerPanic("abstraction.rights/operator@2", "ReadSelectorRule", p)
 				err = &ServiceError{Code: ServiceErrorCodeHandlerError, Message: "handler failed"}
 			}
 		}
@@ -21941,6 +23810,7 @@ func (d *SelectorAuthorizationOperatorDispatcher) invokeSetSelectorRule(args *oa
 			if _, ok := p.(*Refusal); ok {
 				err = &ServiceError{Code: ServiceErrorCodeInvalidResult}
 			} else {
+				handlerPanic("abstraction.rights/operator@2", "SetSelectorRule", p)
 				err = &ServiceError{Code: ServiceErrorCodeHandlerError, Message: "handler failed"}
 			}
 		}
@@ -21973,6 +23843,7 @@ func (d *SelectorAuthorizationOperatorDispatcher) invokeRemoveSelectorRule(args 
 			if _, ok := p.(*Refusal); ok {
 				err = &ServiceError{Code: ServiceErrorCodeInvalidResult}
 			} else {
+				handlerPanic("abstraction.rights/operator@2", "RemoveSelectorRule", p)
 				err = &ServiceError{Code: ServiceErrorCodeHandlerError, Message: "handler failed"}
 			}
 		}
@@ -22005,6 +23876,7 @@ func (d *SelectorAuthorizationOperatorDispatcher) invokeApplyBundle(args *oaSele
 			if _, ok := p.(*Refusal); ok {
 				err = &ServiceError{Code: ServiceErrorCodeInvalidResult}
 			} else {
+				handlerPanic("abstraction.rights/operator@2", "ApplyBundle", p)
 				err = &ServiceError{Code: ServiceErrorCodeHandlerError, Message: "handler failed"}
 			}
 		}
@@ -22037,6 +23909,7 @@ func (d *SelectorAuthorizationOperatorDispatcher) invokeRemoveBundle(args *oaSel
 			if _, ok := p.(*Refusal); ok {
 				err = &ServiceError{Code: ServiceErrorCodeInvalidResult}
 			} else {
+				handlerPanic("abstraction.rights/operator@2", "RemoveBundle", p)
 				err = &ServiceError{Code: ServiceErrorCodeHandlerError, Message: "handler failed"}
 			}
 		}
@@ -22069,6 +23942,7 @@ func (d *SelectorAuthorizationOperatorDispatcher) invokeApplyPermissionAllow(arg
 			if _, ok := p.(*Refusal); ok {
 				err = &ServiceError{Code: ServiceErrorCodeInvalidResult}
 			} else {
+				handlerPanic("abstraction.rights/operator@2", "ApplyPermissionAllow", p)
 				err = &ServiceError{Code: ServiceErrorCodeHandlerError, Message: "handler failed"}
 			}
 		}
@@ -22101,6 +23975,7 @@ func (d *SelectorAuthorizationOperatorDispatcher) invokeUndoPermissionEffect(arg
 			if _, ok := p.(*Refusal); ok {
 				err = &ServiceError{Code: ServiceErrorCodeInvalidResult}
 			} else {
+				handlerPanic("abstraction.rights/operator@2", "UndoPermissionEffect", p)
 				err = &ServiceError{Code: ServiceErrorCodeHandlerError, Message: "handler failed"}
 			}
 		}
@@ -22251,6 +24126,21 @@ func DecodeDecisionExplanationAt(in []byte,depth,limit int)(*DecisionExplanation
 func EncodeDecisionExplanationAt(v *DecisionExplanation,depth int)[]byte{if depth<0||depth>=64{panic(&Refusal{Word:"depth_exceeded"})};out:=encDecisionExplanation(nil,v,depth);if _,_,e:=DecodeDecisionExplanationAt(out,depth,64);e!=nil{panic(e)};return out}
 func EncodeDecisionExplanation(v *DecisionExplanation)[]byte{return append(EncodeDecisionExplanationAt(v,0),"\n"...)}
 func DecodeDecisionExplanation(in []byte)(*DecisionExplanation,error){v,n,e:=DecodeDecisionExplanationAt(in,0,64);if e!=nil{return nil,e};r:=&reader{buf:in,pos:n};r.ws();if r.pos!=len(in){return nil,r.refuse("trailing_bytes")};return v,nil}
+
+func DecodePolicyChangeAt(in []byte,depth,limit int)(*PolicyChange,int,error){r:=&reader{buf:in,depth:depth,limit:limit};if depth<0||limit<1{return nil,0,r.refuse("depth_exceeded")};r.ws();v,e:=r.decodePolicyChange();return v,r.pos,e}
+func EncodePolicyChangeAt(v *PolicyChange,depth int)[]byte{if depth<0||depth>=64{panic(&Refusal{Word:"depth_exceeded"})};out:=encPolicyChange(nil,v,depth);if _,_,e:=DecodePolicyChangeAt(out,depth,64);e!=nil{panic(e)};return out}
+func EncodePolicyChange(v *PolicyChange)[]byte{return append(EncodePolicyChangeAt(v,0),"\n"...)}
+func DecodePolicyChange(in []byte)(*PolicyChange,error){v,n,e:=DecodePolicyChangeAt(in,0,64);if e!=nil{return nil,e};r:=&reader{buf:in,pos:n};r.ws();if r.pos!=len(in){return nil,r.refuse("trailing_bytes")};return v,nil}
+
+func DecodeChangeRequestStateAt(in []byte,depth,limit int)(*ChangeRequestState,int,error){r:=&reader{buf:in,depth:depth,limit:limit};if depth<0||limit<1{return nil,0,r.refuse("depth_exceeded")};r.ws();v,e:=r.decodeChangeRequestState();return v,r.pos,e}
+func EncodeChangeRequestStateAt(v *ChangeRequestState,depth int)[]byte{if depth<0||depth>=64{panic(&Refusal{Word:"depth_exceeded"})};out:=encChangeRequestState(nil,v,depth);if _,_,e:=DecodeChangeRequestStateAt(out,depth,64);e!=nil{panic(e)};return out}
+func EncodeChangeRequestState(v *ChangeRequestState)[]byte{return append(EncodeChangeRequestStateAt(v,0),"\n"...)}
+func DecodeChangeRequestState(in []byte)(*ChangeRequestState,error){v,n,e:=DecodeChangeRequestStateAt(in,0,64);if e!=nil{return nil,e};r:=&reader{buf:in,pos:n};r.ws();if r.pos!=len(in){return nil,r.refuse("trailing_bytes")};return v,nil}
+
+func DecodeChangeRequestPageAt(in []byte,depth,limit int)(*ChangeRequestPage,int,error){r:=&reader{buf:in,depth:depth,limit:limit};if depth<0||limit<1{return nil,0,r.refuse("depth_exceeded")};r.ws();v,e:=r.decodeChangeRequestPage();return v,r.pos,e}
+func EncodeChangeRequestPageAt(v *ChangeRequestPage,depth int)[]byte{if depth<0||depth>=64{panic(&Refusal{Word:"depth_exceeded"})};out:=encChangeRequestPage(nil,v,depth);if _,_,e:=DecodeChangeRequestPageAt(out,depth,64);e!=nil{panic(e)};return out}
+func EncodeChangeRequestPage(v *ChangeRequestPage)[]byte{return append(EncodeChangeRequestPageAt(v,0),"\n"...)}
+func DecodeChangeRequestPage(in []byte)(*ChangeRequestPage,error){v,n,e:=DecodeChangeRequestPageAt(in,0,64);if e!=nil{return nil,e};r:=&reader{buf:in,pos:n};r.ws();if r.pos!=len(in){return nil,r.refuse("trailing_bytes")};return v,nil}
 
 func DecodePermissionKeyAt(in []byte,depth,limit int)(*PermissionKey,int,error){r:=&reader{buf:in,depth:depth,limit:limit};if depth<0||limit<1{return nil,0,r.refuse("depth_exceeded")};r.ws();v,e:=r.decodePermissionKey();return v,r.pos,e}
 func EncodePermissionKeyAt(v *PermissionKey,depth int)[]byte{if depth<0||depth>=64{panic(&Refusal{Word:"depth_exceeded"})};out:=encPermissionKey(nil,v,depth);if _,_,e:=DecodePermissionKeyAt(out,depth,64);e!=nil{panic(e)};return out}

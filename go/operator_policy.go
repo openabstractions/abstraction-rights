@@ -326,7 +326,7 @@ func (p *DecisionPolicy) ExplainForContext(ctx context.Context, subject wire.Sub
 	if err != nil {
 		return wire.DecisionExplanation{Outcome: wire.DecisionOutcomeUnavailable}
 	}
-	return afterMetaPreparation(p.legacyOperationExplained(ctx, f, revision, s, wire.LegacyOperationRequest{LegacyAction: action, LegacyResource: resource}, p.now()), preparationErr).DecisionExplanation
+	return p.afterMetaPreparation(p.legacyOperationExplained(ctx, f, revision, s, wire.LegacyOperationRequest{LegacyAction: action, LegacyResource: resource}, p.now()), preparationErr).DecisionExplanation
 }
 
 // EditAction conditionally registers or retires one catalogue action, recording

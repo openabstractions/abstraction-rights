@@ -3,6 +3,7 @@ package rights
 import (
 	"errors"
 	wire "github.com/openabstractions/abstraction-rights/go/abstraction/rights/api"
+	"github.com/openabstractions/abstraction-rights/go/client"
 	"slices"
 	"strconv"
 	"strings"
@@ -10,7 +11,8 @@ import (
 	"unicode/utf8"
 )
 
-const LegacyExactResourceProfile = "abstraction.rights/legacy-exact-string@1"
+// LegacyExactResourceProfile is the client package's, which callers share.
+const LegacyExactResourceProfile = client.LegacyExactResourceProfile
 
 // DefinitionCatalog binds immutable metadata to trusted compiled resource
 // profiles. Each configured profile has one owning validator for every action.

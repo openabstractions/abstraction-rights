@@ -104,10 +104,23 @@ func (p *DecisionPolicy) preparationStopsRead(ctx context.Context, err error) bo
 		return false
 	}
 	if ctx.Err() != nil {
+		p.logUnavailable("meta-holder", err)
 		return true
 	}
 	state, ok := ctx.Value(metaPreparationKey{}).(metaPreparation)
-	return ok && state.policy == p && !state.ready
+	stops := ok && state.policy == p && !state.ready
+	if stops {
+		p.logUnavailable("meta-holder", err)
+	}
+	return stops
+}
+
+func (p *DecisionPolicy) afterMetaPreparation(result legacyExplanation, err error) legacyExplanation {
+	out := afterMetaPreparation(result, err)
+	if err != nil && out.Outcome == wire.DecisionOutcomeUnavailable && result.Outcome != wire.DecisionOutcomeUnavailable {
+		p.logUnavailable("meta-holder", err)
+	}
+	return out
 }
 
 func afterMetaPreparation(result legacyExplanation, err error) legacyExplanation {
@@ -134,6 +147,7 @@ func (p *DecisionPolicy) refuseHolder(subject wire.Subject, action, resource str
 	if p.MetaHolder != nil {
 		if err := p.MetaHolder(subject); err != nil {
 			if errors.Is(err, ErrMetaHolderUnavailable) {
+				p.logUnavailable("meta-holder", err)
 				return err
 			}
 			return fmt.Errorf("%w: %v", ErrMetaHolder, err)
@@ -155,6 +169,7 @@ func (p *DecisionPolicy) metaHolderDecision(s wire.Subject, action, resource str
 	if p.MetaHolder != nil {
 		err := p.MetaHolder(s)
 		if errors.Is(err, ErrMetaHolderUnavailable) {
+			p.logUnavailable("meta-holder", err)
 			return wire.DecisionOutcomeUnavailable, true
 		}
 		if errors.Is(err, ErrMetaHolder) {

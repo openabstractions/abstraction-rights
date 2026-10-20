@@ -22,6 +22,37 @@ func ParseActionEditOutcome(word string) (ActionEditOutcome, bool) {
 	return wire.ParseActionEditOutcome(word)
 }
 
+type ChangeKind = wire.ChangeKind
+
+const ChangeKindSetRule = wire.ChangeKindSetRule
+const ChangeKindRevokeRule = wire.ChangeKindRevokeRule
+const ChangeKindSetDefault = wire.ChangeKindSetDefault
+const ChangeKindRegisterAction = wire.ChangeKindRegisterAction
+const ChangeKindRetireAction = wire.ChangeKindRetireAction
+const ChangeKindDeclaration = wire.ChangeKindDeclaration
+
+func ChangeKindValues() []ChangeKind                 { return wire.ChangeKindValues() }
+func ParseChangeKind(word string) (ChangeKind, bool) { return wire.ParseChangeKind(word) }
+
+type ChangeRequestOutcome = wire.ChangeRequestOutcome
+
+const ChangeRequestOutcomeApplied = wire.ChangeRequestOutcomeApplied
+const ChangeRequestOutcomePending = wire.ChangeRequestOutcomePending
+const ChangeRequestOutcomeRefused = wire.ChangeRequestOutcomeRefused
+const ChangeRequestOutcomeExpired = wire.ChangeRequestOutcomeExpired
+const ChangeRequestOutcomeConflict = wire.ChangeRequestOutcomeConflict
+const ChangeRequestOutcomeUnknown = wire.ChangeRequestOutcomeUnknown
+const ChangeRequestOutcomeInvalid = wire.ChangeRequestOutcomeInvalid
+const ChangeRequestOutcomeForbidden = wire.ChangeRequestOutcomeForbidden
+const ChangeRequestOutcomeUnavailable = wire.ChangeRequestOutcomeUnavailable
+
+func ChangeRequestOutcomeValues() []ChangeRequestOutcome { return wire.ChangeRequestOutcomeValues() }
+func ParseChangeRequestOutcome(word string) (ChangeRequestOutcome, bool) {
+	return wire.ParseChangeRequestOutcome(word)
+}
+
+type ChangeRequestPage = wire.ChangeRequestPage
+type ChangeRequestState = wire.ChangeRequestState
 type DecisionOutcome = wire.DecisionOutcome
 
 const DecisionOutcomePermitted = wire.DecisionOutcomePermitted
@@ -37,6 +68,7 @@ func ParseDecisionOutcome(word string) (DecisionOutcome, bool) {
 	return wire.ParseDecisionOutcome(word)
 }
 
+type PolicyChange = wire.PolicyChange
 type PolicyEdit = wire.PolicyEdit
 type PolicyEditOutcome = wire.PolicyEditOutcome
 

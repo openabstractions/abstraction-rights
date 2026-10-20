@@ -288,7 +288,7 @@ func selectorEditRefusal(out wire.PolicyEditOutcome) wire.SelectorEdit {
 	return wire.SelectorEdit{Outcome: out, Current: []wire.SelectorRuleRecord{}}
 }
 func (r *selectorOperatorReceiver) edit(subject wire.Subject, run func(wire.Subject, func() error) (wire.SelectorEdit, error)) (wire.SelectorEdit, error) {
-	by, err := r.authorize()
+	by, err := r.authorizeDirect()
 	if err != nil {
 		return selectorEditRefusal(operatorPolicyError(err)), nil
 	}
@@ -298,7 +298,7 @@ func (r *selectorOperatorReceiver) edit(subject wire.Subject, run func(wire.Subj
 	if !r.host.SelectorAvailable() {
 		return selectorEditRefusal(wire.PolicyEditOutcomeUnavailable), nil
 	}
-	result, err := run(by, func() error { _, err := r.authorize(); return err })
+	result, err := run(by, func() error { _, err := r.authorizeDirect(); return err })
 	if err != nil {
 		return selectorEditRefusal(operatorPolicyError(err)), nil
 	}
@@ -331,7 +331,13 @@ func (r *selectorOperatorReceiver) RemoveBundle(expected string, subject wire.Su
 	})
 }
 func (r *selectorOperatorReceiver) permissionEffect(expected, id string, undo bool) (wire.SelectorEdit, error) {
-	by, err := r.authorize()
+	// Completing the person's Allow is the presenter's too; Undo is the Panel
+	// window's alone.
+	admit := r.authorizeCompletion
+	if undo {
+		admit = r.authorizeDirect
+	}
+	by, err := admit()
 	if err != nil {
 		return selectorEditRefusal(operatorPolicyError(err)), nil
 	}
@@ -346,12 +352,12 @@ func (r *selectorOperatorReceiver) permissionEffect(expected, id string, undo bo
 		if r.host.permissionUndo == nil {
 			return selectorEditRefusal(wire.PolicyEditOutcomeUnavailable), nil
 		}
-		result, err = r.host.permissionUndo(r.ctx, by, expected, id, func() error { _, err := r.authorize(); return err })
+		result, err = r.host.permissionUndo(r.ctx, by, expected, id, func() error { _, err := r.authorizeDirect(); return err })
 	} else {
 		if r.host.permissionAllow == nil {
 			return selectorEditRefusal(wire.PolicyEditOutcomeUnavailable), nil
 		}
-		result, err = r.host.permissionAllow(r.ctx, by, expected, id, func() error { _, err := r.authorize(); return err })
+		result, err = r.host.permissionAllow(r.ctx, by, expected, id, func() error { _, err := r.authorizeCompletion(); return err })
 	}
 	if err != nil {
 		return selectorEditRefusal(operatorPolicyError(err)), nil

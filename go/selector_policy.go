@@ -491,7 +491,7 @@ func (p *DecisionPolicy) CheckLegacyOperationContext(ctx context.Context, subjec
 	if e != nil {
 		return wire.Decision{Outcome: wire.DecisionOutcomeUnavailable}
 	}
-	return afterMetaPreparation(p.legacyOperationExplained(ctx, f, revision, s, req, p.now()), preparationErr).decision()
+	return p.afterMetaPreparation(p.legacyOperationExplained(ctx, f, revision, s, req, p.now()), preparationErr).decision()
 }
 func (p *DecisionPolicy) legacyOperationDecision(ctx context.Context, f decisionFile, revision string, s wire.Subject, req wire.LegacyOperationRequest, now time.Time) wire.Decision {
 	return p.legacyOperationExplained(ctx, f, revision, s, req, now).decision()

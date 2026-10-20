@@ -837,6 +837,139 @@ rule, record or decision cache entry. A refusal (`invalid`, `forbidden`,
 `unavailable`) carries no revision, source or name. An earlier operator@1
 service returns `unknown_method`.
 
+**[RIGHTS-O17] An operator program's rights change is the person's to
+confirm.** The runtime composes `EnableOperatorChanges`, and every operator
+edit passes it. The Panel window edits directly, matched by its installed
+image's file identity. The Asks presenter that draws its person-only popups,
+matched the same way, answers and completes the effect of an answered
+question (`ApplyFirstUseAllow`, `ApplyPermissionAllow`), and makes no other
+edit. Every other operator program, the command line first of all, MUST
+use `RequestChange(change, wait_ms)` with a typed `PolicyChange`: `set_rule`
+(with SetRuleFor's `ttl_ms` and `why`), `revoke_rule`, `set_default`,
+`register_action` or `retire_action`. The service holds the request in its own
+memory, admits the runtime-only Asks question `rights.change` (asks ASK-O17),
+words it from its catalogue ("Let the command line give OpenCode permission to
+download files?", Allow / Not now), and waits up to `wait_ms` (0..30000). The
+reply is then `pending` with the request id and its expiry, ten minutes after
+the request. `ObserveChangeRequest(id, wait_ms)` follows one request of the
+caller's own program and `ListChangeRequests` lists them; another program's
+request reads `unknown`. An operator Allow recorded on that exact question
+before the expiry applies exactly the requested change, once, at the
+request's expected revision, or at the current revision when it named none.
+Not now settles `refused`, and a request nobody answered settles `expired`;
+neither changes anything, and a late answer does nothing. A repeated identical
+request from the same program joins the pending one. A runtime restart
+withdraws the pending question with the memory that held the change.
+
+The exemption reads the caller's own connection-bound token: on
+Windows High integrity or above with `TokenElevationTypeFull`, on macOS and
+Linux effective uid 0 (identity ID-H3, the predicate of RIGHTS-R27), and only
+while the `elevated-callers` default is on. No group membership, individual
+privilege or OA role counts. An exempt caller's `RequestChange` applies at
+once, and its direct `SetRule`, `SetRuleFor`, `RevokeRule`, `SetDefault`,
+`RegisterAction` and `RetireAction` apply through the same path. Every change
+applied for a request or an exempt caller writes one runtime log record
+`rights.change.applied`, which the Panel's Activity shows as "Rights changed
+by the command line" (exempt: "... running as administrator") with Undo. Undo
+reverses the change as the Panel window when the rule it left still stands; a
+retired action's Undo registers it again with up to sixteen of its rules.
+
+Every other operator edit has no request form and is the Panel window's
+alone: `SetRulesFor`, `StopAnswerer`, `RevokeAnswerPermits`,
+`ApplyFirstUseAllow`, `RegisterDescribedAction`, the selector edits,
+`ApplyPermissionAllow` and `UndoPermissionEffect` refuse every other caller,
+an exempt one included, with `forbidden`. A direct edit from a caller the gate
+does not admit is `forbidden` and creates no request. Reads, listings,
+explanations and observations are unchanged. An earlier operator@1 service
+answers `RequestChange` with `unknown_method`, and a caller MUST NOT fall back
+to a direct edit.
+Tests: `TestCommandLineGrantWaitsForThePerson`,
+`TestElevatedCommandLineIsExemptUntilTheSwitchIsOff`,
+`TestUnansweredChangeRequestExpires` (serve).
+
+A provider declaration or inference host add from any program other than the
+Panel window is the same kind of request (architect ruling (3) of
+2026-11-22, `decisions/RULINGS-2026-11-22-standing-upload-declarations.md`).
+The registry or inference service admits it as kind `declaration`, carrying
+the declared name, the program (empty for a hosted server) and the exact rule
+set it writes: `hold` on its cards and `awake`, `inventory.provide` on its
+stores, `complete` on a host for the operator programs and the caller, and
+the runtime's credential `apply` for a hosted server's saved key. The edit
+replies `forbidden` with reason `pending:<id>`. Allow applies the declaration
+at the then-current registry revision and then its rules; nothing of either
+exists before. `RequestChange` refuses kind `declaration` as `invalid`. The
+elevated exemption applies, and so does product standing: a name and program
+pair the program ships (`product.Shipped` and the component-to-names table in
+`serve/runtime_declaration_changes.go`, `declarationStanding`), declared with
+the arguments, endpoint, transport and resources of OA's shipped declaration
+of that name. A host or remote declaration's request carries its `address`,
+which the popup shows.
+Tests: `TestCommandLineProviderAddWaitsForThePerson`,
+`TestElevatedProviderAddIsExempt`, `TestProductStandingDeclarationIsExempt`,
+`TestCredentialApplyRuleWaitsForAllow` (serve).
+
+The architect's ruling of 2026-11-22, verbatim
+(`decisions/RULINGS-2026-11-22-owner-designs.md`, section A):
+
+> ## A. Rights changes through operator programs. **0.8.1** (security review first)
+>
+> The owner: "yes definetely a request with popup unless running user is admin
+> or has some other extra privelege."
+>
+> **Rule.**
+>
+> - Every rights mutation an operator program other than the Panel window
+>   requests becomes a pending request. That covers `rights grant`,
+>   `rights revoke` and `rights block`, `questions answer`, enrollment and
+>   delegation changes, pairing approvals, and every other operator@ write. The
+>   person confirms it in a person-only popup.
+> - The Panel's own clicks stay direct: the Panel is the person's operator
+>   window. The protected-prompt work of Q14 part D (0.9.0) later hardens that
+>   click.
+> - The request is typed: action, subject, resource, effect and expiry. It is
+>   never free text. The service renders the popup from its catalogue words,
+>   e.g. "Let the command line give OpenCode permission to download?", with
+>   Allow / Not now.
+> - The command line waits within its wait (default 60 s, `--wait`). It then
+>   returns `pending` with the request id. `openabstractions rights requests`
+>   lists and follows requests.
+> - A request expires after 10 minutes. Allow applies exactly that change,
+>   once.
+> - Every applied change, prompted or exempt, writes an Activity line with
+>   Undo.
+>
+> **"Admin or other extra privilege", precisely.** The caller's own process
+> token, read from the connection (never claimed by the caller), is:
+>
+> - on Windows: elevated, meaning High integrity or above with
+>   `TokenElevationTypeFull`. This is the same predicate as the elevated-callers
+>   ruling of 2026-11-10. Membership of the Administrators group does not
+>   count: at Medium integrity it is deny-only;
+> - on macOS and Linux: effective uid 0, as under sudo.
+>
+> Nothing else counts as extra privilege: no group, no individual Windows
+> privilege, no OA role. The exemption follows the existing `elevated-callers`
+> account default, which the person can switch off ("Ask even when running as
+> administrator").
+>
+> **The elevated agent case.** Claude Code started from an elevated terminal
+> runs `openabstractions rights grant`. Its token is elevated, so the change
+> applies without a popup, with the Activity line "Rights changed by the
+> command line running as administrator" and Undo.
+>
+> This doesn't reopen the hole. An elevated process already holds full control
+> of the machine, including OA's own rights files. OA's prompts cannot contain
+> it, and the person approved that elevation at UAC.
+>
+> The hole the owner closed is the common one: a Medium-integrity agent shell
+> granting itself rights. That now always prompts.
+>
+> **Challenge noted for the owner.** An elevated terminal can live for hours,
+> and an agent started in it inherits the exemption without the person
+> thinking about it. This is acceptable given the reasoning above.
+> Recommendation: keep the exemption, and keep the switch visible on the
+> Permissions page.
+
 **[RIGHTS-E1] The permit outcomes.** Only `permitted` permits resource
 access. `denied` is an explicit exact deny. `not_granted` means no
 unexpired exact rule exists. `unknown_action` means the action is outside

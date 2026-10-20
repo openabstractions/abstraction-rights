@@ -175,6 +175,7 @@ func (p *DecisionPolicy) CheckLegacyOperationAtLeastRevisionContext(ctx context.
 		}
 	}
 	if p.revisionConfiguration == "" || p.configuration(p.revisionConfiguration) != p.revisionConfigurationDigest {
+		p.logUnavailable("config", errors.New("policy revision configuration unavailable"))
 		return refusal(wire.DecisionOutcomeUnavailable)
 	}
 	ctx, preparationErr := p.prepareMetaOperation(ctx, req.LegacyAction, req.LegacyResource)
@@ -192,7 +193,7 @@ func (p *DecisionPolicy) CheckLegacyOperationAtLeastRevisionContext(ctx context.
 			return refusal(wire.DecisionOutcomeUnavailable)
 		}
 	}
-	d := afterMetaPreparation(p.legacyOperationExplained(ctx, f, revision, s, req, p.now()), preparationErr).decision()
+	d := p.afterMetaPreparation(p.legacyOperationExplained(ctx, f, revision, s, req, p.now()), preparationErr).decision()
 	if d.PolicyRevision == "" {
 		return wire.RevisionDecision{Decision: d}
 	}

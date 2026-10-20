@@ -28,6 +28,11 @@ const (
 
 func PermissionFirstUseValues() []PermissionFirstUse { return wire.PermissionFirstUseValues() }
 
+// LegacyExactResourceProfile is the resource profile of a permission whose
+// resource is one exact string. A selection names it with a ResourceSelector
+// of kind one whose Target is that string.
+const LegacyExactResourceProfile = "abstraction.rights/legacy-exact-string@1"
+
 type PermissionDefinitionPage = wire.PermissionDefinitionPage
 type PermissionBundleDefinition = wire.PermissionBundleDefinition
 type PermissionBundlePage = wire.PermissionBundlePage

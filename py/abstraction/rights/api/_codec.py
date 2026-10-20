@@ -206,6 +206,27 @@ class DecisionSource(_StrEnum):
     DEFAULT_EXCLUDED = "default_excluded"
 
 
+class ChangeKind(_StrEnum):
+    SET_RULE = "set_rule"
+    REVOKE_RULE = "revoke_rule"
+    SET_DEFAULT = "set_default"
+    REGISTER_ACTION = "register_action"
+    RETIRE_ACTION = "retire_action"
+    DECLARATION = "declaration"
+
+
+class ChangeRequestOutcome(_StrEnum):
+    APPLIED = "applied"
+    PENDING = "pending"
+    REFUSED = "refused"
+    EXPIRED = "expired"
+    CONFLICT = "conflict"
+    UNKNOWN = "unknown"
+    INVALID = "invalid"
+    FORBIDDEN = "forbidden"
+    UNAVAILABLE = "unavailable"
+
+
 class ResourceSelectorKind(_StrEnum):
     ONE = "one"
     ALL = "all"
@@ -663,6 +684,63 @@ class DecisionExplanation:
 
 
 @dataclasses.dataclass(kw_only=True)
+class PolicyChange:
+    """One typed rights change an operator program requests (RIGHTS-O17). set_rule
+    carries rule, and optionally ttl_ms and why with SetRuleFor's bounds;
+    revoke_rule carries rule, whose permit is ignored; set_default carries name
+    and on; register_action and retire_action carry action. declaration is a
+    provider declaration or inference host add the registry or inference service
+    admitted for the caller: name is the declared name, program its program
+    (empty for a hosted server), address the server address it reaches (a hosted
+    server's base URL or a remote runtime's endpoint; empty for a local program)
+    and rules the exact rule set it writes on Allow; RequestChange refuses it as
+    invalid. Other fields are absent. An empty expected_revision applies at the
+    policy revision current when the change is applied; a nonempty one conflicts
+    when the policy changed. The request is never free text: the service words
+    the person's question from its own catalogue."""
+
+    kind: ChangeKind | None = None
+    expected_revision: str = ""
+    rule: PolicyRule | None = None
+    ttl_ms: int = 0
+    why: str = ""
+    name: str = ""
+    on: bool = False
+    action: str = ""
+    program: str = ""
+    rules: list[PolicyRule] = dataclasses.field(default_factory=list)
+    address: str = ""
+
+
+@dataclasses.dataclass(kw_only=True)
+class ChangeRequestState:
+    """One change request as the service holds it (RIGHTS-O17). pending waits for
+    the person's answer in the service's popup until expires, a UTC RFC 3339
+    instant ten minutes after the request. applied means the service applied
+    exactly this change, once, and carries the policy revision after it; exempt
+    marks a change applied without a question for an elevated caller. refused is
+    the person's Not now; expired is a request nobody answered in time, which
+    changes nothing; conflict is an expected revision the policy no longer had.
+    unknown, invalid, forbidden and unavailable carry no id, change or revision."""
+
+    outcome: ChangeRequestOutcome | None = None
+    id: str = ""
+    revision: str = ""
+    change: PolicyChange | None = None
+    expires: str = ""
+    exempt: bool = False
+
+
+@dataclasses.dataclass(kw_only=True)
+class ChangeRequestPage:
+    """The requests this operator program made that the service still holds, newest
+    first, at most 64. Refusals carry none."""
+
+    outcome: PolicyPageOutcome | None = None
+    requests: list[ChangeRequestState] = dataclasses.field(default_factory=list)
+
+
+@dataclasses.dataclass(kw_only=True)
 class PermissionKey:
     action: str = ""
     resource_profile: str = ""
@@ -993,6 +1071,23 @@ class _AuthorizationOperatorListDefaultsArguments:
 
 
 @dataclasses.dataclass(kw_only=True)
+class _AuthorizationOperatorRequestChangeArguments:
+    change: PolicyChange = dataclasses.field(default_factory=PolicyChange)
+    wait_ms: int = 0
+
+
+@dataclasses.dataclass(kw_only=True)
+class _AuthorizationOperatorObserveChangeRequestArguments:
+    id: str = ""
+    wait_ms: int = 0
+
+
+@dataclasses.dataclass(kw_only=True)
+class _AuthorizationOperatorListChangeRequestsArguments:
+    pass
+
+
+@dataclasses.dataclass(kw_only=True)
 class _AuthorizationOperatorSetDefaultArguments:
     expected_revision: str = ""
     name: str = ""
@@ -1200,6 +1295,21 @@ class _AuthorizationOperatorExplainForResult:
 @dataclasses.dataclass(kw_only=True)
 class _AuthorizationOperatorListDefaultsResult:
     value: DefaultPage = dataclasses.field(default_factory=DefaultPage)
+
+
+@dataclasses.dataclass(kw_only=True)
+class _AuthorizationOperatorRequestChangeResult:
+    value: ChangeRequestState = dataclasses.field(default_factory=ChangeRequestState)
+
+
+@dataclasses.dataclass(kw_only=True)
+class _AuthorizationOperatorObserveChangeRequestResult:
+    value: ChangeRequestState = dataclasses.field(default_factory=ChangeRequestState)
+
+
+@dataclasses.dataclass(kw_only=True)
+class _AuthorizationOperatorListChangeRequestsResult:
+    value: ChangeRequestPage = dataclasses.field(default_factory=ChangeRequestPage)
 
 
 @dataclasses.dataclass(kw_only=True)
@@ -2210,6 +2320,195 @@ def _write_decision_explanation(out, v, depth):
         _esc(out, "default_name")
         out += b": "
         _esc(out, v.default_name)
+    out += b"\n"
+    _pad(out, depth)
+    out += b"}"
+
+
+def _write_policy_change(out, v, depth):
+    if isinstance(v.expected_revision, str):
+        _size = len(v.expected_revision.encode("utf-8", "surrogatepass"))
+        if _size > 128: raise Refusal("bad_value", 0)
+    if isinstance(v.expected_revision, str) and any(c < "\x20" or "\x7f" <= c <= "\x9f" for c in v.expected_revision): raise Refusal("bad_value", 0)
+    if type(v.ttl_ms) is not int: raise Refusal("wrong_type", 0)
+    if v.ttl_ms < 0 or v.ttl_ms > 31536000000: raise Refusal("bad_value", 0)
+    if isinstance(v.why, str):
+        _size = len(v.why.encode("utf-8", "surrogatepass"))
+        if _size > 256: raise Refusal("bad_value", 0)
+    if isinstance(v.why, str) and any(c < "\x20" or "\x7f" <= c <= "\x9f" for c in v.why): raise Refusal("bad_value", 0)
+    if isinstance(v.name, str):
+        _size = len(v.name.encode("utf-8", "surrogatepass"))
+        if _size > 64: raise Refusal("bad_value", 0)
+    if isinstance(v.name, str) and any(c < "\x20" or "\x7f" <= c <= "\x9f" for c in v.name): raise Refusal("bad_value", 0)
+    if isinstance(v.action, str):
+        _size = len(v.action.encode("utf-8", "surrogatepass"))
+        if _size > 128: raise Refusal("bad_value", 0)
+    if isinstance(v.action, str) and any(c < "\x20" or "\x7f" <= c <= "\x9f" for c in v.action): raise Refusal("bad_value", 0)
+    if isinstance(v.program, str):
+        _size = len(v.program.encode("utf-8", "surrogatepass"))
+        if _size > 4096: raise Refusal("bad_value", 0)
+    if isinstance(v.program, str) and any(c < "\x20" or "\x7f" <= c <= "\x9f" for c in v.program): raise Refusal("bad_value", 0)
+    if isinstance(v.rules, list):
+        _size = len(v.rules)
+        if _size > 64: raise Refusal("bad_value", 0)
+    if isinstance(v.address, str):
+        _size = len(v.address.encode("utf-8", "surrogatepass"))
+        if _size > 2048: raise Refusal("bad_value", 0)
+    if isinstance(v.address, str) and any(c < "\x20" or "\x7f" <= c <= "\x9f" for c in v.address): raise Refusal("bad_value", 0)
+    _closed_enum(ChangeKind, v.kind)
+    out += b"{"
+    out += b"\n"
+    _pad(out, depth + 1)
+    _esc(out, "kind")
+    out += b": "
+    _esc(out, v.kind)
+    out += b","
+    out += b"\n"
+    _pad(out, depth + 1)
+    _esc(out, "expected_revision")
+    out += b": "
+    _esc(out, v.expected_revision)
+    if v.rule is not None:
+        out += b","
+        out += b"\n"
+        _pad(out, depth + 1)
+        _esc(out, "rule")
+        out += b": "
+        _write_policy_rule(out, v.rule, depth + 1)
+    if v.ttl_ms != 0:
+        out += b","
+        out += b"\n"
+        _pad(out, depth + 1)
+        _esc(out, "ttl_ms")
+        out += b": "
+        _num(out, v.ttl_ms)
+    if v.why:
+        out += b","
+        out += b"\n"
+        _pad(out, depth + 1)
+        _esc(out, "why")
+        out += b": "
+        _esc(out, v.why)
+    if v.name:
+        out += b","
+        out += b"\n"
+        _pad(out, depth + 1)
+        _esc(out, "name")
+        out += b": "
+        _esc(out, v.name)
+    if v.on:
+        out += b","
+        out += b"\n"
+        _pad(out, depth + 1)
+        _esc(out, "on")
+        out += b": "
+        out += b"true" if v.on else b"false"
+    if v.action:
+        out += b","
+        out += b"\n"
+        _pad(out, depth + 1)
+        _esc(out, "action")
+        out += b": "
+        _esc(out, v.action)
+    if v.program:
+        out += b","
+        out += b"\n"
+        _pad(out, depth + 1)
+        _esc(out, "program")
+        out += b": "
+        _esc(out, v.program)
+    if v.rules:
+        out += b","
+        out += b"\n"
+        _pad(out, depth + 1)
+        _esc(out, "rules")
+        out += b": "
+        _write_list(out, v.rules, depth + 1, _write_policy_rule)
+    if v.address:
+        out += b","
+        out += b"\n"
+        _pad(out, depth + 1)
+        _esc(out, "address")
+        out += b": "
+        _esc(out, v.address)
+    out += b"\n"
+    _pad(out, depth)
+    out += b"}"
+
+
+def _write_change_request_state(out, v, depth):
+    if isinstance(v.id, str):
+        _size = len(v.id.encode("utf-8", "surrogatepass"))
+        if _size > 128: raise Refusal("bad_value", 0)
+    if isinstance(v.id, str) and any(c < "\x20" or "\x7f" <= c <= "\x9f" for c in v.id): raise Refusal("bad_value", 0)
+    if isinstance(v.revision, str):
+        _size = len(v.revision.encode("utf-8", "surrogatepass"))
+        if _size > 128: raise Refusal("bad_value", 0)
+    if isinstance(v.revision, str) and any(c < "\x20" or "\x7f" <= c <= "\x9f" for c in v.revision): raise Refusal("bad_value", 0)
+    if isinstance(v.expires, str):
+        _size = len(v.expires.encode("utf-8", "surrogatepass"))
+        if _size > 64: raise Refusal("bad_value", 0)
+    if isinstance(v.expires, str) and any(c < "\x20" or "\x7f" <= c <= "\x9f" for c in v.expires): raise Refusal("bad_value", 0)
+    _closed_enum(ChangeRequestOutcome, v.outcome)
+    out += b"{"
+    out += b"\n"
+    _pad(out, depth + 1)
+    _esc(out, "outcome")
+    out += b": "
+    _esc(out, v.outcome)
+    out += b","
+    out += b"\n"
+    _pad(out, depth + 1)
+    _esc(out, "id")
+    out += b": "
+    _esc(out, v.id)
+    out += b","
+    out += b"\n"
+    _pad(out, depth + 1)
+    _esc(out, "revision")
+    out += b": "
+    _esc(out, v.revision)
+    if v.change is not None:
+        out += b","
+        out += b"\n"
+        _pad(out, depth + 1)
+        _esc(out, "change")
+        out += b": "
+        _write_policy_change(out, v.change, depth + 1)
+    out += b","
+    out += b"\n"
+    _pad(out, depth + 1)
+    _esc(out, "expires")
+    out += b": "
+    _esc(out, v.expires)
+    out += b","
+    out += b"\n"
+    _pad(out, depth + 1)
+    _esc(out, "exempt")
+    out += b": "
+    out += b"true" if v.exempt else b"false"
+    out += b"\n"
+    _pad(out, depth)
+    out += b"}"
+
+
+def _write_change_request_page(out, v, depth):
+    if isinstance(v.requests, list):
+        _size = len(v.requests)
+        if _size > 64: raise Refusal("bad_value", 0)
+    _closed_enum(PolicyPageOutcome, v.outcome)
+    out += b"{"
+    out += b"\n"
+    _pad(out, depth + 1)
+    _esc(out, "outcome")
+    out += b": "
+    _esc(out, v.outcome)
+    out += b","
+    out += b"\n"
+    _pad(out, depth + 1)
+    _esc(out, "requests")
+    out += b": "
+    _write_list(out, v.requests, depth + 1, _write_change_request_state)
     out += b"\n"
     _pad(out, depth)
     out += b"}"
@@ -3241,6 +3540,55 @@ def _write_oa_authorization_operator_list_defaults_arguments(out, v, depth):
     out += b"}"
 
 
+def _write_oa_authorization_operator_request_change_arguments(out, v, depth):
+    if type(v.wait_ms) is not int: raise Refusal("wrong_type", 0)
+    if v.wait_ms < 0 or v.wait_ms > 30000: raise Refusal("bad_value", 0)
+    out += b"{"
+    out += b"\n"
+    _pad(out, depth + 1)
+    _esc(out, "change")
+    out += b": "
+    _write_policy_change(out, v.change, depth + 1)
+    out += b","
+    out += b"\n"
+    _pad(out, depth + 1)
+    _esc(out, "wait_ms")
+    out += b": "
+    _num(out, v.wait_ms)
+    out += b"\n"
+    _pad(out, depth)
+    out += b"}"
+
+
+def _write_oa_authorization_operator_observe_change_request_arguments(out, v, depth):
+    if isinstance(v.id, str):
+        _size = len(v.id.encode("utf-8", "surrogatepass"))
+        if _size < 1 or _size > 128: raise Refusal("bad_value", 0)
+    if isinstance(v.id, str) and any(c < "\x20" or "\x7f" <= c <= "\x9f" for c in v.id): raise Refusal("bad_value", 0)
+    if type(v.wait_ms) is not int: raise Refusal("wrong_type", 0)
+    if v.wait_ms < 0 or v.wait_ms > 30000: raise Refusal("bad_value", 0)
+    out += b"{"
+    out += b"\n"
+    _pad(out, depth + 1)
+    _esc(out, "id")
+    out += b": "
+    _esc(out, v.id)
+    out += b","
+    out += b"\n"
+    _pad(out, depth + 1)
+    _esc(out, "wait_ms")
+    out += b": "
+    _num(out, v.wait_ms)
+    out += b"\n"
+    _pad(out, depth)
+    out += b"}"
+
+
+def _write_oa_authorization_operator_list_change_requests_arguments(out, v, depth):
+    out += b"{"
+    out += b"}"
+
+
 def _write_oa_authorization_operator_set_default_arguments(out, v, depth):
     out += b"{"
     out += b"\n"
@@ -3848,6 +4196,42 @@ def _write_oa_authorization_operator_list_defaults_result(out, v, depth):
     _esc(out, "value")
     out += b": "
     _write_default_page(out, v.value, depth + 1)
+    out += b"\n"
+    _pad(out, depth)
+    out += b"}"
+
+
+def _write_oa_authorization_operator_request_change_result(out, v, depth):
+    out += b"{"
+    out += b"\n"
+    _pad(out, depth + 1)
+    _esc(out, "value")
+    out += b": "
+    _write_change_request_state(out, v.value, depth + 1)
+    out += b"\n"
+    _pad(out, depth)
+    out += b"}"
+
+
+def _write_oa_authorization_operator_observe_change_request_result(out, v, depth):
+    out += b"{"
+    out += b"\n"
+    _pad(out, depth + 1)
+    _esc(out, "value")
+    out += b": "
+    _write_change_request_state(out, v.value, depth + 1)
+    out += b"\n"
+    _pad(out, depth)
+    out += b"}"
+
+
+def _write_oa_authorization_operator_list_change_requests_result(out, v, depth):
+    out += b"{"
+    out += b"\n"
+    _pad(out, depth + 1)
+    _esc(out, "value")
+    out += b": "
+    _write_change_request_page(out, v.value, depth + 1)
     out += b"\n"
     _pad(out, depth)
     out += b"}"
@@ -5872,6 +6256,247 @@ def _read_decision_explanation(r):
     return v
 
 
+def _read_policy_change(r):
+    if r.at() != _LBRACE:
+        raise r.refuse("wrong_type")
+    r.enter()
+    r.pos += 1
+    v = PolicyChange()
+    seen = 0
+    r.ws()
+    if r.at() != _RBRACE:
+        while True:
+            r.ws()
+            if r.at() != _QUOTE:
+                raise r.refuse("malformed")
+            key = r.string()
+            r.ws()
+            if r.at() != _COLON:
+                raise r.refuse("malformed")
+            r.pos += 1
+            r.ws()
+            if key == "kind":
+                if seen & 1:
+                    raise r.refuse("duplicate_field")
+                seen |= 1
+                v.kind = r.string()
+            elif key == "expected_revision":
+                if seen & 2:
+                    raise r.refuse("duplicate_field")
+                seen |= 2
+                v.expected_revision = r.string()
+            elif key == "rule":
+                if seen & 4:
+                    raise r.refuse("duplicate_field")
+                seen |= 4
+                v.rule = _read_policy_rule(r)
+            elif key == "ttl_ms":
+                if seen & 8:
+                    raise r.refuse("duplicate_field")
+                seen |= 8
+                v.ttl_ms = r.integer(-9223372036854775808, 9223372036854775807)
+            elif key == "why":
+                if seen & 16:
+                    raise r.refuse("duplicate_field")
+                seen |= 16
+                v.why = r.string()
+            elif key == "name":
+                if seen & 32:
+                    raise r.refuse("duplicate_field")
+                seen |= 32
+                v.name = r.string()
+            elif key == "on":
+                if seen & 64:
+                    raise r.refuse("duplicate_field")
+                seen |= 64
+                v.on = r.boolean()
+            elif key == "action":
+                if seen & 128:
+                    raise r.refuse("duplicate_field")
+                seen |= 128
+                v.action = r.string()
+            elif key == "program":
+                if seen & 256:
+                    raise r.refuse("duplicate_field")
+                seen |= 256
+                v.program = r.string()
+            elif key == "rules":
+                if seen & 512:
+                    raise r.refuse("duplicate_field")
+                seen |= 512
+                v.rules = _read_list(r, _read_policy_rule)
+            elif key == "address":
+                if seen & 1024:
+                    raise r.refuse("duplicate_field")
+                seen |= 1024
+                v.address = r.string()
+            else:
+                raise r.refuse("unknown_field")
+            r.ws()
+            if r.at() != _COMMA:
+                break
+            r.pos += 1
+    if r.at() != _RBRACE:
+        raise r.refuse("malformed")
+    r.pos += 1
+    r.depth -= 1
+    if seen & 3 != 3:
+        raise r.refuse("missing_field")
+    _size = len(v.expected_revision.encode("utf-8", "surrogatepass"))
+    if _size > 128: raise r.refuse("bad_value")
+    if any(c < "\x20" or "\x7f" <= c <= "\x9f" for c in v.expected_revision): raise r.refuse("bad_value")
+    if v.ttl_ms < 0 or v.ttl_ms > 31536000000: raise r.refuse("bad_value")
+    _size = len(v.why.encode("utf-8", "surrogatepass"))
+    if _size > 256: raise r.refuse("bad_value")
+    if any(c < "\x20" or "\x7f" <= c <= "\x9f" for c in v.why): raise r.refuse("bad_value")
+    _size = len(v.name.encode("utf-8", "surrogatepass"))
+    if _size > 64: raise r.refuse("bad_value")
+    if any(c < "\x20" or "\x7f" <= c <= "\x9f" for c in v.name): raise r.refuse("bad_value")
+    _size = len(v.action.encode("utf-8", "surrogatepass"))
+    if _size > 128: raise r.refuse("bad_value")
+    if any(c < "\x20" or "\x7f" <= c <= "\x9f" for c in v.action): raise r.refuse("bad_value")
+    _size = len(v.program.encode("utf-8", "surrogatepass"))
+    if _size > 4096: raise r.refuse("bad_value")
+    if any(c < "\x20" or "\x7f" <= c <= "\x9f" for c in v.program): raise r.refuse("bad_value")
+    _size = len(v.rules)
+    if _size > 64: raise r.refuse("bad_value")
+    _size = len(v.address.encode("utf-8", "surrogatepass"))
+    if _size > 2048: raise r.refuse("bad_value")
+    if any(c < "\x20" or "\x7f" <= c <= "\x9f" for c in v.address): raise r.refuse("bad_value")
+    try:
+        v.kind = ChangeKind(v.kind)
+    except ValueError:
+        raise r.refuse("bad_enum") from None
+    return v
+
+
+def _read_change_request_state(r):
+    if r.at() != _LBRACE:
+        raise r.refuse("wrong_type")
+    r.enter()
+    r.pos += 1
+    v = ChangeRequestState()
+    seen = 0
+    r.ws()
+    if r.at() != _RBRACE:
+        while True:
+            r.ws()
+            if r.at() != _QUOTE:
+                raise r.refuse("malformed")
+            key = r.string()
+            r.ws()
+            if r.at() != _COLON:
+                raise r.refuse("malformed")
+            r.pos += 1
+            r.ws()
+            if key == "outcome":
+                if seen & 1:
+                    raise r.refuse("duplicate_field")
+                seen |= 1
+                v.outcome = r.string()
+            elif key == "id":
+                if seen & 2:
+                    raise r.refuse("duplicate_field")
+                seen |= 2
+                v.id = r.string()
+            elif key == "revision":
+                if seen & 4:
+                    raise r.refuse("duplicate_field")
+                seen |= 4
+                v.revision = r.string()
+            elif key == "change":
+                if seen & 8:
+                    raise r.refuse("duplicate_field")
+                seen |= 8
+                v.change = _read_policy_change(r)
+            elif key == "expires":
+                if seen & 16:
+                    raise r.refuse("duplicate_field")
+                seen |= 16
+                v.expires = r.string()
+            elif key == "exempt":
+                if seen & 32:
+                    raise r.refuse("duplicate_field")
+                seen |= 32
+                v.exempt = r.boolean()
+            else:
+                raise r.refuse("unknown_field")
+            r.ws()
+            if r.at() != _COMMA:
+                break
+            r.pos += 1
+    if r.at() != _RBRACE:
+        raise r.refuse("malformed")
+    r.pos += 1
+    r.depth -= 1
+    if seen & 55 != 55:
+        raise r.refuse("missing_field")
+    _size = len(v.id.encode("utf-8", "surrogatepass"))
+    if _size > 128: raise r.refuse("bad_value")
+    if any(c < "\x20" or "\x7f" <= c <= "\x9f" for c in v.id): raise r.refuse("bad_value")
+    _size = len(v.revision.encode("utf-8", "surrogatepass"))
+    if _size > 128: raise r.refuse("bad_value")
+    if any(c < "\x20" or "\x7f" <= c <= "\x9f" for c in v.revision): raise r.refuse("bad_value")
+    _size = len(v.expires.encode("utf-8", "surrogatepass"))
+    if _size > 64: raise r.refuse("bad_value")
+    if any(c < "\x20" or "\x7f" <= c <= "\x9f" for c in v.expires): raise r.refuse("bad_value")
+    try:
+        v.outcome = ChangeRequestOutcome(v.outcome)
+    except ValueError:
+        raise r.refuse("bad_enum") from None
+    return v
+
+
+def _read_change_request_page(r):
+    if r.at() != _LBRACE:
+        raise r.refuse("wrong_type")
+    r.enter()
+    r.pos += 1
+    v = ChangeRequestPage()
+    seen = 0
+    r.ws()
+    if r.at() != _RBRACE:
+        while True:
+            r.ws()
+            if r.at() != _QUOTE:
+                raise r.refuse("malformed")
+            key = r.string()
+            r.ws()
+            if r.at() != _COLON:
+                raise r.refuse("malformed")
+            r.pos += 1
+            r.ws()
+            if key == "outcome":
+                if seen & 1:
+                    raise r.refuse("duplicate_field")
+                seen |= 1
+                v.outcome = r.string()
+            elif key == "requests":
+                if seen & 2:
+                    raise r.refuse("duplicate_field")
+                seen |= 2
+                v.requests = _read_list(r, _read_change_request_state)
+            else:
+                raise r.refuse("unknown_field")
+            r.ws()
+            if r.at() != _COMMA:
+                break
+            r.pos += 1
+    if r.at() != _RBRACE:
+        raise r.refuse("malformed")
+    r.pos += 1
+    r.depth -= 1
+    if seen & 3 != 3:
+        raise r.refuse("missing_field")
+    _size = len(v.requests)
+    if _size > 64: raise r.refuse("bad_value")
+    try:
+        v.outcome = PolicyPageOutcome(v.outcome)
+    except ValueError:
+        raise r.refuse("bad_enum") from None
+    return v
+
+
 def _read_permission_key(r):
     if r.at() != _LBRACE:
         raise r.refuse("wrong_type")
@@ -7851,6 +8476,133 @@ def _read_oa_authorization_operator_list_defaults_arguments(r):
     return v
 
 
+def _read_oa_authorization_operator_request_change_arguments(r):
+    if r.at() != _LBRACE:
+        raise r.refuse("wrong_type")
+    r.enter()
+    r.pos += 1
+    v = _AuthorizationOperatorRequestChangeArguments()
+    seen = 0
+    r.ws()
+    if r.at() != _RBRACE:
+        while True:
+            r.ws()
+            if r.at() != _QUOTE:
+                raise r.refuse("malformed")
+            key = r.string()
+            r.ws()
+            if r.at() != _COLON:
+                raise r.refuse("malformed")
+            r.pos += 1
+            r.ws()
+            if key == "change":
+                if seen & 1:
+                    raise r.refuse("duplicate_field")
+                seen |= 1
+                v.change = _read_policy_change(r)
+            elif key == "wait_ms":
+                if seen & 2:
+                    raise r.refuse("duplicate_field")
+                seen |= 2
+                v.wait_ms = r.integer(-9223372036854775808, 9223372036854775807)
+            else:
+                raise r.refuse("unknown_field")
+            r.ws()
+            if r.at() != _COMMA:
+                break
+            r.pos += 1
+    if r.at() != _RBRACE:
+        raise r.refuse("malformed")
+    r.pos += 1
+    r.depth -= 1
+    if seen & 3 != 3:
+        raise r.refuse("missing_field")
+    if v.wait_ms < 0 or v.wait_ms > 30000: raise r.refuse("bad_value")
+    return v
+
+
+def _read_oa_authorization_operator_observe_change_request_arguments(r):
+    if r.at() != _LBRACE:
+        raise r.refuse("wrong_type")
+    r.enter()
+    r.pos += 1
+    v = _AuthorizationOperatorObserveChangeRequestArguments()
+    seen = 0
+    r.ws()
+    if r.at() != _RBRACE:
+        while True:
+            r.ws()
+            if r.at() != _QUOTE:
+                raise r.refuse("malformed")
+            key = r.string()
+            r.ws()
+            if r.at() != _COLON:
+                raise r.refuse("malformed")
+            r.pos += 1
+            r.ws()
+            if key == "id":
+                if seen & 1:
+                    raise r.refuse("duplicate_field")
+                seen |= 1
+                v.id = r.string()
+            elif key == "wait_ms":
+                if seen & 2:
+                    raise r.refuse("duplicate_field")
+                seen |= 2
+                v.wait_ms = r.integer(-9223372036854775808, 9223372036854775807)
+            else:
+                raise r.refuse("unknown_field")
+            r.ws()
+            if r.at() != _COMMA:
+                break
+            r.pos += 1
+    if r.at() != _RBRACE:
+        raise r.refuse("malformed")
+    r.pos += 1
+    r.depth -= 1
+    if seen & 3 != 3:
+        raise r.refuse("missing_field")
+    _size = len(v.id.encode("utf-8", "surrogatepass"))
+    if _size < 1 or _size > 128: raise r.refuse("bad_value")
+    if any(c < "\x20" or "\x7f" <= c <= "\x9f" for c in v.id): raise r.refuse("bad_value")
+    if v.wait_ms < 0 or v.wait_ms > 30000: raise r.refuse("bad_value")
+    return v
+
+
+def _read_oa_authorization_operator_list_change_requests_arguments(r):
+    if r.at() != _LBRACE:
+        raise r.refuse("wrong_type")
+    r.enter()
+    r.pos += 1
+    v = _AuthorizationOperatorListChangeRequestsArguments()
+    seen = 0
+    r.ws()
+    if r.at() != _RBRACE:
+        while True:
+            r.ws()
+            if r.at() != _QUOTE:
+                raise r.refuse("malformed")
+            key = r.string()
+            r.ws()
+            if r.at() != _COLON:
+                raise r.refuse("malformed")
+            r.pos += 1
+            r.ws()
+            if False:
+                pass
+            else:
+                raise r.refuse("unknown_field")
+            r.ws()
+            if r.at() != _COMMA:
+                break
+            r.pos += 1
+    if r.at() != _RBRACE:
+        raise r.refuse("malformed")
+    r.pos += 1
+    r.depth -= 1
+    return v
+
+
 def _read_oa_authorization_operator_set_default_arguments(r):
     if r.at() != _LBRACE:
         raise r.refuse("wrong_type")
@@ -9405,6 +10157,123 @@ def _read_oa_authorization_operator_list_defaults_result(r):
     return v
 
 
+def _read_oa_authorization_operator_request_change_result(r):
+    if r.at() != _LBRACE:
+        raise r.refuse("wrong_type")
+    r.enter()
+    r.pos += 1
+    v = _AuthorizationOperatorRequestChangeResult()
+    seen = 0
+    r.ws()
+    if r.at() != _RBRACE:
+        while True:
+            r.ws()
+            if r.at() != _QUOTE:
+                raise r.refuse("malformed")
+            key = r.string()
+            r.ws()
+            if r.at() != _COLON:
+                raise r.refuse("malformed")
+            r.pos += 1
+            r.ws()
+            if key == "value":
+                if seen & 1:
+                    raise r.refuse("duplicate_field")
+                seen |= 1
+                v.value = _read_change_request_state(r)
+            else:
+                raise r.refuse("unknown_field")
+            r.ws()
+            if r.at() != _COMMA:
+                break
+            r.pos += 1
+    if r.at() != _RBRACE:
+        raise r.refuse("malformed")
+    r.pos += 1
+    r.depth -= 1
+    if seen & 1 != 1:
+        raise r.refuse("missing_field")
+    return v
+
+
+def _read_oa_authorization_operator_observe_change_request_result(r):
+    if r.at() != _LBRACE:
+        raise r.refuse("wrong_type")
+    r.enter()
+    r.pos += 1
+    v = _AuthorizationOperatorObserveChangeRequestResult()
+    seen = 0
+    r.ws()
+    if r.at() != _RBRACE:
+        while True:
+            r.ws()
+            if r.at() != _QUOTE:
+                raise r.refuse("malformed")
+            key = r.string()
+            r.ws()
+            if r.at() != _COLON:
+                raise r.refuse("malformed")
+            r.pos += 1
+            r.ws()
+            if key == "value":
+                if seen & 1:
+                    raise r.refuse("duplicate_field")
+                seen |= 1
+                v.value = _read_change_request_state(r)
+            else:
+                raise r.refuse("unknown_field")
+            r.ws()
+            if r.at() != _COMMA:
+                break
+            r.pos += 1
+    if r.at() != _RBRACE:
+        raise r.refuse("malformed")
+    r.pos += 1
+    r.depth -= 1
+    if seen & 1 != 1:
+        raise r.refuse("missing_field")
+    return v
+
+
+def _read_oa_authorization_operator_list_change_requests_result(r):
+    if r.at() != _LBRACE:
+        raise r.refuse("wrong_type")
+    r.enter()
+    r.pos += 1
+    v = _AuthorizationOperatorListChangeRequestsResult()
+    seen = 0
+    r.ws()
+    if r.at() != _RBRACE:
+        while True:
+            r.ws()
+            if r.at() != _QUOTE:
+                raise r.refuse("malformed")
+            key = r.string()
+            r.ws()
+            if r.at() != _COLON:
+                raise r.refuse("malformed")
+            r.pos += 1
+            r.ws()
+            if key == "value":
+                if seen & 1:
+                    raise r.refuse("duplicate_field")
+                seen |= 1
+                v.value = _read_change_request_page(r)
+            else:
+                raise r.refuse("unknown_field")
+            r.ws()
+            if r.at() != _COMMA:
+                break
+            r.pos += 1
+    if r.at() != _RBRACE:
+        raise r.refuse("malformed")
+    r.pos += 1
+    r.depth -= 1
+    if seen & 1 != 1:
+        raise r.refuse("missing_field")
+    return v
+
+
 def _read_oa_authorization_operator_set_default_result(r):
     if r.at() != _LBRACE:
         raise r.refuse("wrong_type")
@@ -9987,6 +10856,9 @@ _JSON_RECORDS = {
     DefaultPage: (_write_default_page, _read_default_page),
     DefaultEdit: (_write_default_edit, _read_default_edit),
     DecisionExplanation: (_write_decision_explanation, _read_decision_explanation),
+    PolicyChange: (_write_policy_change, _read_policy_change),
+    ChangeRequestState: (_write_change_request_state, _read_change_request_state),
+    ChangeRequestPage: (_write_change_request_page, _read_change_request_page),
     PermissionKey: (_write_permission_key, _read_permission_key),
     ResourceSelector: (_write_resource_selector, _read_resource_selector),
     PermissionSelection: (_write_permission_selection, _read_permission_selection),
@@ -10200,6 +11072,9 @@ _SERVICE_RECORDS = {
     "DefaultPage": (DefaultPage, [("outcome", "enum", "never"), ("revision", "string", "never"), ("defaults", "list<AccountDefault>", "never"), ]),
     "DefaultEdit": (DefaultEdit, [("outcome", "enum", "never"), ("revision", "string", "never"), ("current", "AccountDefault", "absent"), ]),
     "DecisionExplanation": (DecisionExplanation, [("outcome", "enum", "never"), ("policy_revision", "string", "absent"), ("source", "enum", "absent"), ("default_name", "string", "absent"), ]),
+    "PolicyChange": (PolicyChange, [("kind", "enum", "never"), ("expected_revision", "string", "never"), ("rule", "PolicyRule", "absent"), ("ttl_ms", "i64", "zero"), ("why", "string", "zero"), ("name", "string", "zero"), ("on", "bool", "zero"), ("action", "string", "zero"), ("program", "string", "zero"), ("rules", "list<PolicyRule>", "zero"), ("address", "string", "zero"), ]),
+    "ChangeRequestState": (ChangeRequestState, [("outcome", "enum", "never"), ("id", "string", "never"), ("revision", "string", "never"), ("change", "PolicyChange", "absent"), ("expires", "string", "never"), ("exempt", "bool", "never"), ]),
+    "ChangeRequestPage": (ChangeRequestPage, [("outcome", "enum", "never"), ("requests", "list<ChangeRequestState>", "never"), ]),
     "PermissionKey": (PermissionKey, [("action", "string", "never"), ("resource_profile", "string", "never"), ]),
     "ResourceSelector": (ResourceSelector, [("kind", "enum", "never"), ("target", "binary", "absent"), ]),
     "PermissionSelection": (PermissionSelection, [("permission", "PermissionKey", "never"), ("selector", "ResourceSelector", "never"), ]),
@@ -10238,6 +11113,9 @@ _SERVICE_RECORDS = {
     "OAAuthorizationOperatorRetireActionArguments": (_AuthorizationOperatorRetireActionArguments, [("expected_revision", "string", "never"), ("action", "string", "never"), ]),
     "OAAuthorizationOperatorExplainForArguments": (_AuthorizationOperatorExplainForArguments, [("subject", "Subject", "never"), ("action", "string", "never"), ("resource", "string", "never"), ]),
     "OAAuthorizationOperatorListDefaultsArguments": (_AuthorizationOperatorListDefaultsArguments, []),
+    "OAAuthorizationOperatorRequestChangeArguments": (_AuthorizationOperatorRequestChangeArguments, [("change", "PolicyChange", "never"), ("wait_ms", "i64", "never"), ]),
+    "OAAuthorizationOperatorObserveChangeRequestArguments": (_AuthorizationOperatorObserveChangeRequestArguments, [("id", "string", "never"), ("wait_ms", "i64", "never"), ]),
+    "OAAuthorizationOperatorListChangeRequestsArguments": (_AuthorizationOperatorListChangeRequestsArguments, []),
     "OAAuthorizationOperatorSetDefaultArguments": (_AuthorizationOperatorSetDefaultArguments, [("expected_revision", "string", "never"), ("name", "string", "never"), ("on", "bool", "never"), ]),
     "OASelectorAuthorizationListPermissionDefinitionsArguments": (_SelectorAuthorizationListPermissionDefinitionsArguments, [("cursor", "string", "never"), ("limit", "i64", "never"), ]),
     "OASelectorAuthorizationListPermissionBundlesArguments": (_SelectorAuthorizationListPermissionBundlesArguments, [("cursor", "string", "never"), ("limit", "i64", "never"), ]),
@@ -10274,6 +11152,9 @@ _SERVICE_RECORDS = {
     "OAAuthorizationOperatorRetireActionResult": (_AuthorizationOperatorRetireActionResult, [("value", "ActionEdit", "never"), ]),
     "OAAuthorizationOperatorExplainForResult": (_AuthorizationOperatorExplainForResult, [("value", "DecisionExplanation", "never"), ]),
     "OAAuthorizationOperatorListDefaultsResult": (_AuthorizationOperatorListDefaultsResult, [("value", "DefaultPage", "never"), ]),
+    "OAAuthorizationOperatorRequestChangeResult": (_AuthorizationOperatorRequestChangeResult, [("value", "ChangeRequestState", "never"), ]),
+    "OAAuthorizationOperatorObserveChangeRequestResult": (_AuthorizationOperatorObserveChangeRequestResult, [("value", "ChangeRequestState", "never"), ]),
+    "OAAuthorizationOperatorListChangeRequestsResult": (_AuthorizationOperatorListChangeRequestsResult, [("value", "ChangeRequestPage", "never"), ]),
     "OAAuthorizationOperatorSetDefaultResult": (_AuthorizationOperatorSetDefaultResult, [("value", "DefaultEdit", "never"), ]),
     "OASelectorAuthorizationListPermissionDefinitionsResult": (_SelectorAuthorizationListPermissionDefinitionsResult, [("value", "PermissionDefinitionPage", "never"), ]),
     "OASelectorAuthorizationListPermissionBundlesResult": (_SelectorAuthorizationListPermissionBundlesResult, [("value", "PermissionBundlePage", "never"), ]),
@@ -10542,6 +11423,31 @@ class AuthorizationOperator:
         returns unknown_method."""
         raise NotImplementedError
 
+    def request_change(self, change: PolicyChange, wait_ms: int) -> ChangeRequestState:
+        """Request one typed rights change (RIGHTS-O17). The Panel window applies
+        its changes through the direct methods. Any other operator program's
+        change becomes a pending request the person confirms in a person-only
+        popup the service words; the call waits up to wait_ms for the answer and
+        then returns pending with the request id. A request expires ten minutes
+        after it was made. Allow applies exactly that change, once. A caller
+        whose own connection-bound token is elevated is exempt while the
+        elevated-callers default is on: its change applies at once. Every
+        applied change writes an Activity line with Undo. An earlier operator@1
+        service returns unknown_method; a caller must not fall back to a direct
+        edit."""
+        raise NotImplementedError
+
+    def observe_change_request(self, id: str, wait_ms: int) -> ChangeRequestState:
+        """Wait up to wait_ms for one request this operator program made to settle
+        and report its state (RIGHTS-O17). A request of another program, or one
+        the service no longer holds, is unknown."""
+        raise NotImplementedError
+
+    def list_change_requests(self) -> ChangeRequestPage:
+        """List the change requests this operator program made that the service
+        still holds (RIGHTS-O17)."""
+        raise NotImplementedError
+
     def set_default(self, expected_revision: str, name: str, on: bool) -> DefaultEdit:
         """Atomically compare the expected durable revision and turn one configured
         account-wide default on or off, recording the operator subject and
@@ -10788,6 +11694,41 @@ class AuthorizationOperatorClient(AuthorizationOperator):
         _result = _service_decode(_read_oa_authorization_operator_list_defaults_result, _payload, 1)
         return _result.value
 
+    def request_change(self, change: PolicyChange, wait_ms: int) -> ChangeRequestState:
+        _service_check("PolicyChange", change)
+        _service_check("i64", wait_ms)
+        _args = _AuthorizationOperatorRequestChangeArguments()
+        _args.change = change
+        _args.wait_ms = wait_ms
+        _arguments = _service_encode(_write_oa_authorization_operator_request_change_arguments, _args, 1)
+        _service_decode(_read_oa_authorization_operator_request_change_arguments, _arguments, 1)
+        _request = _service_request("abstraction.rights/operator@1", "RequestChange", _arguments)
+        _payload = _service_response(self._transport.exchange_frame(_request), "abstraction.rights/operator@1", "RequestChange")
+        _result = _service_decode(_read_oa_authorization_operator_request_change_result, _payload, 1)
+        return _result.value
+
+    def observe_change_request(self, id: str, wait_ms: int) -> ChangeRequestState:
+        _service_check("string", id)
+        _service_check("i64", wait_ms)
+        _args = _AuthorizationOperatorObserveChangeRequestArguments()
+        _args.id = id
+        _args.wait_ms = wait_ms
+        _arguments = _service_encode(_write_oa_authorization_operator_observe_change_request_arguments, _args, 1)
+        _service_decode(_read_oa_authorization_operator_observe_change_request_arguments, _arguments, 1)
+        _request = _service_request("abstraction.rights/operator@1", "ObserveChangeRequest", _arguments)
+        _payload = _service_response(self._transport.exchange_frame(_request), "abstraction.rights/operator@1", "ObserveChangeRequest")
+        _result = _service_decode(_read_oa_authorization_operator_observe_change_request_result, _payload, 1)
+        return _result.value
+
+    def list_change_requests(self) -> ChangeRequestPage:
+        _args = _AuthorizationOperatorListChangeRequestsArguments()
+        _arguments = _service_encode(_write_oa_authorization_operator_list_change_requests_arguments, _args, 1)
+        _service_decode(_read_oa_authorization_operator_list_change_requests_arguments, _arguments, 1)
+        _request = _service_request("abstraction.rights/operator@1", "ListChangeRequests", _arguments)
+        _payload = _service_response(self._transport.exchange_frame(_request), "abstraction.rights/operator@1", "ListChangeRequests")
+        _result = _service_decode(_read_oa_authorization_operator_list_change_requests_result, _payload, 1)
+        return _result.value
+
     def set_default(self, expected_revision: str, name: str, on: bool) -> DefaultEdit:
         _service_check("string", expected_revision)
         _service_check("string", name)
@@ -10805,20 +11746,52 @@ class AuthorizationOperatorClient(AuthorizationOperator):
 
 
 class SelectorAuthorization:
+    """Typed authorization: permissions keyed by action and resource profile,
+    decided for One resources and All collections from one snapshot.
+    authorization@1 decides exact action and resource strings; a program uses
+    this service for typed selectors. The Go client type rights.Client serves
+    both services: ResolveRights binds authorization@1 for Decide, DecideFor,
+    DecideForAtLeastRevision, Require and ListActionDescriptions, and
+    ResolveRightsSelector binds this service for ListPermissionDefinitions,
+    ListPermissionBundles, CheckBatch, CheckBatchFor and
+    CheckLegacyOperationFor. A method of the other service answers
+    unknown_method."""
 
     def list_permission_definitions(self, cursor: str, limit: int) -> PermissionDefinitionPage:
+        """List the typed permission definitions the catalogue serves: each action
+        with its resource profile and the selectors it supports. Callers of the
+        runtime's own account only. A page binds one policy revision; a cursor
+        from another revision reads gap."""
         raise NotImplementedError
 
     def list_permission_bundles(self, cursor: str, limit: int) -> PermissionBundlePage:
+        """List the named permission bundles an operator can apply as one consent,
+        each an immutable version with its member permissions. Callers of the
+        runtime's own account only. A page binds one policy revision."""
         raise NotImplementedError
 
     def check_batch(self, request: CheckBatchRequest) -> BatchDecision:
+        """Decide the calling program's own typed permissions for 1..256 resources
+        and an optional All collection admission, from one policy snapshot
+        (RIGHTS-R19). Each target is the owning capability's document for the
+        resource, which this service prepares; a caller supplies no captured
+        evidence. The result is advisory to the caller: a resource service
+        decides with CheckBatchFor. Asks nobody and writes nothing."""
         raise NotImplementedError
 
     def check_batch_for(self, subject: Subject, request: CheckBatchRequest) -> BatchDecision:
+        """Decide a subject's typed permissions as CheckBatch does. The receiving
+        host must designate the calling program as the enforcer of every
+        requested permission and of the collection admission; otherwise
+        forbidden. Subject and caller belong to the runtime's own account, and
+        subject is the enforcer's assertion. Asks nobody and writes nothing."""
         raise NotImplementedError
 
     def check_legacy_operation_for(self, subject: Subject, request: LegacyOperationRequest) -> Decision:
+        """Decide one exact authorization@1 action and resource for a subject with
+        live typed blocks carried across known equivalence (RIGHTS-R20). The
+        caller enforces the legacy action, and the concrete operation when one
+        is supplied. It grants no typed permit."""
         raise NotImplementedError
 
 
@@ -10900,27 +11873,51 @@ class SelectorAuthorizationOperator:
     original semantics."""
 
     def list_selector_rules(self, cursor: str, limit: int) -> SelectorRulePage:
+        """List every typed rule with its setter, time, reason, expiry and bundle
+        origin. Operator programs only. A page binds one policy revision."""
         raise NotImplementedError
 
     def read_selector_rule(self, subject: Subject, selection: PermissionSelection) -> SelectorRuleRead:
+        """Read the one rule for a subject and an exact permission selection,
+        addressed by the selection's retained bytes with no new target
+        preparation. Operator programs only."""
         raise NotImplementedError
 
     def set_selector_rule(self, expected_revision: str, rule: SelectorRule, ttl_ms: int, why: str) -> SelectorEdit:
+        """Set one typed permit or block at expected_revision; a stale revision
+        conflicts. ttl_ms 0 keeps the rule until removed, and at most one year
+        bounds it. Replacing a row detaches its bundle origin (RIGHTS-O12). The
+        Panel window's edit only (RIGHTS-O17)."""
         raise NotImplementedError
 
     def remove_selector_rule(self, expected_revision: str, subject: Subject, selection: PermissionSelection) -> SelectorEdit:
+        """Remove the rule for a subject and an exact permission selection at
+        expected_revision. The Panel window's edit only (RIGHTS-O17)."""
         raise NotImplementedError
 
     def apply_bundle(self, expected_revision: str, subject: Subject, bundle_ref: str, selector: ResourceSelector, ttl_ms: int, why: str) -> SelectorEdit:
+        """Expand one immutable bundle version into explicit permits for a subject,
+        atomically, with one setter and expiry and a retained bundle origin
+        (RIGHTS-O12). New members of a later version need new consent. The Panel
+        window's edit only (RIGHTS-O17)."""
         raise NotImplementedError
 
     def remove_bundle(self, expected_revision: str, subject: Subject, origin_id: str) -> SelectorEdit:
+        """Remove a subject's rules that still carry bundle origin origin_id. Rows
+        replaced since keep their later independent edits. The Panel window's
+        edit only (RIGHTS-O17)."""
         raise NotImplementedError
 
     def apply_permission_allow(self, expected_revision: str, question_id: str) -> SelectorEdit:
+        """Write the typed effect pinned by the asks permission@1 question
+        question_id after an operator Allow on it. The effect comes from the
+        question, never from the caller. The Panel window and the Asks presenter
+        only (RIGHTS-O17). A revoked or expired occurrence refuses replay."""
         raise NotImplementedError
 
     def undo_permission_effect(self, expected_revision: str, question_id: str) -> SelectorEdit:
+        """Remove the still-current rules that question_id's Allow wrote, keeping
+        later edits and blocks. The Panel window's edit only (RIGHTS-O17)."""
         raise NotImplementedError
 
 
@@ -11079,6 +12076,9 @@ _NAMED_RECORDS = {
     "DefaultPage": (DefaultPage, [("outcome", "enum", "never"), ("revision", "string", "never"), ("defaults", "list<AccountDefault>", "never"), ]),
     "DefaultEdit": (DefaultEdit, [("outcome", "enum", "never"), ("revision", "string", "never"), ("current", "AccountDefault", "absent"), ]),
     "DecisionExplanation": (DecisionExplanation, [("outcome", "enum", "never"), ("policy_revision", "string", "absent"), ("source", "enum", "absent"), ("default_name", "string", "absent"), ]),
+    "PolicyChange": (PolicyChange, [("kind", "enum", "never"), ("expected_revision", "string", "never"), ("rule", "PolicyRule", "absent"), ("ttl_ms", "i64", "zero"), ("why", "string", "zero"), ("name", "string", "zero"), ("on", "bool", "zero"), ("action", "string", "zero"), ("program", "string", "zero"), ("rules", "list<PolicyRule>", "zero"), ("address", "string", "zero"), ]),
+    "ChangeRequestState": (ChangeRequestState, [("outcome", "enum", "never"), ("id", "string", "never"), ("revision", "string", "never"), ("change", "PolicyChange", "absent"), ("expires", "string", "never"), ("exempt", "bool", "never"), ]),
+    "ChangeRequestPage": (ChangeRequestPage, [("outcome", "enum", "never"), ("requests", "list<ChangeRequestState>", "never"), ]),
     "PermissionKey": (PermissionKey, [("action", "string", "never"), ("resource_profile", "string", "never"), ]),
     "ResourceSelector": (ResourceSelector, [("kind", "enum", "never"), ("target", "binary", "absent"), ]),
     "PermissionSelection": (PermissionSelection, [("permission", "PermissionKey", "never"), ("selector", "ResourceSelector", "never"), ]),
@@ -11250,6 +12250,18 @@ def _check_default_edit(v, depth=0, limit=_DEPTH_LIMIT):
 
 def _check_decision_explanation(v, depth=0, limit=_DEPTH_LIMIT):
     _named_check("DecisionExplanation", v, depth, min(limit, _DEPTH_LIMIT))
+
+
+def _check_policy_change(v, depth=0, limit=_DEPTH_LIMIT):
+    _named_check("PolicyChange", v, depth, min(limit, _DEPTH_LIMIT))
+
+
+def _check_change_request_state(v, depth=0, limit=_DEPTH_LIMIT):
+    _named_check("ChangeRequestState", v, depth, min(limit, _DEPTH_LIMIT))
+
+
+def _check_change_request_page(v, depth=0, limit=_DEPTH_LIMIT):
+    _named_check("ChangeRequestPage", v, depth, min(limit, _DEPTH_LIMIT))
 
 
 def _check_permission_key(v, depth=0, limit=_DEPTH_LIMIT):
@@ -12195,6 +13207,111 @@ def encode_decision_explanation(v):
 
 def decode_decision_explanation(data):
     v, n = _decode_decision_explanation_at(data, 0, _DEPTH_LIMIT)
+    r = _Reader(bytes(data))
+    r.pos = n
+    r.ws()
+    if r.pos != len(r.buf):
+        raise r.refuse("trailing_bytes")
+    return v
+
+
+def _decode_policy_change_at(data, depth, limit):
+    r = _Reader(bytes(data))
+    if depth < 0 or limit < 1:
+        raise r.refuse("depth_exceeded")
+    r.depth = depth
+    r.limit = min(limit, _DEPTH_LIMIT)
+    r.ws()
+    v = _read_policy_change(r)
+    return v, r.pos
+
+
+def _encode_policy_change_at(v, depth):
+    if depth < 0 or depth >= _DEPTH_LIMIT:
+        raise _Reader(b"").refuse("depth_exceeded")
+    _check_policy_change(v, depth, _DEPTH_LIMIT)
+    out = bytearray()
+    _write_policy_change(out, v, depth)
+    _decode_policy_change_at(out, depth, _DEPTH_LIMIT)
+    return bytes(out)
+
+
+def encode_policy_change(v):
+    return _encode_policy_change_at(v, 0) + "\n".encode()
+
+
+def decode_policy_change(data):
+    v, n = _decode_policy_change_at(data, 0, _DEPTH_LIMIT)
+    r = _Reader(bytes(data))
+    r.pos = n
+    r.ws()
+    if r.pos != len(r.buf):
+        raise r.refuse("trailing_bytes")
+    return v
+
+
+def _decode_change_request_state_at(data, depth, limit):
+    r = _Reader(bytes(data))
+    if depth < 0 or limit < 1:
+        raise r.refuse("depth_exceeded")
+    r.depth = depth
+    r.limit = min(limit, _DEPTH_LIMIT)
+    r.ws()
+    v = _read_change_request_state(r)
+    return v, r.pos
+
+
+def _encode_change_request_state_at(v, depth):
+    if depth < 0 or depth >= _DEPTH_LIMIT:
+        raise _Reader(b"").refuse("depth_exceeded")
+    _check_change_request_state(v, depth, _DEPTH_LIMIT)
+    out = bytearray()
+    _write_change_request_state(out, v, depth)
+    _decode_change_request_state_at(out, depth, _DEPTH_LIMIT)
+    return bytes(out)
+
+
+def encode_change_request_state(v):
+    return _encode_change_request_state_at(v, 0) + "\n".encode()
+
+
+def decode_change_request_state(data):
+    v, n = _decode_change_request_state_at(data, 0, _DEPTH_LIMIT)
+    r = _Reader(bytes(data))
+    r.pos = n
+    r.ws()
+    if r.pos != len(r.buf):
+        raise r.refuse("trailing_bytes")
+    return v
+
+
+def _decode_change_request_page_at(data, depth, limit):
+    r = _Reader(bytes(data))
+    if depth < 0 or limit < 1:
+        raise r.refuse("depth_exceeded")
+    r.depth = depth
+    r.limit = min(limit, _DEPTH_LIMIT)
+    r.ws()
+    v = _read_change_request_page(r)
+    return v, r.pos
+
+
+def _encode_change_request_page_at(v, depth):
+    if depth < 0 or depth >= _DEPTH_LIMIT:
+        raise _Reader(b"").refuse("depth_exceeded")
+    _check_change_request_page(v, depth, _DEPTH_LIMIT)
+    out = bytearray()
+    _write_change_request_page(out, v, depth)
+    _decode_change_request_page_at(out, depth, _DEPTH_LIMIT)
+    return bytes(out)
+
+
+def encode_change_request_page(v):
+    return _encode_change_request_page_at(v, 0) + "\n".encode()
+
+
+def decode_change_request_page(data):
+    v, n = _decode_change_request_page_at(data, 0, _DEPTH_LIMIT)
     r = _Reader(bytes(data))
     r.pos = n
     r.ws()

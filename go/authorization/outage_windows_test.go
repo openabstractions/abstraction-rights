@@ -13,8 +13,8 @@ import (
 
 // A policy file whose read access its ACL denies answers access denied on every
 // open. The decision, the operator's rule read and the policy listing read
-// unavailable within the native client's ordinary per-call deadline, and read
-// the file again once its ACL is restored.
+// unavailable within about a second, far inside the native client's ordinary
+// per-call deadline, and read the file again once its ACL is restored.
 func TestAReadDeniedPolicyIsUnavailablePromptly(t *testing.T) {
 	p, path := policy(t)
 	subject := nativeSubject(t)
@@ -23,8 +23,10 @@ func TestAReadDeniedPolicyIsUnavailablePromptly(t *testing.T) {
 	}
 	_, decisions, operator, _ := liveOperator(t, p, func(ctx context.Context, _ *identity.Peer) error { return ctx.Err() })
 	// RIGHTS-R3 gives each ordinary native call five seconds. The server's
-	// policy read may use that call's budget when retrying denied opens.
+	// policy read retries an access-denied open briefly and answers well
+	// inside that budget.
 	const callBudget = 5 * time.Second
+	const prompt = 1500 * time.Millisecond
 	readableCtx, cancelReadable := context.WithTimeout(context.Background(), callBudget)
 	defer cancelReadable()
 	if d, err := decisions.DecideContext(readableCtx, action, "sha256:outage"); err != nil || d.Outcome != wire.DecisionOutcomePermitted {
@@ -47,8 +49,10 @@ func TestAReadDeniedPolicyIsUnavailablePromptly(t *testing.T) {
 		start := time.Now()
 		outcome := call(ctx)
 		end := time.Now()
-		if elapsed := end.Sub(start); outcome != "unavailable" || end.After(deadline) {
+		if elapsed := end.Sub(start); outcome != "unavailable" || end.After(deadline) || elapsed > prompt {
 			t.Fatalf("%s on a read-denied policy: %q after %v", name, outcome, elapsed)
+		} else {
+			t.Logf("%s on a read-denied policy: unavailable after %v", name, elapsed)
 		}
 	}
 	timed("Decide", func(ctx context.Context) string {

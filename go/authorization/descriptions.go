@@ -87,11 +87,11 @@ func (r *receiver) ListActionDescriptions(cursor string, limit int64) (wire.Desc
 }
 
 func (r *operatorReceiver) RegisterDescribedAction(expected string, description wire.ActionDescription) (wire.DescriptionEdit, error) {
-	by, err := r.authorize()
+	by, err := r.authorizeDirect()
 	if err != nil {
 		return wire.DescriptionEdit{Outcome: operatorActionError(err)}, nil
 	}
-	result, err := r.host.policy.PublishAction(expected, description, by, func() error { _, err := r.authorize(); return err })
+	result, err := r.host.policy.PublishAction(expected, description, by, func() error { _, err := r.authorizeDirect(); return err })
 	if err != nil {
 		return wire.DescriptionEdit{Outcome: operatorActionError(err)}, nil
 	}

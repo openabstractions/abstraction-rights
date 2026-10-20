@@ -137,6 +137,27 @@
       "class": "effect",
       "contract": "abstraction.rights/operator@1",
       "idempotency_key": "",
+      "method": "RequestChange",
+      "trait": "idempotent"
+    },
+    {
+      "class": "read",
+      "contract": "abstraction.rights/operator@1",
+      "idempotency_key": "",
+      "method": "ObserveChangeRequest",
+      "trait": "readonly"
+    },
+    {
+      "class": "read",
+      "contract": "abstraction.rights/operator@1",
+      "idempotency_key": "",
+      "method": "ListChangeRequests",
+      "trait": "readonly"
+    },
+    {
+      "class": "effect",
+      "contract": "abstraction.rights/operator@1",
+      "idempotency_key": "",
       "method": "SetDefault",
       "trait": "idempotent"
     },

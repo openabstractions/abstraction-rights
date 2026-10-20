@@ -104,7 +104,7 @@ type operatorReceiver struct {
 }
 
 func (r *operatorReceiver) ApplyFirstUseAllow(expected, id string) (wire.PolicyEdit, error) {
-	by, err := r.authorize()
+	by, err := r.authorizeCompletion()
 	if err != nil {
 		return wire.PolicyEdit{Outcome: operatorPolicyError(err)}, nil
 	}
@@ -117,7 +117,7 @@ func (r *operatorReceiver) ApplyFirstUseAllow(expected, id string) (wire.PolicyE
 	if r.host.firstUseAllow == nil {
 		return wire.PolicyEdit{Outcome: wire.PolicyEditOutcomeUnavailable}, nil
 	}
-	result, err := r.host.firstUseAllow(r.ctx, by, expected, id, func() error { _, err := r.authorize(); return err })
+	result, err := r.host.firstUseAllow(r.ctx, by, expected, id, func() error { _, err := r.authorizeCompletion(); return err })
 	if err != nil {
 		return wire.PolicyEdit{Outcome: operatorPolicyError(err)}, nil
 	}
@@ -199,26 +199,38 @@ func (r *operatorReceiver) ListPolicy(cursor string, limit int64) (wire.PolicyPa
 	return page, nil
 }
 func (r *operatorReceiver) SetRule(expected string, rule wire.PolicyRule) (wire.PolicyEdit, error) {
+	if result, routed, err := r.exempt(wire.PolicyChange{Kind: wire.ChangeKindSetRule, ExpectedRevision: expected, Rule: &rule}); routed {
+		if err != nil {
+			return wire.PolicyEdit{Outcome: operatorPolicyError(err)}, nil
+		}
+		return policyEditOf(result), nil
+	}
 	return r.edit(expected, rule.Subject, rule.Action, rule.Resource, rights.RuleEdit{Permit: &rule.Permit})
 }
 func (r *operatorReceiver) RevokeRule(expected string, subject wire.Subject, action, resource string) (wire.PolicyEdit, error) {
+	if result, routed, err := r.exempt(wire.PolicyChange{Kind: wire.ChangeKindRevokeRule, ExpectedRevision: expected, Rule: &wire.PolicyRule{Subject: subject, Action: action, Resource: resource}}); routed {
+		if err != nil {
+			return wire.PolicyEdit{Outcome: operatorPolicyError(err)}, nil
+		}
+		return policyEditOf(result), nil
+	}
 	return r.edit(expected, subject, action, resource, rights.RuleEdit{})
 }
 func (r *operatorReceiver) StopAnswerer(expected string, answerer wire.Subject, alsoRevokeGrants bool) (wire.PolicyEdit, error) {
-	if _, err := r.authorize(); err != nil {
+	if _, err := r.authorizeDirect(); err != nil {
 		return wire.PolicyEdit{Outcome: operatorPolicyError(err)}, nil
 	}
-	result, err := r.host.policy.StopAnswerer(expected, answerer, alsoRevokeGrants, func() error { _, err := r.authorize(); return err })
+	result, err := r.host.policy.StopAnswerer(expected, answerer, alsoRevokeGrants, func() error { _, err := r.authorizeDirect(); return err })
 	if err != nil {
 		return wire.PolicyEdit{Outcome: operatorPolicyError(err)}, nil
 	}
 	return result, nil
 }
 func (r *operatorReceiver) RevokeAnswerPermits(expected string, answerer, target wire.Subject, actions []string, resource, questionID string) (wire.PolicyEdit, error) {
-	if _, err := r.authorize(); err != nil {
+	if _, err := r.authorizeDirect(); err != nil {
 		return wire.PolicyEdit{Outcome: operatorPolicyError(err)}, nil
 	}
-	result, err := r.host.policy.RevokeAnswerPermits(expected, answerer, target, actions, resource, questionID, func() error { _, err := r.authorize(); return err })
+	result, err := r.host.policy.RevokeAnswerPermits(expected, answerer, target, actions, resource, questionID, func() error { _, err := r.authorizeDirect(); return err })
 	if err != nil {
 		return wire.PolicyEdit{Outcome: operatorPolicyError(err)}, nil
 	}
@@ -228,6 +240,14 @@ func (r *operatorReceiver) SetRuleFor(expected string, rule wire.PolicyRule, ttl
 	ttl := time.Duration(ttlMS) * time.Millisecond
 	if ttlMS < 0 || ttlMS > rights.MaxRuleTTL.Milliseconds() {
 		ttl = -1
+	}
+	if ttl >= 0 && len(why) <= 256 {
+		if result, routed, err := r.exempt(wire.PolicyChange{Kind: wire.ChangeKindSetRule, ExpectedRevision: expected, Rule: &rule, TTLMs: ttlMS, Why: why}); routed {
+			if err != nil {
+				return wire.PolicyEdit{Outcome: operatorPolicyError(err)}, nil
+			}
+			return policyEditOf(result), nil
+		}
 	}
 	return r.edit(expected, rule.Subject, rule.Action, rule.Resource, rights.RuleEdit{Permit: &rule.Permit, TTL: ttl, Why: why, Exact: true})
 }
@@ -239,12 +259,12 @@ func (r *operatorReceiver) SetRulesFor(expected string, rules []wire.PolicyRule,
 	if ttlMS < 0 || ttlMS > rights.MaxRuleTTL.Milliseconds() {
 		ttl = -1
 	}
-	by, err := r.authorize()
+	by, err := r.authorizeDirect()
 	if err != nil {
 		return wire.PolicyEdit{Outcome: operatorPolicyError(err)}, nil
 	}
 	permit := rules[0].Permit
-	result, err := r.host.policy.ChangeRules(expected, rules, rights.RuleEdit{Permit: &permit, By: by, TTL: ttl, Why: why, Exact: true}, func() error { _, err := r.authorize(); return err })
+	result, err := r.host.policy.ChangeRules(expected, rules, rights.RuleEdit{Permit: &permit, By: by, TTL: ttl, Why: why, Exact: true}, func() error { _, err := r.authorizeDirect(); return err })
 	if err != nil {
 		return wire.PolicyEdit{Outcome: operatorPolicyError(err)}, nil
 	}
@@ -254,7 +274,7 @@ func (r *operatorReceiver) SetRulesFor(expected string, rules []wire.PolicyRule,
 // edit records the operator subject established for this call as the rule's
 // provenance and rechecks authority inside the atomic edit.
 func (r *operatorReceiver) edit(expected string, subject wire.Subject, action, resource string, edit rights.RuleEdit) (wire.PolicyEdit, error) {
-	by, err := r.authorize()
+	by, err := r.authorizeDirect()
 	if err != nil {
 		return wire.PolicyEdit{Outcome: operatorPolicyError(err)}, nil
 	}
@@ -262,7 +282,7 @@ func (r *operatorReceiver) edit(expected string, subject wire.Subject, action, r
 		return wire.PolicyEdit{Outcome: wire.PolicyEditOutcomeForbidden}, nil
 	}
 	edit.By = by
-	result, err := r.host.policy.ChangeRuleContext(r.ctx, expected, subject, action, resource, edit, func() error { _, err := r.authorize(); return err })
+	result, err := r.host.policy.ChangeRuleContext(r.ctx, expected, subject, action, resource, edit, func() error { _, err := r.authorizeDirect(); return err })
 	if err != nil {
 		return wire.PolicyEdit{Outcome: operatorPolicyError(err)}, nil
 	}
@@ -321,11 +341,17 @@ func (r *operatorReceiver) ListDefaults() (wire.DefaultPage, error) {
 // SetDefault turns one configured default on or off, recording the operator
 // subject established for this call (RIGHTS-O13).
 func (r *operatorReceiver) SetDefault(expected, name string, on bool) (wire.DefaultEdit, error) {
-	by, err := r.authorize()
+	if result, routed, err := r.exempt(wire.PolicyChange{Kind: wire.ChangeKindSetDefault, ExpectedRevision: expected, Name: name, On: on}); routed {
+		if err != nil {
+			return wire.DefaultEdit{Outcome: operatorPolicyError(err)}, nil
+		}
+		return defaultEditOf(result), nil
+	}
+	by, err := r.authorizeDirect()
 	if err != nil {
 		return wire.DefaultEdit{Outcome: operatorPolicyError(err)}, nil
 	}
-	result, err := r.host.policy.SetDefault(expected, name, on, by, func() error { _, err := r.authorize(); return err })
+	result, err := r.host.policy.SetDefault(expected, name, on, by, func() error { _, err := r.authorizeDirect(); return err })
 	if err != nil {
 		return wire.DefaultEdit{Outcome: operatorPolicyError(err)}, nil
 	}
@@ -339,11 +365,21 @@ func (r *operatorReceiver) RetireAction(expected, action string) (wire.ActionEdi
 	return r.editAction(expected, action, false)
 }
 func (r *operatorReceiver) editAction(expected, action string, register bool) (wire.ActionEdit, error) {
-	by, err := r.authorize()
+	kind := wire.ChangeKindRetireAction
+	if register {
+		kind = wire.ChangeKindRegisterAction
+	}
+	if result, routed, err := r.exempt(wire.PolicyChange{Kind: kind, ExpectedRevision: expected, Action: action}); routed {
+		if err != nil {
+			return wire.ActionEdit{Outcome: operatorActionError(err)}, nil
+		}
+		return actionEditOf(result), nil
+	}
+	by, err := r.authorizeDirect()
 	if err != nil {
 		return wire.ActionEdit{Outcome: operatorActionError(err)}, nil
 	}
-	result, err := r.host.policy.EditAction(expected, action, register, by, func() error { _, err := r.authorize(); return err })
+	result, err := r.host.policy.EditAction(expected, action, register, by, func() error { _, err := r.authorizeDirect(); return err })
 	if err != nil {
 		return wire.ActionEdit{Outcome: operatorActionError(err)}, nil
 	}
