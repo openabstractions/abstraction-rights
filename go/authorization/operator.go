@@ -12,6 +12,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode"
 	"unicode/utf8"
 )
 
@@ -19,6 +20,21 @@ import (
 // native rechecked evidence; policy subjects in requests are administrative
 // targets. Return ErrOperatorForbidden for denial, other errors for outage.
 type AuthorizeOperator func(context.Context, *identity.Peer) error
+
+// ApplyFirstUseAllow is trusted runtime composition. It pins the actual Book
+// occurrence before entering rights, derives its complete target permits and
+// commits their durable proof. It must honor ctx and recheck authorize in-lock.
+type ApplyFirstUseAllow func(ctx context.Context, operator wire.Subject, expected, id string, authorize func() error) (wire.PolicyEdit, error)
+
+func (h *Host) EnableFirstUseAllow(apply ApplyFirstUseAllow) error {
+	h.lifecycle.Lock()
+	defer h.lifecycle.Unlock()
+	if h.serving || h.ctx.Err() != nil || apply == nil {
+		return errors.New("rights: configure first-use Allow before Serve")
+	}
+	h.firstUseAllow = apply
+	return nil
+}
 
 var ErrOperatorForbidden = errors.New("rights: operator forbidden")
 
@@ -32,6 +48,9 @@ func operatorPolicyError(err error) wire.PolicyEditOutcome {
 	if errors.Is(err, ErrOperatorForbidden) {
 		return wire.PolicyEditOutcomeForbidden
 	}
+	if errors.Is(err, rights.ErrUnresolvedShortName) {
+		return wire.PolicyEditOutcomeInvalid
+	}
 	return wire.PolicyEditOutcomeUnavailable
 }
 func operatorRuleError(err error) wire.RuleReadOutcome {
@@ -39,6 +58,12 @@ func operatorRuleError(err error) wire.RuleReadOutcome {
 		return wire.RuleReadOutcomeForbidden
 	}
 	return wire.RuleReadOutcomeUnavailable
+}
+func operatorDecisionError(err error) wire.DecisionOutcome {
+	if errors.Is(err, ErrOperatorForbidden) {
+		return wire.DecisionOutcomeForbidden
+	}
+	return wire.DecisionOutcomeUnavailable
 }
 func operatorActionError(err error) wire.ActionEditOutcome {
 	if errors.Is(err, ErrOperatorForbidden) {
@@ -73,6 +98,27 @@ func (h *Host) OperatorAvailable() bool {
 }
 
 type operatorReceiver struct{ receiver }
+
+func (r *operatorReceiver) ApplyFirstUseAllow(expected, id string) (wire.PolicyEdit, error) {
+	by, err := r.authorize()
+	if err != nil {
+		return wire.PolicyEdit{Outcome: operatorPolicyError(err)}, nil
+	}
+	valid := func(value string) bool {
+		return len(value) > 0 && len(value) <= 128 && utf8.ValidString(value) && strings.IndexFunc(value, unicode.IsControl) < 0
+	}
+	if !valid(expected) || !valid(id) {
+		return wire.PolicyEdit{Outcome: wire.PolicyEditOutcomeInvalid}, nil
+	}
+	if r.host.firstUseAllow == nil {
+		return wire.PolicyEdit{Outcome: wire.PolicyEditOutcomeUnavailable}, nil
+	}
+	result, err := r.host.firstUseAllow(r.ctx, by, expected, id, func() error { _, err := r.authorize(); return err })
+	if err != nil {
+		return wire.PolicyEdit{Outcome: operatorPolicyError(err)}, nil
+	}
+	return result, nil
+}
 
 func (r *operatorReceiver) authorize() (wire.Subject, error) {
 	if err := r.ctx.Err(); err != nil {
@@ -152,12 +198,51 @@ func (r *operatorReceiver) SetRule(expected string, rule wire.PolicyRule) (wire.
 func (r *operatorReceiver) RevokeRule(expected string, subject wire.Subject, action, resource string) (wire.PolicyEdit, error) {
 	return r.edit(expected, subject, action, resource, rights.RuleEdit{})
 }
+func (r *operatorReceiver) StopAnswerer(expected string, answerer wire.Subject, alsoRevokeGrants bool) (wire.PolicyEdit, error) {
+	if _, err := r.authorize(); err != nil {
+		return wire.PolicyEdit{Outcome: operatorPolicyError(err)}, nil
+	}
+	result, err := r.host.policy.StopAnswerer(expected, answerer, alsoRevokeGrants, func() error { _, err := r.authorize(); return err })
+	if err != nil {
+		return wire.PolicyEdit{Outcome: operatorPolicyError(err)}, nil
+	}
+	return result, nil
+}
+func (r *operatorReceiver) RevokeAnswerPermits(expected string, answerer, target wire.Subject, actions []string, resource, questionID string) (wire.PolicyEdit, error) {
+	if _, err := r.authorize(); err != nil {
+		return wire.PolicyEdit{Outcome: operatorPolicyError(err)}, nil
+	}
+	result, err := r.host.policy.RevokeAnswerPermits(expected, answerer, target, actions, resource, questionID, func() error { _, err := r.authorize(); return err })
+	if err != nil {
+		return wire.PolicyEdit{Outcome: operatorPolicyError(err)}, nil
+	}
+	return result, nil
+}
 func (r *operatorReceiver) SetRuleFor(expected string, rule wire.PolicyRule, ttlMS int64, why string) (wire.PolicyEdit, error) {
 	ttl := time.Duration(ttlMS) * time.Millisecond
 	if ttlMS < 0 || ttlMS > rights.MaxRuleTTL.Milliseconds() {
 		ttl = -1
 	}
 	return r.edit(expected, rule.Subject, rule.Action, rule.Resource, rights.RuleEdit{Permit: &rule.Permit, TTL: ttl, Why: why, Exact: true})
+}
+func (r *operatorReceiver) SetRulesFor(expected string, rules []wire.PolicyRule, ttlMS int64, why string) (wire.PolicyEdit, error) {
+	if len(rules) < 1 || len(rules) > 2 {
+		return wire.PolicyEdit{Outcome: wire.PolicyEditOutcomeInvalid}, nil
+	}
+	ttl := time.Duration(ttlMS) * time.Millisecond
+	if ttlMS < 0 || ttlMS > rights.MaxRuleTTL.Milliseconds() {
+		ttl = -1
+	}
+	by, err := r.authorize()
+	if err != nil {
+		return wire.PolicyEdit{Outcome: operatorPolicyError(err)}, nil
+	}
+	permit := rules[0].Permit
+	result, err := r.host.policy.ChangeRules(expected, rules, rights.RuleEdit{Permit: &permit, By: by, TTL: ttl, Why: why, Exact: true}, func() error { _, err := r.authorize(); return err })
+	if err != nil {
+		return wire.PolicyEdit{Outcome: operatorPolicyError(err)}, nil
+	}
+	return result, nil
 }
 
 // edit records the operator subject established for this call as the rule's
@@ -184,6 +269,57 @@ func (r *operatorReceiver) ReadRule(subject wire.Subject, action, resource strin
 	}
 	return result, nil
 }
+
+// ExplainFor reports one exact decision for subject with the step that
+// decided it, under operator authorization rechecked before returning
+// (RIGHTS-O14). Refusals carry no revision, source or name.
+func (r *operatorReceiver) ExplainFor(subject wire.Subject, action, resource string) (wire.DecisionExplanation, error) {
+	refusal := func(err error) wire.DecisionExplanation {
+		return wire.DecisionExplanation{Outcome: operatorDecisionError(err)}
+	}
+	if _, err := r.authorize(); err != nil {
+		return refusal(err), nil
+	}
+	result := r.host.policy.ExplainForContext(r.ctx, subject, action, resource)
+	if _, err := r.authorize(); err != nil {
+		return refusal(err), nil
+	}
+	return result, nil
+}
+
+// ListDefaults reads every configured account-wide default under operator
+// authorization, rechecked before returning (RIGHTS-O13).
+func (r *operatorReceiver) ListDefaults() (wire.DefaultPage, error) {
+	refusal := func(outcome wire.PolicyPageOutcome) wire.DefaultPage {
+		return wire.DefaultPage{Outcome: outcome, Defaults: []wire.AccountDefault{}}
+	}
+	if _, err := r.authorize(); err != nil {
+		return refusal(operatorPageError(err)), nil
+	}
+	revision, defaults, err := r.host.policy.DefaultsSnapshot(r.ctx)
+	if err != nil {
+		return refusal(wire.PolicyPageOutcomeUnavailable), nil
+	}
+	if _, err := r.authorize(); err != nil {
+		return refusal(operatorPageError(err)), nil
+	}
+	return wire.DefaultPage{Outcome: wire.PolicyPageOutcomePage, Revision: revision, Defaults: defaults}, nil
+}
+
+// SetDefault turns one configured default on or off, recording the operator
+// subject established for this call (RIGHTS-O13).
+func (r *operatorReceiver) SetDefault(expected, name string, on bool) (wire.DefaultEdit, error) {
+	by, err := r.authorize()
+	if err != nil {
+		return wire.DefaultEdit{Outcome: operatorPolicyError(err)}, nil
+	}
+	result, err := r.host.policy.SetDefault(expected, name, on, by, func() error { _, err := r.authorize(); return err })
+	if err != nil {
+		return wire.DefaultEdit{Outcome: operatorPolicyError(err)}, nil
+	}
+	return result, nil
+}
+
 func (r *operatorReceiver) RegisterAction(expected, action string) (wire.ActionEdit, error) {
 	return r.editAction(expected, action, true)
 }

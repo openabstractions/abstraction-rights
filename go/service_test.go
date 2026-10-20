@@ -7,10 +7,11 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"slices"
+	"sync"
 	"testing"
 	"time"
 
-	asks "github.com/openabstractions/abstraction-asks/go"
 	identity "github.com/openabstractions/abstraction-identity"
 	"github.com/openabstractions/abstraction-identity/listen"
 	watch "github.com/openabstractions/abstraction-watch/go"
@@ -20,7 +21,70 @@ type harness struct {
 	s      *Service
 	app    *Client
 	tool   *Client
-	person *asks.Client
+	person *person
+}
+
+// person stands in for the asks layer the runtime composes with this service
+// (serve's rights_asks_test.go runs the real one): it keeps each Question
+// until the test answers it, and answers a kept refusal again without asking,
+// as asks does for "never".
+type person struct {
+	mu      sync.Mutex
+	pending []*asked
+	kept    map[string]Decision
+}
+
+type asked struct {
+	Question
+	answer chan Decision
+}
+
+func keptKey(q Question) string { return q.Asker + "\x00" + q.Key }
+
+func (p *person) Await(ctx context.Context, q Question) (Decision, error) {
+	p.mu.Lock()
+	if d, ok := p.kept[keptKey(q)]; ok {
+		p.mu.Unlock()
+		return d, nil
+	}
+	a := &asked{Question: q, answer: make(chan Decision, 1)}
+	p.pending = append(p.pending, a)
+	p.mu.Unlock()
+	select {
+	case d := <-a.answer:
+		return d, nil
+	case <-ctx.Done():
+		p.mu.Lock()
+		p.pending = slices.DeleteFunc(p.pending, func(x *asked) bool { return x == a })
+		p.mu.Unlock()
+		return Decision{}, ctx.Err()
+	}
+}
+
+func (p *person) Pending() ([]*asked, error) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return slices.Clone(p.pending), nil
+}
+
+// Answer answers a pending question with "allow" or "never".
+func (p *person) Answer(a *asked, option string) error {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if !slices.Contains(p.pending, a) {
+		return errors.New("not pending")
+	}
+	p.pending = slices.DeleteFunc(p.pending, func(x *asked) bool { return x == a })
+	d := Decision{Yes: option == "allow"}
+	if option == "never" {
+		d.Kept = true
+		if p.kept == nil {
+			p.kept = map[string]Decision{}
+		}
+		p.kept[keptKey(a.Question)] = d
+	}
+	a.answer <- d
+	return nil
 }
 
 func endpoint(t *testing.T, dir, name string) string {
@@ -47,30 +111,22 @@ func start(t *testing.T) harness {
 		}
 	}
 	dir := t.TempDir()
-	asksDir := filepath.Join(dir, "asks")
-	asksAt := endpoint(t, asksDir, "asks")
-	a, err := asks.Start(asksAt, asksDir)
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { a.Close() })
+	who := &person{}
 	at := endpoint(t, dir, "rights")
-	s, err := Start(at, dir, asksAt)
+	s, err := Start(at, dir, who)
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { s.Close() })
 	admin, _ := os.ReadFile(filepath.Join(dir, "admin.secret"))
-	personAdmin, _ := os.ReadFile(filepath.Join(asksDir, "admin.secret"))
-	return harness{s: s, app: &Client{Endpoint: at}, tool: &Client{Endpoint: at, Admin: string(admin)},
-		person: &asks.Client{Endpoint: asksAt, Admin: string(personAdmin)}}
+	return harness{s: s, app: &Client{Endpoint: at}, tool: &Client{Endpoint: at, Admin: string(admin)}, person: who}
 }
 
-func awaitQuestion(t *testing.T, person *asks.Client) asks.Record {
+func awaitQuestion(t *testing.T, who *person) *asked {
 	t.Helper()
-	sub := watch.Poll(func() ([]asks.Record, string, error) {
-		rs, err := person.Pending()
-		return rs, fmt.Sprint(len(rs)), err
+	sub := watch.Poll(func() ([]*asked, string, error) {
+		qs, err := who.Pending()
+		return qs, fmt.Sprint(len(qs)), err
 	}, 10*time.Millisecond, 0)
 	defer sub.Close()
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -102,10 +158,13 @@ func registerApproved(t *testing.T, h harness, name string) string {
 	if q.Asker != name || q.Key != "rights.register" {
 		t.Fatalf("the question asked was %+v", q)
 	}
-	if identity.Ceiling().Bindable && !q.Via.Bound {
-		t.Fatalf("this machine can bind but the asker is not bound: %s", q.Via.Why)
+	if q.For == nil || q.Slots["rights"] != RightAwake {
+		t.Fatalf("the question does not name the program or the rights: %+v", q.Question)
 	}
-	if _, err := h.person.Answer(q.ID, "allow"); err != nil {
+	if identity.Ceiling().Bindable && !q.For.Bound {
+		t.Fatalf("this machine can bind but the registering program is not bound: %s", q.For.Why)
+	}
+	if err := h.person.Answer(q, "allow"); err != nil {
 		t.Fatal(err)
 	}
 	select {
@@ -189,7 +248,7 @@ func TestPolicySurvivesRestart(t *testing.T) {
 	secret := registerApproved(t, h, "durable")
 	h.s.Close()
 
-	again, err := Start(h.app.Endpoint, filepath.Dir(h.s.policy.path), h.person.Endpoint)
+	again, err := Start(h.app.Endpoint, filepath.Dir(h.s.policy.path), h.person)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -218,7 +277,7 @@ func TestRefusals(t *testing.T) {
 	refused := make(chan error, 1)
 	go func() { _, err := app.Register("denied", RightAwake); refused <- err }()
 	q := awaitQuestion(t, h.person)
-	if _, err := h.person.Answer(q.ID, "never"); err != nil {
+	if err := h.person.Answer(q, "never"); err != nil {
 		t.Fatal(err)
 	}
 	if err := <-refused; err == nil {
@@ -272,7 +331,7 @@ func TestProgramProofRefusalPrecedesProvider(t *testing.T) {
 	}
 	state := filepath.Join(t.TempDir(), "not-created")
 	at := endpoint(t, state, "refused")
-	service, err := Start(at, state, "unused")
+	service, err := Start(at, state, &person{})
 	if service != nil {
 		service.Close()
 		t.Fatal("service started without Program proof")

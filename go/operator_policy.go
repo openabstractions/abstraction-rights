@@ -1,11 +1,11 @@
 package rights
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
-	cas "github.com/openabstractions/abstraction-cas/go"
 	wire "github.com/openabstractions/abstraction-rights/go/abstraction/rights/api"
 	"slices"
 	"time"
@@ -24,9 +24,11 @@ type PolicySnapshot struct {
 func (p *DecisionPolicy) revision(f decisionFile) string {
 	//unchecked: data only feeds the revision hash below, never a returned payload; its fields are plain marshalable data
 	data, _ := json.Marshal(struct {
-		Seed []string     `json:"seed"`
-		File decisionFile `json:"file"`
-	}{p.seed, f})
+		Seed        []string     `json:"seed"`
+		File        decisionFile `json:"file"`
+		Definitions string       `json:"definitions,omitempty"`
+		Defaults    string       `json:"defaults,omitempty"`
+	}{p.seed, f, p.Definitions.DefinitionDigest(), p.defaultsDigest()})
 	sum := sha256.Sum256(data)
 	return "sha256:" + hex.EncodeToString(sum[:])
 }
@@ -55,6 +57,15 @@ type RuleEdit struct {
 	TTL    time.Duration
 	Why    string
 	Exact  bool
+	// PreserveOtherSetter is for bounded delegated answers, which may never
+	// replace a person's live rule. Explicit operator edits leave it false.
+	PreserveOtherSetter bool
+	// Deadline bounds a delegated permit by its absolute delegation expiry,
+	// re-evaluated at the actual in-lock edit time.
+	Deadline time.Time
+	// QuestionID identifies a trusted responder answer's exact effect. It is
+	// private persisted provenance, never a public RuleRecord member.
+	QuestionID string
 }
 
 // EditRule compares the expected revision and rechecks trusted authorization
@@ -66,11 +77,29 @@ func (p *DecisionPolicy) EditRule(expected string, subject wire.Subject, action,
 
 // ChangeRule is EditRule with provenance, reason and expiry. A stale revision
 // always conflicts. An uncatalogued action or an out-of-bounds edit is invalid.
+// A rule written for a program path that keeps an unresolved short alias is
+// invalid and returns ErrUnresolvedShortName, which names the path.
 func (p *DecisionPolicy) ChangeRule(expected string, subject wire.Subject, action, resource string, edit RuleEdit, authorize func() error) (wire.PolicyEdit, error) {
-	subject, err := NormalizeDecisionSubject(subject)
+	if edit.Permit != nil {
+		return p.ChangeRules(expected, []wire.PolicyRule{{Subject: subject, Action: action, Resource: resource, Permit: *edit.Permit}}, edit, authorize)
+	}
+	// A revoke names the stored rule as it is; a written rule's subject must
+	// have a spelling that can still match once its file appears. The setter
+	// is provenance and matches nothing.
+	normalize := NormalizeDecisionSubject
+	if edit.Permit != nil {
+		normalize = writableSubject
+	}
+	subject, err := normalize(subject)
+	if errors.Is(err, ErrUnresolvedShortName) {
+		return wire.PolicyEdit{Outcome: wire.PolicyEditOutcomeInvalid}, err
+	}
 	by, byErr := NormalizeDecisionSubject(edit.By)
 	if err != nil || byErr != nil || !ValidDecisionQuery(action, resource) || !boundedDecisionString(expected, 128) ||
 		edit.TTL < 0 || edit.TTL > MaxRuleTTL || edit.TTL%time.Millisecond != 0 || !validWhy(edit.Why) || (edit.Permit == nil && (edit.TTL != 0 || edit.Why != "")) {
+		return wire.PolicyEdit{Outcome: wire.PolicyEditOutcomeInvalid}, nil
+	}
+	if validMetaEdit(action, resource, edit.Permit, edit.TTL) != nil || p.refuseHolder(subject, action, resource, edit.Permit) != nil {
 		return wire.PolicyEdit{Outcome: wire.PolicyEditOutcomeInvalid}, nil
 	}
 	if authorize == nil {
@@ -81,19 +110,16 @@ func (p *DecisionPolicy) ChangeRule(expected string, subject wire.Subject, actio
 	}
 	result := wire.PolicyEdit{}
 	noWrite := errors.New("rights: policy edit without write")
-	key := ruleKey(decisionRule{Subject: subject, Action: action, Resource: resource})
+	change := ruleChange{permit: edit.Permit, by: by, at: p.now(), ttl: edit.TTL, why: edit.Why, exact: edit.Exact}
 	capture := func(f decisionFile) {
 		result.Revision = p.revision(f)
-		for _, r := range f.Rules {
-			if ruleKey(r) == key {
-				current := publicRule(r)
-				result.Current = &current
-				break
-			}
+		if r, found := decidingRule(f.Rules, subject, action, resource, change.at, keyOnce()); found {
+			current := publicRule(r)
+			result.Current = &current
 		}
 	}
-	change := ruleChange{permit: edit.Permit, by: by, at: p.now(), ttl: edit.TTL, why: edit.Why, exact: edit.Exact}
-	err = cas.ChangeLimit(p.path, MaxDecisionBytes, func(data []byte) ([]byte, error) {
+	err = p.change(func(data []byte) ([]byte, error) {
+		result = wire.PolicyEdit{}
 		if err := authorize(); err != nil {
 			return nil, err
 		}
@@ -115,6 +141,9 @@ func (p *DecisionPolicy) ChangeRule(expected string, subject wire.Subject, actio
 			return nil, err
 		}
 		result.Outcome = wire.PolicyEditOutcomeApplied
+		if changed {
+			f.Profile = DecisionProfile
+		}
 		capture(f)
 		if !changed {
 			return nil, noWrite
@@ -130,7 +159,8 @@ func (p *DecisionPolicy) ChangeRule(expected string, subject wire.Subject, actio
 	return result, nil
 }
 
-// ReadRule returns one exact rule with its provenance. Callers authorize first.
+// ReadRule returns the rule that decides one target, with its provenance:
+// the rule Decide reads (decidingRule). Callers authorize first.
 func (p *DecisionPolicy) ReadRule(subject wire.Subject, action, resource string) wire.RuleRead {
 	s, err := NormalizeDecisionSubject(subject)
 	if err != nil || !ValidDecisionQuery(action, resource) {
@@ -140,19 +170,33 @@ func (p *DecisionPolicy) ReadRule(subject wire.Subject, action, resource string)
 	if err != nil {
 		return wire.RuleRead{Outcome: wire.RuleReadOutcomeUnavailable}
 	}
-	key := ruleKey(decisionRule{Subject: s, Action: action, Resource: resource})
-	for _, r := range f.Rules {
-		if ruleKey(r) != key {
-			continue
-		}
-		record := wire.RuleRecord{Rule: publicRule(r), SetBy: r.SetBy, SetAt: r.SetAt, Why: r.Why, Expires: r.Expires}
-		outcome := wire.RuleReadOutcomeFound
-		if expired(r, p.now()) {
-			outcome = wire.RuleReadOutcomeExpired
-		}
-		return wire.RuleRead{Outcome: outcome, Revision: revision, Record: &record}
+	now := p.now()
+	r, found := decidingRule(f.Rules, s, action, resource, now, p.decisionKeys(revision, s.Program))
+	if !found {
+		return wire.RuleRead{Outcome: wire.RuleReadOutcomeUnknown, Revision: revision}
 	}
-	return wire.RuleRead{Outcome: wire.RuleReadOutcomeUnknown, Revision: revision}
+	record := wire.RuleRecord{Rule: publicRule(r), SetBy: r.SetBy, SetAt: r.SetAt, Why: r.Why, Expires: r.Expires}
+	outcome := wire.RuleReadOutcomeFound
+	if expired(r, now) {
+		outcome = wire.RuleReadOutcomeExpired
+	}
+	return wire.RuleRead{Outcome: outcome, Revision: revision, Record: &record}
+}
+
+// ExplainForContext evaluates subject on one exact target as a decision does
+// and reports the step that decided it (RIGHTS-O14): the same evaluation, so
+// a program-identity match, a typed Block and the defaults read as they
+// decide. It asks nobody and records nothing.
+func (p *DecisionPolicy) ExplainForContext(ctx context.Context, subject wire.Subject, action, resource string) wire.DecisionExplanation {
+	s, err := NormalizeDecisionSubject(subject)
+	if err != nil || !ValidDecisionQuery(action, resource) {
+		return wire.DecisionExplanation{Outcome: wire.DecisionOutcomeInvalid}
+	}
+	f, revision, err := p.readDecisionContext(ctx)
+	if err != nil {
+		return wire.DecisionExplanation{Outcome: wire.DecisionOutcomeUnavailable}
+	}
+	return p.legacyOperationExplained(f, revision, s, wire.LegacyOperationRequest{LegacyAction: action, LegacyResource: resource}, p.now()).DecisionExplanation
 }
 
 // EditAction conditionally registers or retires one catalogue action, recording
@@ -186,7 +230,8 @@ func (p *DecisionPolicy) EditAction(expected, action string, register bool, by w
 		}
 	}
 	at := stamp(p.now())
-	err = cas.ChangeLimit(p.path, MaxDecisionBytes, func(data []byte) ([]byte, error) {
+	err = p.change(func(data []byte) ([]byte, error) {
+		result = wire.ActionEdit{}
 		if err := authorize(); err != nil {
 			return nil, err
 		}
@@ -222,15 +267,22 @@ func (p *DecisionPolicy) EditAction(expected, action string, register bool, by w
 				return nil, noWrite
 			}
 			f.Actions = slices.Delete(f.Actions, index, index+1)
+			f.Descriptions = slices.DeleteFunc(f.Descriptions, func(d publishedDescription) bool { return d.Description.Action == action })
+			if len(f.Descriptions) == 0 {
+				f.Descriptions = nil
+			}
 			if len(f.Actions) == 0 {
 				f.Actions = nil
 			}
 			f.Rules = slices.DeleteFunc(f.Rules, func(r decisionRule) bool { return r.Action == action })
+			f.SelectorRules = slices.DeleteFunc(f.SelectorRules, func(r selectorRule) bool { return r.Selection.Permission.Action == action })
+			pruneOrigins(&f)
 			if len(f.Rules) == 0 {
 				f.Rules = nil
 			}
 		}
 		result.Outcome = wire.ActionEditOutcomeApplied
+		f.Profile = DecisionProfile
 		capture(f)
 		return json.Marshal(f)
 	})

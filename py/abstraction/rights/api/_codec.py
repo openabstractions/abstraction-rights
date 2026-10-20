@@ -5,6 +5,7 @@ from __future__ import annotations
 import dataclasses
 import enum
 
+
 _HEX = b"0123456789abcdef"
 _WS = (0x20, 0x09, 0x0A, 0x0D)
 _SHORT = {0x22: b'\\"', 0x5C: b"\\\\", 0x08: b"\\b", 0x0C: b"\\f",
@@ -192,12 +193,39 @@ class RuleReadOutcome(_StrEnum):
     UNAVAILABLE = "unavailable"
 
 
+class PermissionFirstUse(_StrEnum):
+    NONE = "none"
+    EXACT = "exact"
+    CONSUMING_PAIRED = "consuming_paired"
+
+
 class ActionEditOutcome(_StrEnum):
     APPLIED = "applied"
     CONFLICT = "conflict"
     UNKNOWN = "unknown"
     INVALID = "invalid"
     EXHAUSTED = "exhausted"
+    FORBIDDEN = "forbidden"
+    UNAVAILABLE = "unavailable"
+
+
+class DecisionSource(_StrEnum):
+    NONE = "none"
+    OWN_RULE = "own_rule"
+    TYPED_BLOCK = "typed_block"
+    ACCOUNT_DEFAULT = "account_default"
+    DEFAULT_EXCLUDED = "default_excluded"
+
+
+class ResourceSelectorKind(_StrEnum):
+    ONE = "one"
+    ALL = "all"
+
+
+class BatchCheckOutcome(_StrEnum):
+    CHECKED = "checked"
+    CONFLICT = "conflict"
+    INVALID = "invalid"
     FORBIDDEN = "forbidden"
     UNAVAILABLE = "unavailable"
 
@@ -405,6 +433,71 @@ class CatalogEntry:
 
 
 @dataclasses.dataclass(kw_only=True)
+class ActionDescription:
+    """Operator-declared description of a stable app feature. feature_app names the
+    described app, never the grant/decision subject. app_label and description
+    are trimmed control-free UTF-8 text of 1..128 and 1..512 bytes.
+    declared_risk is trimmed 1..32 bytes of display metadata: routine,
+    sensitive, administrative and unknown align existing words; unfamiliar words
+    have unknown interpretation. Risk text changes no authorization, question
+    tier or answerer authority. Metadata establishes no code behavior or vendor
+    trust."""
+
+    action: str = ""
+    feature_app: Subject = dataclasses.field(default_factory=Subject)
+    app_label: str = ""
+    description: str = ""
+    declared_risk: str = ""
+
+
+@dataclasses.dataclass(kw_only=True)
+class PermissionDefinition:
+    """Service-owned definition metadata for one stable exact action. Operations
+    identify owning IDL methods and existing domain effects. resource_profile is
+    an immutable namespaced profile@version bound to a compiled owning validator
+    by trusted composition; unknown profiles/versions are refused. Legacy
+    exact-string profiles retain bounded exact bytes, including literal '*', and
+    describe their resource owner's existing validation. served distinguishes
+    implemented receiving enforcement from defined/unserved operations; unserved
+    definitions admit no first-use request. first_use names only existing exact
+    or consuming paired admission; dynamic tier/answerer facts remain separately
+    service-owned. Disclosure and lifecycle explain data/effects and account,
+    deletion and name-reuse boundaries. Metadata conveys no proof, grant,
+    callback or scope selector. Changed authority requires a new action
+    identity/version. This additive record is available to generated consumers;
+    no service method publishes or registers definitions in this slice."""
+
+    action: str = ""
+    owner_contract: str = ""
+    operations: list[str] = dataclasses.field(default_factory=list)
+    resource_profile: str = ""
+    resource_type: str = ""
+    enforced_by: list[str] = dataclasses.field(default_factory=list)
+    disclosure: str = ""
+    lifecycle: str = ""
+    first_use: PermissionFirstUse | None = None
+    served: bool = False
+
+
+@dataclasses.dataclass(kw_only=True)
+class DescribedAction:
+    """One current catalogue action. choices is exactly allow, block, remove_rule,
+    naming existing SetRule permit/deny and RevokeRule choices without authority
+    to invoke them. Description and publication fields occur together or are all
+    absent. description.action equals action. published_by is the operator
+    subject established for publication; feature_app is its administrative
+    declaration, and the imported descriptor's author/vendor remain unverified.
+    published_at is service UTC RFC 3339 with milliseconds. Undescribed names
+    carry no invented app information."""
+
+    action: str = ""
+    choices: list[str] = dataclasses.field(default_factory=list)
+    description: ActionDescription | None = None
+    published_by: Subject | None = None
+    published_at: str = ""
+
+
+@dataclasses.dataclass(kw_only=True)
 class ActionEdit:
     """applied, conflict and unknown carry the revision observed inside the
     conditional edit. applied and conflict carry the action's registration entry
@@ -420,6 +513,308 @@ class ActionEdit:
 
 
 @dataclasses.dataclass(kw_only=True)
+class DescriptionEdit:
+    """applied/conflict carry the revision and current described catalogue action
+    when present; all other outcomes carry neither. A stale expected revision
+    always conflicts. Identical metadata at the current revision is a no-op. A
+    valid correction changes descriptor publication provenance/time and
+    revision, preserving all grants, denies, targets, expiry and private answer
+    receipts. Registration alone grants nothing."""
+
+    outcome: ActionEditOutcome | None = None
+    revision: str = ""
+    current: DescribedAction | None = None
+
+
+@dataclasses.dataclass(kw_only=True)
+class DescriptionPage:
+    """Sorted current catalogue descriptions, including undescribed names, under
+    one durable revision. 1..64 requested entries and at most 256 KiB encoded
+    reply. Noncomplete pages have a nonempty next cursor and at least one entry;
+    cursors are at most 256 UTF-8 bytes. Refusals have empty
+    revision/actions/next and complete=false. No retained enumeration snapshot
+    or historical replay."""
+
+    outcome: PolicyPageOutcome | None = None
+    revision: str = ""
+    actions: list[DescribedAction] = dataclasses.field(default_factory=list)
+    next: str = ""
+    complete: bool = False
+
+
+@dataclasses.dataclass(kw_only=True)
+class AccountDefault:
+    """One account-wide default the receiving runtime configures: a permit on
+    action for every program of the runtime's own account that has no live rule
+    of its own on the queried target. name is 1..64 bytes of lowercase ASCII
+    letters, digits, '.', '_' and '-'. resource is the one exact resource the
+    default covers; with every_resource it is empty and the default covers every
+    resource of the action. on is the switch: true after a fresh install, until
+    an operator turns it off. set_by and set_at occur together, name the
+    operator subject the rights service established for the last switch edit and
+    its service UTC time, and are absent while the switch was never turned. A
+    per-program rule, a Block included, decides before any default; a configured
+    excluded program, such as a script host, and every other account receive no
+    default. A default writes no rule."""
+
+    name: str = ""
+    action: str = ""
+    resource: str = ""
+    every_resource: bool = False
+    on: bool = False
+    set_by: Subject | None = None
+    set_at: str = ""
+
+
+@dataclasses.dataclass(kw_only=True)
+class DefaultPage:
+    """Every configured account-wide default, sorted by name, under one durable
+    revision; at most 32 entries. Refusals have an empty revision and no
+    defaults."""
+
+    outcome: PolicyPageOutcome | None = None
+    revision: str = ""
+    defaults: list[AccountDefault] = dataclasses.field(default_factory=list)
+
+
+@dataclasses.dataclass(kw_only=True)
+class DefaultEdit:
+    """applied and conflict carry the revision and the named default's current
+    state observed inside the conditional edit. Other outcomes carry neither. A
+    stale expected revision always conflicts. Setting a switch to its current
+    state at the matching revision is a no-op that keeps the revision."""
+
+    outcome: PolicyEditOutcome | None = None
+    revision: str = ""
+    current: AccountDefault | None = None
+
+
+@dataclasses.dataclass(kw_only=True)
+class DecisionExplanation:
+    """One exact decision for a subject with the step that decided it, from the
+    same evaluation a decision makes. own_rule is the subject's own live exact
+    rule, matched by program identity; typed_block a live typed Block that
+    covers the target; account_default the named account-wide default that
+    permits; default_excluded a named default switched on for the target that
+    the configured exclusion, such as the script-host rule, keeps from this
+    program; none no rule and no default. outcome and policy_revision are those
+    the decision carries. Refusals (invalid, forbidden, unavailable) carry no
+    revision, source or name."""
+
+    outcome: DecisionOutcome | None = None
+    policy_revision: str = ""
+    source: DecisionSource | None = None
+    default_name: str = ""
+
+
+@dataclasses.dataclass(kw_only=True)
+class PermissionKey:
+    action: str = ""
+    resource_profile: str = ""
+
+
+@dataclasses.dataclass(kw_only=True)
+class ResourceSelector:
+    """One has one bounded canonical owning-IDL document. All omits target and
+    selects the fixed profile collection within the rule subject's
+    account/runtime. Operator inputs are prepared by the trusted owning profile;
+    arbitrary captured identity evidence is refused."""
+
+    kind: ResourceSelectorKind | None = None
+    target: bytes | None = None
+
+
+@dataclasses.dataclass(kw_only=True)
+class PermissionSelection:
+    permission: PermissionKey = dataclasses.field(default_factory=PermissionKey)
+    selector: ResourceSelector = dataclasses.field(default_factory=ResourceSelector)
+
+
+@dataclasses.dataclass(kw_only=True)
+class ConcreteResource:
+    """A concrete resource, never a grant selector. Historical captured evidence is
+    accepted only from an explicitly authorized receiving enforcer; no direct
+    caller obtains effect authority from this assertion."""
+
+    permission: PermissionKey = dataclasses.field(default_factory=PermissionKey)
+    target: bytes = b""
+
+
+@dataclasses.dataclass(kw_only=True)
+class CheckBatchRequest:
+    expected_revision: str = ""
+    collection_admission: PermissionKey | None = None
+    resources: list[ConcreteResource] = dataclasses.field(default_factory=list)
+
+
+@dataclasses.dataclass(kw_only=True)
+class BatchDecision:
+    """checked has one revision and ordered evaluated outcomes from one immutable
+    policy snapshot and one clock sample. conflict has the observed revision and
+    no outcomes. Other refusals have empty revision and no outcomes. A batch
+    never mixes revisions or partially succeeds. No authority lease is issued."""
+
+    outcome: BatchCheckOutcome | None = None
+    revision: str = ""
+    collection_outcome: DecisionOutcome | None = None
+    outcomes: list[DecisionOutcome] = dataclasses.field(default_factory=list)
+
+
+@dataclasses.dataclass(kw_only=True)
+class SelectorPermissionDefinition:
+    """Full key is definition.action plus definition.resource_profile.
+    Service-owned collection/all_effect state membership and present/future
+    meaning. Only actually served receiving selectors are advertised. Existing
+    PermissionDefinition.first_use remains the legacy projection; new selector
+    first use uses first_use_selectors."""
+
+    definition: PermissionDefinition = dataclasses.field(default_factory=PermissionDefinition)
+    label: str = ""
+    supported_selectors: list[ResourceSelectorKind] = dataclasses.field(default_factory=list)
+    first_use_selectors: list[ResourceSelectorKind] = dataclasses.field(default_factory=list)
+    collection: str = ""
+    all_effect: str = ""
+    request_type: str = ""
+
+
+@dataclasses.dataclass(kw_only=True)
+class PermissionDefinitionPage:
+    outcome: PolicyPageOutcome | None = None
+    revision: str = ""
+    definitions: list[SelectorPermissionDefinition] = dataclasses.field(default_factory=list)
+    next: str = ""
+    complete: bool = False
+
+
+@dataclasses.dataclass(kw_only=True)
+class PermissionBundleDefinition:
+    """Immutable finite expansion identified by namespaced bundle@version and
+    deterministic content digest. This slice permits only member profiles with
+    the same owning target document and collection. Each member validates
+    independently. No mapping language, live role reference, future operation or
+    permission-administration effect is implied."""
+
+    bundle_ref: str = ""
+    owner_contract: str = ""
+    label: str = ""
+    target_type: str = ""
+    supported_selectors: list[ResourceSelectorKind] = dataclasses.field(default_factory=list)
+    members: list[PermissionKey] = dataclasses.field(default_factory=list)
+    disclosure: str = ""
+    definition_digest: str = ""
+
+
+@dataclasses.dataclass(kw_only=True)
+class PermissionBundlePage:
+    outcome: PolicyPageOutcome | None = None
+    revision: str = ""
+    bundles: list[PermissionBundleDefinition] = dataclasses.field(default_factory=list)
+    next: str = ""
+    complete: bool = False
+
+
+@dataclasses.dataclass(kw_only=True)
+class BundleExpansion:
+    """The exact original finite expansion, retained independently of later
+    catalogue changes. All selected member profiles must accept the same
+    canonical target/collection. A new version requires new consent."""
+
+    bundle_ref: str = ""
+    definition_digest: str = ""
+    selector: ResourceSelector = dataclasses.field(default_factory=ResourceSelector)
+    selections: list[PermissionSelection] = dataclasses.field(default_factory=list)
+
+
+@dataclasses.dataclass(kw_only=True)
+class PermissionEffect:
+    """Complete typed permit proposal retained by a trusted Asks admission owner.
+    When bundle is present its selections equal this complete list. Native
+    preparation establishes subject and target evidence. Text, a serialized
+    subject or an app-supplied effect grants no authority."""
+
+    subject: Subject = dataclasses.field(default_factory=Subject)
+    selections: list[PermissionSelection] = dataclasses.field(default_factory=list)
+    bundle: BundleExpansion | None = None
+
+
+@dataclasses.dataclass(kw_only=True)
+class SelectorRule:
+    subject: Subject = dataclasses.field(default_factory=Subject)
+    selection: PermissionSelection = dataclasses.field(default_factory=PermissionSelection)
+    permit: bool = False
+
+
+@dataclasses.dataclass(kw_only=True)
+class BundleOrigin:
+    """Rights-established historical application identity and immutable expansion.
+    An origin explains how rules arose; it does not assert that all original
+    members remain current."""
+
+    id: str = ""
+    expansion: BundleExpansion = dataclasses.field(default_factory=BundleExpansion)
+
+
+@dataclasses.dataclass(kw_only=True)
+class SelectorRuleRecord:
+    rule: SelectorRule = dataclasses.field(default_factory=SelectorRule)
+    set_by: Subject = dataclasses.field(default_factory=Subject)
+    set_at: str = ""
+    why: str = ""
+    expires: str = ""
+    bundle_origin: BundleOrigin | None = None
+
+
+@dataclasses.dataclass(kw_only=True)
+class SelectorRulePage:
+    outcome: PolicyPageOutcome | None = None
+    revision: str = ""
+    records: list[SelectorRuleRecord] = dataclasses.field(default_factory=list)
+    next: str = ""
+    complete: bool = False
+
+
+@dataclasses.dataclass(kw_only=True)
+class SelectorRuleRead:
+    outcome: RuleReadOutcome | None = None
+    revision: str = ""
+    record: SelectorRuleRecord | None = None
+
+
+@dataclasses.dataclass(kw_only=True)
+class SelectorEdit:
+    """Applied/conflict carry the locked observed revision and complete bounded
+    affected state. Stale expected revision always conflicts, including matching
+    desired state. Other refusals carry empty revision/current. Atomic edits
+    have no per-member success. Individual replacement removes that row's active
+    bundle origin; remaining rows keep historical origin."""
+
+    outcome: PolicyEditOutcome | None = None
+    revision: str = ""
+    current: list[SelectorRuleRecord] = dataclasses.field(default_factory=list)
+    bundle_origin: BundleOrigin | None = None
+
+
+@dataclasses.dataclass(kw_only=True)
+class LegacyOperationRequest:
+    """Old exact authority plus an optional receiver-known concrete effect. Trusted
+    compiled capability equivalence validates the supplied effect against this
+    old operation and its fixed collection. Original legacy authority and live
+    equivalent typed restrictions are evaluated at one snapshot. Missing
+    concrete detail on a coarse view uses conservative collection intersection.
+    This method imports explicit blocks only; it grants no typed permit."""
+
+    legacy_action: str = ""
+    legacy_resource: str = ""
+    concrete_operation: ConcreteResource | None = None
+
+
+@dataclasses.dataclass(kw_only=True)
+class _AuthorizationListActionDescriptionsArguments:
+    cursor: str = ""
+    limit: int = 0
+
+
+@dataclasses.dataclass(kw_only=True)
 class _AuthorizationDecideArguments:
     action: str = ""
     resource: str = ""
@@ -430,6 +825,18 @@ class _AuthorizationDecideForArguments:
     subject: Subject = dataclasses.field(default_factory=Subject)
     action: str = ""
     resource: str = ""
+
+
+@dataclasses.dataclass(kw_only=True)
+class _AuthorizationOperatorRegisterDescribedActionArguments:
+    expected_revision: str = ""
+    description: ActionDescription = dataclasses.field(default_factory=ActionDescription)
+
+
+@dataclasses.dataclass(kw_only=True)
+class _AuthorizationOperatorApplyFirstUseAllowArguments:
+    expected_revision: str = ""
+    question_id: str = ""
 
 
 @dataclasses.dataclass(kw_only=True)
@@ -453,9 +860,34 @@ class _AuthorizationOperatorRevokeRuleArguments:
 
 
 @dataclasses.dataclass(kw_only=True)
+class _AuthorizationOperatorStopAnswererArguments:
+    expected_revision: str = ""
+    answerer: Subject = dataclasses.field(default_factory=Subject)
+    also_revoke_grants: bool = False
+
+
+@dataclasses.dataclass(kw_only=True)
+class _AuthorizationOperatorRevokeAnswerPermitsArguments:
+    expected_revision: str = ""
+    answerer: Subject = dataclasses.field(default_factory=Subject)
+    target: Subject = dataclasses.field(default_factory=Subject)
+    actions: list[str] = dataclasses.field(default_factory=list)
+    resource: str = ""
+    question_id: str = ""
+
+
+@dataclasses.dataclass(kw_only=True)
 class _AuthorizationOperatorSetRuleForArguments:
     expected_revision: str = ""
     rule: PolicyRule = dataclasses.field(default_factory=PolicyRule)
+    ttl_ms: int = 0
+    why: str = ""
+
+
+@dataclasses.dataclass(kw_only=True)
+class _AuthorizationOperatorSetRulesForArguments:
+    expected_revision: str = ""
+    rules: list[PolicyRule] = dataclasses.field(default_factory=list)
     ttl_ms: int = 0
     why: str = ""
 
@@ -477,6 +909,110 @@ class _AuthorizationOperatorRegisterActionArguments:
 class _AuthorizationOperatorRetireActionArguments:
     expected_revision: str = ""
     action: str = ""
+
+
+@dataclasses.dataclass(kw_only=True)
+class _AuthorizationOperatorExplainForArguments:
+    subject: Subject = dataclasses.field(default_factory=Subject)
+    action: str = ""
+    resource: str = ""
+
+
+@dataclasses.dataclass(kw_only=True)
+class _AuthorizationOperatorListDefaultsArguments:
+    pass
+
+
+@dataclasses.dataclass(kw_only=True)
+class _AuthorizationOperatorSetDefaultArguments:
+    expected_revision: str = ""
+    name: str = ""
+    on: bool = False
+
+
+@dataclasses.dataclass(kw_only=True)
+class _SelectorAuthorizationListPermissionDefinitionsArguments:
+    cursor: str = ""
+    limit: int = 0
+
+
+@dataclasses.dataclass(kw_only=True)
+class _SelectorAuthorizationListPermissionBundlesArguments:
+    cursor: str = ""
+    limit: int = 0
+
+
+@dataclasses.dataclass(kw_only=True)
+class _SelectorAuthorizationCheckBatchArguments:
+    request: CheckBatchRequest = dataclasses.field(default_factory=CheckBatchRequest)
+
+
+@dataclasses.dataclass(kw_only=True)
+class _SelectorAuthorizationCheckBatchForArguments:
+    subject: Subject = dataclasses.field(default_factory=Subject)
+    request: CheckBatchRequest = dataclasses.field(default_factory=CheckBatchRequest)
+
+
+@dataclasses.dataclass(kw_only=True)
+class _SelectorAuthorizationCheckLegacyOperationForArguments:
+    subject: Subject = dataclasses.field(default_factory=Subject)
+    request: LegacyOperationRequest = dataclasses.field(default_factory=LegacyOperationRequest)
+
+
+@dataclasses.dataclass(kw_only=True)
+class _SelectorAuthorizationOperatorListSelectorRulesArguments:
+    cursor: str = ""
+    limit: int = 0
+
+
+@dataclasses.dataclass(kw_only=True)
+class _SelectorAuthorizationOperatorReadSelectorRuleArguments:
+    subject: Subject = dataclasses.field(default_factory=Subject)
+    selection: PermissionSelection = dataclasses.field(default_factory=PermissionSelection)
+
+
+@dataclasses.dataclass(kw_only=True)
+class _SelectorAuthorizationOperatorSetSelectorRuleArguments:
+    expected_revision: str = ""
+    rule: SelectorRule = dataclasses.field(default_factory=SelectorRule)
+    ttl_ms: int = 0
+    why: str = ""
+
+
+@dataclasses.dataclass(kw_only=True)
+class _SelectorAuthorizationOperatorRemoveSelectorRuleArguments:
+    expected_revision: str = ""
+    subject: Subject = dataclasses.field(default_factory=Subject)
+    selection: PermissionSelection = dataclasses.field(default_factory=PermissionSelection)
+
+
+@dataclasses.dataclass(kw_only=True)
+class _SelectorAuthorizationOperatorApplyBundleArguments:
+    expected_revision: str = ""
+    subject: Subject = dataclasses.field(default_factory=Subject)
+    bundle_ref: str = ""
+    selector: ResourceSelector = dataclasses.field(default_factory=ResourceSelector)
+    ttl_ms: int = 0
+    why: str = ""
+
+
+@dataclasses.dataclass(kw_only=True)
+class _SelectorAuthorizationOperatorRemoveBundleArguments:
+    expected_revision: str = ""
+    subject: Subject = dataclasses.field(default_factory=Subject)
+    origin_id: str = ""
+
+
+@dataclasses.dataclass(kw_only=True)
+class _SelectorAuthorizationOperatorApplyPermissionAllowArguments:
+    expected_revision: str = ""
+    question_id: str = ""
+
+
+@dataclasses.dataclass(kw_only=True)
+class _SelectorAuthorizationOperatorUndoPermissionEffectArguments:
+    expected_revision: str = ""
+    question_id: str = ""
 
 
 @dataclasses.dataclass(kw_only=True)
@@ -503,6 +1039,11 @@ class _ServiceError:
 
 
 @dataclasses.dataclass(kw_only=True)
+class _AuthorizationListActionDescriptionsResult:
+    value: DescriptionPage = dataclasses.field(default_factory=DescriptionPage)
+
+
+@dataclasses.dataclass(kw_only=True)
 class _AuthorizationDecideResult:
     value: Decision = dataclasses.field(default_factory=Decision)
 
@@ -510,6 +1051,16 @@ class _AuthorizationDecideResult:
 @dataclasses.dataclass(kw_only=True)
 class _AuthorizationDecideForResult:
     value: Decision = dataclasses.field(default_factory=Decision)
+
+
+@dataclasses.dataclass(kw_only=True)
+class _AuthorizationOperatorRegisterDescribedActionResult:
+    value: DescriptionEdit = dataclasses.field(default_factory=DescriptionEdit)
+
+
+@dataclasses.dataclass(kw_only=True)
+class _AuthorizationOperatorApplyFirstUseAllowResult:
+    value: PolicyEdit = dataclasses.field(default_factory=PolicyEdit)
 
 
 @dataclasses.dataclass(kw_only=True)
@@ -528,7 +1079,22 @@ class _AuthorizationOperatorRevokeRuleResult:
 
 
 @dataclasses.dataclass(kw_only=True)
+class _AuthorizationOperatorStopAnswererResult:
+    value: PolicyEdit = dataclasses.field(default_factory=PolicyEdit)
+
+
+@dataclasses.dataclass(kw_only=True)
+class _AuthorizationOperatorRevokeAnswerPermitsResult:
+    value: PolicyEdit = dataclasses.field(default_factory=PolicyEdit)
+
+
+@dataclasses.dataclass(kw_only=True)
 class _AuthorizationOperatorSetRuleForResult:
+    value: PolicyEdit = dataclasses.field(default_factory=PolicyEdit)
+
+
+@dataclasses.dataclass(kw_only=True)
+class _AuthorizationOperatorSetRulesForResult:
     value: PolicyEdit = dataclasses.field(default_factory=PolicyEdit)
 
 
@@ -545,6 +1111,86 @@ class _AuthorizationOperatorRegisterActionResult:
 @dataclasses.dataclass(kw_only=True)
 class _AuthorizationOperatorRetireActionResult:
     value: ActionEdit = dataclasses.field(default_factory=ActionEdit)
+
+
+@dataclasses.dataclass(kw_only=True)
+class _AuthorizationOperatorExplainForResult:
+    value: DecisionExplanation = dataclasses.field(default_factory=DecisionExplanation)
+
+
+@dataclasses.dataclass(kw_only=True)
+class _AuthorizationOperatorListDefaultsResult:
+    value: DefaultPage = dataclasses.field(default_factory=DefaultPage)
+
+
+@dataclasses.dataclass(kw_only=True)
+class _AuthorizationOperatorSetDefaultResult:
+    value: DefaultEdit = dataclasses.field(default_factory=DefaultEdit)
+
+
+@dataclasses.dataclass(kw_only=True)
+class _SelectorAuthorizationListPermissionDefinitionsResult:
+    value: PermissionDefinitionPage = dataclasses.field(default_factory=PermissionDefinitionPage)
+
+
+@dataclasses.dataclass(kw_only=True)
+class _SelectorAuthorizationListPermissionBundlesResult:
+    value: PermissionBundlePage = dataclasses.field(default_factory=PermissionBundlePage)
+
+
+@dataclasses.dataclass(kw_only=True)
+class _SelectorAuthorizationCheckBatchResult:
+    value: BatchDecision = dataclasses.field(default_factory=BatchDecision)
+
+
+@dataclasses.dataclass(kw_only=True)
+class _SelectorAuthorizationCheckBatchForResult:
+    value: BatchDecision = dataclasses.field(default_factory=BatchDecision)
+
+
+@dataclasses.dataclass(kw_only=True)
+class _SelectorAuthorizationCheckLegacyOperationForResult:
+    value: Decision = dataclasses.field(default_factory=Decision)
+
+
+@dataclasses.dataclass(kw_only=True)
+class _SelectorAuthorizationOperatorListSelectorRulesResult:
+    value: SelectorRulePage = dataclasses.field(default_factory=SelectorRulePage)
+
+
+@dataclasses.dataclass(kw_only=True)
+class _SelectorAuthorizationOperatorReadSelectorRuleResult:
+    value: SelectorRuleRead = dataclasses.field(default_factory=SelectorRuleRead)
+
+
+@dataclasses.dataclass(kw_only=True)
+class _SelectorAuthorizationOperatorSetSelectorRuleResult:
+    value: SelectorEdit = dataclasses.field(default_factory=SelectorEdit)
+
+
+@dataclasses.dataclass(kw_only=True)
+class _SelectorAuthorizationOperatorRemoveSelectorRuleResult:
+    value: SelectorEdit = dataclasses.field(default_factory=SelectorEdit)
+
+
+@dataclasses.dataclass(kw_only=True)
+class _SelectorAuthorizationOperatorApplyBundleResult:
+    value: SelectorEdit = dataclasses.field(default_factory=SelectorEdit)
+
+
+@dataclasses.dataclass(kw_only=True)
+class _SelectorAuthorizationOperatorRemoveBundleResult:
+    value: SelectorEdit = dataclasses.field(default_factory=SelectorEdit)
+
+
+@dataclasses.dataclass(kw_only=True)
+class _SelectorAuthorizationOperatorApplyPermissionAllowResult:
+    value: SelectorEdit = dataclasses.field(default_factory=SelectorEdit)
+
+
+@dataclasses.dataclass(kw_only=True)
+class _SelectorAuthorizationOperatorUndoPermissionEffectResult:
+    value: SelectorEdit = dataclasses.field(default_factory=SelectorEdit)
 
 
 def _write_request(out, v, depth):
@@ -992,6 +1638,148 @@ def _write_catalog_entry(out, v, depth):
     out += b"}"
 
 
+def _write_action_description(out, v, depth):
+    out += b"{"
+    out += b"\n"
+    _pad(out, depth + 1)
+    _esc(out, "action")
+    out += b": "
+    _esc(out, v.action)
+    out += b","
+    out += b"\n"
+    _pad(out, depth + 1)
+    _esc(out, "feature_app")
+    out += b": "
+    _write_subject(out, v.feature_app, depth + 1)
+    out += b","
+    out += b"\n"
+    _pad(out, depth + 1)
+    _esc(out, "app_label")
+    out += b": "
+    _esc(out, v.app_label)
+    out += b","
+    out += b"\n"
+    _pad(out, depth + 1)
+    _esc(out, "description")
+    out += b": "
+    _esc(out, v.description)
+    out += b","
+    out += b"\n"
+    _pad(out, depth + 1)
+    _esc(out, "declared_risk")
+    out += b": "
+    _esc(out, v.declared_risk)
+    out += b"\n"
+    _pad(out, depth)
+    out += b"}"
+
+
+def _write_permission_definition(out, v, depth):
+    _closed_enum(PermissionFirstUse, v.first_use)
+    out += b"{"
+    out += b"\n"
+    _pad(out, depth + 1)
+    _esc(out, "action")
+    out += b": "
+    _esc(out, v.action)
+    out += b","
+    out += b"\n"
+    _pad(out, depth + 1)
+    _esc(out, "owner_contract")
+    out += b": "
+    _esc(out, v.owner_contract)
+    out += b","
+    out += b"\n"
+    _pad(out, depth + 1)
+    _esc(out, "operations")
+    out += b": "
+    _strs(out, v.operations, depth + 1)
+    out += b","
+    out += b"\n"
+    _pad(out, depth + 1)
+    _esc(out, "resource_profile")
+    out += b": "
+    _esc(out, v.resource_profile)
+    out += b","
+    out += b"\n"
+    _pad(out, depth + 1)
+    _esc(out, "resource_type")
+    out += b": "
+    _esc(out, v.resource_type)
+    out += b","
+    out += b"\n"
+    _pad(out, depth + 1)
+    _esc(out, "enforced_by")
+    out += b": "
+    _strs(out, v.enforced_by, depth + 1)
+    out += b","
+    out += b"\n"
+    _pad(out, depth + 1)
+    _esc(out, "disclosure")
+    out += b": "
+    _esc(out, v.disclosure)
+    out += b","
+    out += b"\n"
+    _pad(out, depth + 1)
+    _esc(out, "lifecycle")
+    out += b": "
+    _esc(out, v.lifecycle)
+    out += b","
+    out += b"\n"
+    _pad(out, depth + 1)
+    _esc(out, "first_use")
+    out += b": "
+    _esc(out, v.first_use)
+    out += b","
+    out += b"\n"
+    _pad(out, depth + 1)
+    _esc(out, "served")
+    out += b": "
+    out += b"true" if v.served else b"false"
+    out += b"\n"
+    _pad(out, depth)
+    out += b"}"
+
+
+def _write_described_action(out, v, depth):
+    out += b"{"
+    out += b"\n"
+    _pad(out, depth + 1)
+    _esc(out, "action")
+    out += b": "
+    _esc(out, v.action)
+    out += b","
+    out += b"\n"
+    _pad(out, depth + 1)
+    _esc(out, "choices")
+    out += b": "
+    _strs(out, v.choices, depth + 1)
+    if v.description is not None:
+        out += b","
+        out += b"\n"
+        _pad(out, depth + 1)
+        _esc(out, "description")
+        out += b": "
+        _write_action_description(out, v.description, depth + 1)
+    if v.published_by is not None:
+        out += b","
+        out += b"\n"
+        _pad(out, depth + 1)
+        _esc(out, "published_by")
+        out += b": "
+        _write_subject(out, v.published_by, depth + 1)
+    if v.published_at:
+        out += b","
+        out += b"\n"
+        _pad(out, depth + 1)
+        _esc(out, "published_at")
+        out += b": "
+        _esc(out, v.published_at)
+    out += b"\n"
+    _pad(out, depth)
+    out += b"}"
+
+
 def _write_action_edit(out, v, depth):
     _closed_enum(ActionEditOutcome, v.outcome)
     out += b"{"
@@ -1013,6 +1801,807 @@ def _write_action_edit(out, v, depth):
         _esc(out, "current")
         out += b": "
         _write_catalog_entry(out, v.current, depth + 1)
+    out += b"\n"
+    _pad(out, depth)
+    out += b"}"
+
+
+def _write_description_edit(out, v, depth):
+    _closed_enum(ActionEditOutcome, v.outcome)
+    out += b"{"
+    out += b"\n"
+    _pad(out, depth + 1)
+    _esc(out, "outcome")
+    out += b": "
+    _esc(out, v.outcome)
+    out += b","
+    out += b"\n"
+    _pad(out, depth + 1)
+    _esc(out, "revision")
+    out += b": "
+    _esc(out, v.revision)
+    if v.current is not None:
+        out += b","
+        out += b"\n"
+        _pad(out, depth + 1)
+        _esc(out, "current")
+        out += b": "
+        _write_described_action(out, v.current, depth + 1)
+    out += b"\n"
+    _pad(out, depth)
+    out += b"}"
+
+
+def _write_description_page(out, v, depth):
+    _closed_enum(PolicyPageOutcome, v.outcome)
+    out += b"{"
+    out += b"\n"
+    _pad(out, depth + 1)
+    _esc(out, "outcome")
+    out += b": "
+    _esc(out, v.outcome)
+    out += b","
+    out += b"\n"
+    _pad(out, depth + 1)
+    _esc(out, "revision")
+    out += b": "
+    _esc(out, v.revision)
+    out += b","
+    out += b"\n"
+    _pad(out, depth + 1)
+    _esc(out, "actions")
+    out += b": "
+    _write_list(out, v.actions, depth + 1, _write_described_action)
+    out += b","
+    out += b"\n"
+    _pad(out, depth + 1)
+    _esc(out, "next")
+    out += b": "
+    _esc(out, v.next)
+    out += b","
+    out += b"\n"
+    _pad(out, depth + 1)
+    _esc(out, "complete")
+    out += b": "
+    out += b"true" if v.complete else b"false"
+    out += b"\n"
+    _pad(out, depth)
+    out += b"}"
+
+
+def _write_account_default(out, v, depth):
+    out += b"{"
+    out += b"\n"
+    _pad(out, depth + 1)
+    _esc(out, "name")
+    out += b": "
+    _esc(out, v.name)
+    out += b","
+    out += b"\n"
+    _pad(out, depth + 1)
+    _esc(out, "action")
+    out += b": "
+    _esc(out, v.action)
+    out += b","
+    out += b"\n"
+    _pad(out, depth + 1)
+    _esc(out, "resource")
+    out += b": "
+    _esc(out, v.resource)
+    out += b","
+    out += b"\n"
+    _pad(out, depth + 1)
+    _esc(out, "every_resource")
+    out += b": "
+    out += b"true" if v.every_resource else b"false"
+    out += b","
+    out += b"\n"
+    _pad(out, depth + 1)
+    _esc(out, "on")
+    out += b": "
+    out += b"true" if v.on else b"false"
+    if v.set_by is not None:
+        out += b","
+        out += b"\n"
+        _pad(out, depth + 1)
+        _esc(out, "set_by")
+        out += b": "
+        _write_subject(out, v.set_by, depth + 1)
+    if v.set_at:
+        out += b","
+        out += b"\n"
+        _pad(out, depth + 1)
+        _esc(out, "set_at")
+        out += b": "
+        _esc(out, v.set_at)
+    out += b"\n"
+    _pad(out, depth)
+    out += b"}"
+
+
+def _write_default_page(out, v, depth):
+    _closed_enum(PolicyPageOutcome, v.outcome)
+    out += b"{"
+    out += b"\n"
+    _pad(out, depth + 1)
+    _esc(out, "outcome")
+    out += b": "
+    _esc(out, v.outcome)
+    out += b","
+    out += b"\n"
+    _pad(out, depth + 1)
+    _esc(out, "revision")
+    out += b": "
+    _esc(out, v.revision)
+    out += b","
+    out += b"\n"
+    _pad(out, depth + 1)
+    _esc(out, "defaults")
+    out += b": "
+    _write_list(out, v.defaults, depth + 1, _write_account_default)
+    out += b"\n"
+    _pad(out, depth)
+    out += b"}"
+
+
+def _write_default_edit(out, v, depth):
+    _closed_enum(PolicyEditOutcome, v.outcome)
+    out += b"{"
+    out += b"\n"
+    _pad(out, depth + 1)
+    _esc(out, "outcome")
+    out += b": "
+    _esc(out, v.outcome)
+    out += b","
+    out += b"\n"
+    _pad(out, depth + 1)
+    _esc(out, "revision")
+    out += b": "
+    _esc(out, v.revision)
+    if v.current is not None:
+        out += b","
+        out += b"\n"
+        _pad(out, depth + 1)
+        _esc(out, "current")
+        out += b": "
+        _write_account_default(out, v.current, depth + 1)
+    out += b"\n"
+    _pad(out, depth)
+    out += b"}"
+
+
+def _write_decision_explanation(out, v, depth):
+    _closed_enum(DecisionOutcome, v.outcome)
+    if v.source is not None:
+        _closed_enum(DecisionSource, v.source)
+    out += b"{"
+    out += b"\n"
+    _pad(out, depth + 1)
+    _esc(out, "outcome")
+    out += b": "
+    _esc(out, v.outcome)
+    if v.policy_revision:
+        out += b","
+        out += b"\n"
+        _pad(out, depth + 1)
+        _esc(out, "policy_revision")
+        out += b": "
+        _esc(out, v.policy_revision)
+    if v.source is not None:
+        out += b","
+        out += b"\n"
+        _pad(out, depth + 1)
+        _esc(out, "source")
+        out += b": "
+        _esc(out, v.source)
+    if v.default_name:
+        out += b","
+        out += b"\n"
+        _pad(out, depth + 1)
+        _esc(out, "default_name")
+        out += b": "
+        _esc(out, v.default_name)
+    out += b"\n"
+    _pad(out, depth)
+    out += b"}"
+
+
+def _write_permission_key(out, v, depth):
+    out += b"{"
+    out += b"\n"
+    _pad(out, depth + 1)
+    _esc(out, "action")
+    out += b": "
+    _esc(out, v.action)
+    out += b","
+    out += b"\n"
+    _pad(out, depth + 1)
+    _esc(out, "resource_profile")
+    out += b": "
+    _esc(out, v.resource_profile)
+    out += b"\n"
+    _pad(out, depth)
+    out += b"}"
+
+
+def _write_resource_selector(out, v, depth):
+    _closed_enum(ResourceSelectorKind, v.kind)
+    out += b"{"
+    out += b"\n"
+    _pad(out, depth + 1)
+    _esc(out, "kind")
+    out += b": "
+    _esc(out, v.kind)
+    if v.target is not None:
+        out += b","
+        out += b"\n"
+        _pad(out, depth + 1)
+        _esc(out, "target")
+        out += b": "
+        _esc(out, _encode_binary(v.target))
+    out += b"\n"
+    _pad(out, depth)
+    out += b"}"
+
+
+def _write_permission_selection(out, v, depth):
+    out += b"{"
+    out += b"\n"
+    _pad(out, depth + 1)
+    _esc(out, "permission")
+    out += b": "
+    _write_permission_key(out, v.permission, depth + 1)
+    out += b","
+    out += b"\n"
+    _pad(out, depth + 1)
+    _esc(out, "selector")
+    out += b": "
+    _write_resource_selector(out, v.selector, depth + 1)
+    out += b"\n"
+    _pad(out, depth)
+    out += b"}"
+
+
+def _write_concrete_resource(out, v, depth):
+    out += b"{"
+    out += b"\n"
+    _pad(out, depth + 1)
+    _esc(out, "permission")
+    out += b": "
+    _write_permission_key(out, v.permission, depth + 1)
+    out += b","
+    out += b"\n"
+    _pad(out, depth + 1)
+    _esc(out, "target")
+    out += b": "
+    _esc(out, _encode_binary(v.target))
+    out += b"\n"
+    _pad(out, depth)
+    out += b"}"
+
+
+def _write_check_batch_request(out, v, depth):
+    out += b"{"
+    first = True
+    if v.expected_revision:
+        first = False
+        out += b"\n"
+        _pad(out, depth + 1)
+        _esc(out, "expected_revision")
+        out += b": "
+        _esc(out, v.expected_revision)
+    if v.collection_admission is not None:
+        if not first:
+            out += b","
+        first = False
+        out += b"\n"
+        _pad(out, depth + 1)
+        _esc(out, "collection_admission")
+        out += b": "
+        _write_permission_key(out, v.collection_admission, depth + 1)
+    if not first:
+        out += b","
+    out += b"\n"
+    _pad(out, depth + 1)
+    _esc(out, "resources")
+    out += b": "
+    _write_list(out, v.resources, depth + 1, _write_concrete_resource)
+    out += b"\n"
+    _pad(out, depth)
+    out += b"}"
+
+
+def _write_batch_decision(out, v, depth):
+    _closed_enum(BatchCheckOutcome, v.outcome)
+    if v.collection_outcome is not None:
+        _closed_enum(DecisionOutcome, v.collection_outcome)
+    for item in v.outcomes:
+        _closed_enum(DecisionOutcome, item)
+    out += b"{"
+    out += b"\n"
+    _pad(out, depth + 1)
+    _esc(out, "outcome")
+    out += b": "
+    _esc(out, v.outcome)
+    out += b","
+    out += b"\n"
+    _pad(out, depth + 1)
+    _esc(out, "revision")
+    out += b": "
+    _esc(out, v.revision)
+    if v.collection_outcome is not None:
+        out += b","
+        out += b"\n"
+        _pad(out, depth + 1)
+        _esc(out, "collection_outcome")
+        out += b": "
+        _esc(out, v.collection_outcome)
+    out += b","
+    out += b"\n"
+    _pad(out, depth + 1)
+    _esc(out, "outcomes")
+    out += b": "
+    _strs(out, v.outcomes, depth + 1)
+    out += b"\n"
+    _pad(out, depth)
+    out += b"}"
+
+
+def _write_selector_permission_definition(out, v, depth):
+    for item in v.supported_selectors:
+        _closed_enum(ResourceSelectorKind, item)
+    for item in v.first_use_selectors:
+        _closed_enum(ResourceSelectorKind, item)
+    out += b"{"
+    out += b"\n"
+    _pad(out, depth + 1)
+    _esc(out, "definition")
+    out += b": "
+    _write_permission_definition(out, v.definition, depth + 1)
+    out += b","
+    out += b"\n"
+    _pad(out, depth + 1)
+    _esc(out, "label")
+    out += b": "
+    _esc(out, v.label)
+    out += b","
+    out += b"\n"
+    _pad(out, depth + 1)
+    _esc(out, "supported_selectors")
+    out += b": "
+    _strs(out, v.supported_selectors, depth + 1)
+    out += b","
+    out += b"\n"
+    _pad(out, depth + 1)
+    _esc(out, "first_use_selectors")
+    out += b": "
+    _strs(out, v.first_use_selectors, depth + 1)
+    out += b","
+    out += b"\n"
+    _pad(out, depth + 1)
+    _esc(out, "collection")
+    out += b": "
+    _esc(out, v.collection)
+    out += b","
+    out += b"\n"
+    _pad(out, depth + 1)
+    _esc(out, "all_effect")
+    out += b": "
+    _esc(out, v.all_effect)
+    out += b","
+    out += b"\n"
+    _pad(out, depth + 1)
+    _esc(out, "request_type")
+    out += b": "
+    _esc(out, v.request_type)
+    out += b"\n"
+    _pad(out, depth)
+    out += b"}"
+
+
+def _write_permission_definition_page(out, v, depth):
+    _closed_enum(PolicyPageOutcome, v.outcome)
+    out += b"{"
+    out += b"\n"
+    _pad(out, depth + 1)
+    _esc(out, "outcome")
+    out += b": "
+    _esc(out, v.outcome)
+    out += b","
+    out += b"\n"
+    _pad(out, depth + 1)
+    _esc(out, "revision")
+    out += b": "
+    _esc(out, v.revision)
+    out += b","
+    out += b"\n"
+    _pad(out, depth + 1)
+    _esc(out, "definitions")
+    out += b": "
+    _write_list(out, v.definitions, depth + 1, _write_selector_permission_definition)
+    out += b","
+    out += b"\n"
+    _pad(out, depth + 1)
+    _esc(out, "next")
+    out += b": "
+    _esc(out, v.next)
+    out += b","
+    out += b"\n"
+    _pad(out, depth + 1)
+    _esc(out, "complete")
+    out += b": "
+    out += b"true" if v.complete else b"false"
+    out += b"\n"
+    _pad(out, depth)
+    out += b"}"
+
+
+def _write_permission_bundle_definition(out, v, depth):
+    for item in v.supported_selectors:
+        _closed_enum(ResourceSelectorKind, item)
+    out += b"{"
+    out += b"\n"
+    _pad(out, depth + 1)
+    _esc(out, "bundle_ref")
+    out += b": "
+    _esc(out, v.bundle_ref)
+    out += b","
+    out += b"\n"
+    _pad(out, depth + 1)
+    _esc(out, "owner_contract")
+    out += b": "
+    _esc(out, v.owner_contract)
+    out += b","
+    out += b"\n"
+    _pad(out, depth + 1)
+    _esc(out, "label")
+    out += b": "
+    _esc(out, v.label)
+    out += b","
+    out += b"\n"
+    _pad(out, depth + 1)
+    _esc(out, "target_type")
+    out += b": "
+    _esc(out, v.target_type)
+    out += b","
+    out += b"\n"
+    _pad(out, depth + 1)
+    _esc(out, "supported_selectors")
+    out += b": "
+    _strs(out, v.supported_selectors, depth + 1)
+    out += b","
+    out += b"\n"
+    _pad(out, depth + 1)
+    _esc(out, "members")
+    out += b": "
+    _write_list(out, v.members, depth + 1, _write_permission_key)
+    out += b","
+    out += b"\n"
+    _pad(out, depth + 1)
+    _esc(out, "disclosure")
+    out += b": "
+    _esc(out, v.disclosure)
+    out += b","
+    out += b"\n"
+    _pad(out, depth + 1)
+    _esc(out, "definition_digest")
+    out += b": "
+    _esc(out, v.definition_digest)
+    out += b"\n"
+    _pad(out, depth)
+    out += b"}"
+
+
+def _write_permission_bundle_page(out, v, depth):
+    _closed_enum(PolicyPageOutcome, v.outcome)
+    out += b"{"
+    out += b"\n"
+    _pad(out, depth + 1)
+    _esc(out, "outcome")
+    out += b": "
+    _esc(out, v.outcome)
+    out += b","
+    out += b"\n"
+    _pad(out, depth + 1)
+    _esc(out, "revision")
+    out += b": "
+    _esc(out, v.revision)
+    out += b","
+    out += b"\n"
+    _pad(out, depth + 1)
+    _esc(out, "bundles")
+    out += b": "
+    _write_list(out, v.bundles, depth + 1, _write_permission_bundle_definition)
+    out += b","
+    out += b"\n"
+    _pad(out, depth + 1)
+    _esc(out, "next")
+    out += b": "
+    _esc(out, v.next)
+    out += b","
+    out += b"\n"
+    _pad(out, depth + 1)
+    _esc(out, "complete")
+    out += b": "
+    out += b"true" if v.complete else b"false"
+    out += b"\n"
+    _pad(out, depth)
+    out += b"}"
+
+
+def _write_bundle_expansion(out, v, depth):
+    out += b"{"
+    out += b"\n"
+    _pad(out, depth + 1)
+    _esc(out, "bundle_ref")
+    out += b": "
+    _esc(out, v.bundle_ref)
+    out += b","
+    out += b"\n"
+    _pad(out, depth + 1)
+    _esc(out, "definition_digest")
+    out += b": "
+    _esc(out, v.definition_digest)
+    out += b","
+    out += b"\n"
+    _pad(out, depth + 1)
+    _esc(out, "selector")
+    out += b": "
+    _write_resource_selector(out, v.selector, depth + 1)
+    out += b","
+    out += b"\n"
+    _pad(out, depth + 1)
+    _esc(out, "selections")
+    out += b": "
+    _write_list(out, v.selections, depth + 1, _write_permission_selection)
+    out += b"\n"
+    _pad(out, depth)
+    out += b"}"
+
+
+def _write_permission_effect(out, v, depth):
+    out += b"{"
+    out += b"\n"
+    _pad(out, depth + 1)
+    _esc(out, "subject")
+    out += b": "
+    _write_subject(out, v.subject, depth + 1)
+    out += b","
+    out += b"\n"
+    _pad(out, depth + 1)
+    _esc(out, "selections")
+    out += b": "
+    _write_list(out, v.selections, depth + 1, _write_permission_selection)
+    if v.bundle is not None:
+        out += b","
+        out += b"\n"
+        _pad(out, depth + 1)
+        _esc(out, "bundle")
+        out += b": "
+        _write_bundle_expansion(out, v.bundle, depth + 1)
+    out += b"\n"
+    _pad(out, depth)
+    out += b"}"
+
+
+def _write_selector_rule(out, v, depth):
+    out += b"{"
+    out += b"\n"
+    _pad(out, depth + 1)
+    _esc(out, "subject")
+    out += b": "
+    _write_subject(out, v.subject, depth + 1)
+    out += b","
+    out += b"\n"
+    _pad(out, depth + 1)
+    _esc(out, "selection")
+    out += b": "
+    _write_permission_selection(out, v.selection, depth + 1)
+    out += b","
+    out += b"\n"
+    _pad(out, depth + 1)
+    _esc(out, "permit")
+    out += b": "
+    out += b"true" if v.permit else b"false"
+    out += b"\n"
+    _pad(out, depth)
+    out += b"}"
+
+
+def _write_bundle_origin(out, v, depth):
+    out += b"{"
+    out += b"\n"
+    _pad(out, depth + 1)
+    _esc(out, "id")
+    out += b": "
+    _esc(out, v.id)
+    out += b","
+    out += b"\n"
+    _pad(out, depth + 1)
+    _esc(out, "expansion")
+    out += b": "
+    _write_bundle_expansion(out, v.expansion, depth + 1)
+    out += b"\n"
+    _pad(out, depth)
+    out += b"}"
+
+
+def _write_selector_rule_record(out, v, depth):
+    out += b"{"
+    out += b"\n"
+    _pad(out, depth + 1)
+    _esc(out, "rule")
+    out += b": "
+    _write_selector_rule(out, v.rule, depth + 1)
+    out += b","
+    out += b"\n"
+    _pad(out, depth + 1)
+    _esc(out, "set_by")
+    out += b": "
+    _write_subject(out, v.set_by, depth + 1)
+    out += b","
+    out += b"\n"
+    _pad(out, depth + 1)
+    _esc(out, "set_at")
+    out += b": "
+    _esc(out, v.set_at)
+    out += b","
+    out += b"\n"
+    _pad(out, depth + 1)
+    _esc(out, "why")
+    out += b": "
+    _esc(out, v.why)
+    out += b","
+    out += b"\n"
+    _pad(out, depth + 1)
+    _esc(out, "expires")
+    out += b": "
+    _esc(out, v.expires)
+    if v.bundle_origin is not None:
+        out += b","
+        out += b"\n"
+        _pad(out, depth + 1)
+        _esc(out, "bundle_origin")
+        out += b": "
+        _write_bundle_origin(out, v.bundle_origin, depth + 1)
+    out += b"\n"
+    _pad(out, depth)
+    out += b"}"
+
+
+def _write_selector_rule_page(out, v, depth):
+    _closed_enum(PolicyPageOutcome, v.outcome)
+    out += b"{"
+    out += b"\n"
+    _pad(out, depth + 1)
+    _esc(out, "outcome")
+    out += b": "
+    _esc(out, v.outcome)
+    out += b","
+    out += b"\n"
+    _pad(out, depth + 1)
+    _esc(out, "revision")
+    out += b": "
+    _esc(out, v.revision)
+    out += b","
+    out += b"\n"
+    _pad(out, depth + 1)
+    _esc(out, "records")
+    out += b": "
+    _write_list(out, v.records, depth + 1, _write_selector_rule_record)
+    out += b","
+    out += b"\n"
+    _pad(out, depth + 1)
+    _esc(out, "next")
+    out += b": "
+    _esc(out, v.next)
+    out += b","
+    out += b"\n"
+    _pad(out, depth + 1)
+    _esc(out, "complete")
+    out += b": "
+    out += b"true" if v.complete else b"false"
+    out += b"\n"
+    _pad(out, depth)
+    out += b"}"
+
+
+def _write_selector_rule_read(out, v, depth):
+    _closed_enum(RuleReadOutcome, v.outcome)
+    out += b"{"
+    out += b"\n"
+    _pad(out, depth + 1)
+    _esc(out, "outcome")
+    out += b": "
+    _esc(out, v.outcome)
+    out += b","
+    out += b"\n"
+    _pad(out, depth + 1)
+    _esc(out, "revision")
+    out += b": "
+    _esc(out, v.revision)
+    if v.record is not None:
+        out += b","
+        out += b"\n"
+        _pad(out, depth + 1)
+        _esc(out, "record")
+        out += b": "
+        _write_selector_rule_record(out, v.record, depth + 1)
+    out += b"\n"
+    _pad(out, depth)
+    out += b"}"
+
+
+def _write_selector_edit(out, v, depth):
+    _closed_enum(PolicyEditOutcome, v.outcome)
+    out += b"{"
+    out += b"\n"
+    _pad(out, depth + 1)
+    _esc(out, "outcome")
+    out += b": "
+    _esc(out, v.outcome)
+    out += b","
+    out += b"\n"
+    _pad(out, depth + 1)
+    _esc(out, "revision")
+    out += b": "
+    _esc(out, v.revision)
+    out += b","
+    out += b"\n"
+    _pad(out, depth + 1)
+    _esc(out, "current")
+    out += b": "
+    _write_list(out, v.current, depth + 1, _write_selector_rule_record)
+    if v.bundle_origin is not None:
+        out += b","
+        out += b"\n"
+        _pad(out, depth + 1)
+        _esc(out, "bundle_origin")
+        out += b": "
+        _write_bundle_origin(out, v.bundle_origin, depth + 1)
+    out += b"\n"
+    _pad(out, depth)
+    out += b"}"
+
+
+def _write_legacy_operation_request(out, v, depth):
+    out += b"{"
+    out += b"\n"
+    _pad(out, depth + 1)
+    _esc(out, "legacy_action")
+    out += b": "
+    _esc(out, v.legacy_action)
+    out += b","
+    out += b"\n"
+    _pad(out, depth + 1)
+    _esc(out, "legacy_resource")
+    out += b": "
+    _esc(out, v.legacy_resource)
+    if v.concrete_operation is not None:
+        out += b","
+        out += b"\n"
+        _pad(out, depth + 1)
+        _esc(out, "concrete_operation")
+        out += b": "
+        _write_concrete_resource(out, v.concrete_operation, depth + 1)
+    out += b"\n"
+    _pad(out, depth)
+    out += b"}"
+
+
+def _write_oa_authorization_list_action_descriptions_arguments(out, v, depth):
+    out += b"{"
+    out += b"\n"
+    _pad(out, depth + 1)
+    _esc(out, "cursor")
+    out += b": "
+    _esc(out, v.cursor)
+    out += b","
+    out += b"\n"
+    _pad(out, depth + 1)
+    _esc(out, "limit")
+    out += b": "
+    _num(out, v.limit)
     out += b"\n"
     _pad(out, depth)
     out += b"}"
@@ -1055,6 +2644,42 @@ def _write_oa_authorization_decide_for_arguments(out, v, depth):
     _esc(out, "resource")
     out += b": "
     _esc(out, v.resource)
+    out += b"\n"
+    _pad(out, depth)
+    out += b"}"
+
+
+def _write_oa_authorization_operator_register_described_action_arguments(out, v, depth):
+    out += b"{"
+    out += b"\n"
+    _pad(out, depth + 1)
+    _esc(out, "expected_revision")
+    out += b": "
+    _esc(out, v.expected_revision)
+    out += b","
+    out += b"\n"
+    _pad(out, depth + 1)
+    _esc(out, "description")
+    out += b": "
+    _write_action_description(out, v.description, depth + 1)
+    out += b"\n"
+    _pad(out, depth)
+    out += b"}"
+
+
+def _write_oa_authorization_operator_apply_first_use_allow_arguments(out, v, depth):
+    out += b"{"
+    out += b"\n"
+    _pad(out, depth + 1)
+    _esc(out, "expected_revision")
+    out += b": "
+    _esc(out, v.expected_revision)
+    out += b","
+    out += b"\n"
+    _pad(out, depth + 1)
+    _esc(out, "question_id")
+    out += b": "
+    _esc(out, v.question_id)
     out += b"\n"
     _pad(out, depth)
     out += b"}"
@@ -1126,6 +2751,72 @@ def _write_oa_authorization_operator_revoke_rule_arguments(out, v, depth):
     out += b"}"
 
 
+def _write_oa_authorization_operator_stop_answerer_arguments(out, v, depth):
+    out += b"{"
+    out += b"\n"
+    _pad(out, depth + 1)
+    _esc(out, "expected_revision")
+    out += b": "
+    _esc(out, v.expected_revision)
+    out += b","
+    out += b"\n"
+    _pad(out, depth + 1)
+    _esc(out, "answerer")
+    out += b": "
+    _write_subject(out, v.answerer, depth + 1)
+    out += b","
+    out += b"\n"
+    _pad(out, depth + 1)
+    _esc(out, "also_revoke_grants")
+    out += b": "
+    out += b"true" if v.also_revoke_grants else b"false"
+    out += b"\n"
+    _pad(out, depth)
+    out += b"}"
+
+
+def _write_oa_authorization_operator_revoke_answer_permits_arguments(out, v, depth):
+    out += b"{"
+    out += b"\n"
+    _pad(out, depth + 1)
+    _esc(out, "expected_revision")
+    out += b": "
+    _esc(out, v.expected_revision)
+    out += b","
+    out += b"\n"
+    _pad(out, depth + 1)
+    _esc(out, "answerer")
+    out += b": "
+    _write_subject(out, v.answerer, depth + 1)
+    out += b","
+    out += b"\n"
+    _pad(out, depth + 1)
+    _esc(out, "target")
+    out += b": "
+    _write_subject(out, v.target, depth + 1)
+    out += b","
+    out += b"\n"
+    _pad(out, depth + 1)
+    _esc(out, "actions")
+    out += b": "
+    _strs(out, v.actions, depth + 1)
+    out += b","
+    out += b"\n"
+    _pad(out, depth + 1)
+    _esc(out, "resource")
+    out += b": "
+    _esc(out, v.resource)
+    out += b","
+    out += b"\n"
+    _pad(out, depth + 1)
+    _esc(out, "question_id")
+    out += b": "
+    _esc(out, v.question_id)
+    out += b"\n"
+    _pad(out, depth)
+    out += b"}"
+
+
 def _write_oa_authorization_operator_set_rule_for_arguments(out, v, depth):
     out += b"{"
     out += b"\n"
@@ -1139,6 +2830,36 @@ def _write_oa_authorization_operator_set_rule_for_arguments(out, v, depth):
     _esc(out, "rule")
     out += b": "
     _write_policy_rule(out, v.rule, depth + 1)
+    out += b","
+    out += b"\n"
+    _pad(out, depth + 1)
+    _esc(out, "ttl_ms")
+    out += b": "
+    _num(out, v.ttl_ms)
+    out += b","
+    out += b"\n"
+    _pad(out, depth + 1)
+    _esc(out, "why")
+    out += b": "
+    _esc(out, v.why)
+    out += b"\n"
+    _pad(out, depth)
+    out += b"}"
+
+
+def _write_oa_authorization_operator_set_rules_for_arguments(out, v, depth):
+    out += b"{"
+    out += b"\n"
+    _pad(out, depth + 1)
+    _esc(out, "expected_revision")
+    out += b": "
+    _esc(out, v.expected_revision)
+    out += b","
+    out += b"\n"
+    _pad(out, depth + 1)
+    _esc(out, "rules")
+    out += b": "
+    _write_list(out, v.rules, depth + 1, _write_policy_rule)
     out += b","
     out += b"\n"
     _pad(out, depth + 1)
@@ -1211,6 +2932,335 @@ def _write_oa_authorization_operator_retire_action_arguments(out, v, depth):
     _esc(out, "action")
     out += b": "
     _esc(out, v.action)
+    out += b"\n"
+    _pad(out, depth)
+    out += b"}"
+
+
+def _write_oa_authorization_operator_explain_for_arguments(out, v, depth):
+    out += b"{"
+    out += b"\n"
+    _pad(out, depth + 1)
+    _esc(out, "subject")
+    out += b": "
+    _write_subject(out, v.subject, depth + 1)
+    out += b","
+    out += b"\n"
+    _pad(out, depth + 1)
+    _esc(out, "action")
+    out += b": "
+    _esc(out, v.action)
+    out += b","
+    out += b"\n"
+    _pad(out, depth + 1)
+    _esc(out, "resource")
+    out += b": "
+    _esc(out, v.resource)
+    out += b"\n"
+    _pad(out, depth)
+    out += b"}"
+
+
+def _write_oa_authorization_operator_list_defaults_arguments(out, v, depth):
+    out += b"{"
+    out += b"}"
+
+
+def _write_oa_authorization_operator_set_default_arguments(out, v, depth):
+    out += b"{"
+    out += b"\n"
+    _pad(out, depth + 1)
+    _esc(out, "expected_revision")
+    out += b": "
+    _esc(out, v.expected_revision)
+    out += b","
+    out += b"\n"
+    _pad(out, depth + 1)
+    _esc(out, "name")
+    out += b": "
+    _esc(out, v.name)
+    out += b","
+    out += b"\n"
+    _pad(out, depth + 1)
+    _esc(out, "on")
+    out += b": "
+    out += b"true" if v.on else b"false"
+    out += b"\n"
+    _pad(out, depth)
+    out += b"}"
+
+
+def _write_oa_selector_authorization_list_permission_definitions_arguments(out, v, depth):
+    out += b"{"
+    out += b"\n"
+    _pad(out, depth + 1)
+    _esc(out, "cursor")
+    out += b": "
+    _esc(out, v.cursor)
+    out += b","
+    out += b"\n"
+    _pad(out, depth + 1)
+    _esc(out, "limit")
+    out += b": "
+    _num(out, v.limit)
+    out += b"\n"
+    _pad(out, depth)
+    out += b"}"
+
+
+def _write_oa_selector_authorization_list_permission_bundles_arguments(out, v, depth):
+    out += b"{"
+    out += b"\n"
+    _pad(out, depth + 1)
+    _esc(out, "cursor")
+    out += b": "
+    _esc(out, v.cursor)
+    out += b","
+    out += b"\n"
+    _pad(out, depth + 1)
+    _esc(out, "limit")
+    out += b": "
+    _num(out, v.limit)
+    out += b"\n"
+    _pad(out, depth)
+    out += b"}"
+
+
+def _write_oa_selector_authorization_check_batch_arguments(out, v, depth):
+    out += b"{"
+    out += b"\n"
+    _pad(out, depth + 1)
+    _esc(out, "request")
+    out += b": "
+    _write_check_batch_request(out, v.request, depth + 1)
+    out += b"\n"
+    _pad(out, depth)
+    out += b"}"
+
+
+def _write_oa_selector_authorization_check_batch_for_arguments(out, v, depth):
+    out += b"{"
+    out += b"\n"
+    _pad(out, depth + 1)
+    _esc(out, "subject")
+    out += b": "
+    _write_subject(out, v.subject, depth + 1)
+    out += b","
+    out += b"\n"
+    _pad(out, depth + 1)
+    _esc(out, "request")
+    out += b": "
+    _write_check_batch_request(out, v.request, depth + 1)
+    out += b"\n"
+    _pad(out, depth)
+    out += b"}"
+
+
+def _write_oa_selector_authorization_check_legacy_operation_for_arguments(out, v, depth):
+    out += b"{"
+    out += b"\n"
+    _pad(out, depth + 1)
+    _esc(out, "subject")
+    out += b": "
+    _write_subject(out, v.subject, depth + 1)
+    out += b","
+    out += b"\n"
+    _pad(out, depth + 1)
+    _esc(out, "request")
+    out += b": "
+    _write_legacy_operation_request(out, v.request, depth + 1)
+    out += b"\n"
+    _pad(out, depth)
+    out += b"}"
+
+
+def _write_oa_selector_authorization_operator_list_selector_rules_arguments(out, v, depth):
+    out += b"{"
+    out += b"\n"
+    _pad(out, depth + 1)
+    _esc(out, "cursor")
+    out += b": "
+    _esc(out, v.cursor)
+    out += b","
+    out += b"\n"
+    _pad(out, depth + 1)
+    _esc(out, "limit")
+    out += b": "
+    _num(out, v.limit)
+    out += b"\n"
+    _pad(out, depth)
+    out += b"}"
+
+
+def _write_oa_selector_authorization_operator_read_selector_rule_arguments(out, v, depth):
+    out += b"{"
+    out += b"\n"
+    _pad(out, depth + 1)
+    _esc(out, "subject")
+    out += b": "
+    _write_subject(out, v.subject, depth + 1)
+    out += b","
+    out += b"\n"
+    _pad(out, depth + 1)
+    _esc(out, "selection")
+    out += b": "
+    _write_permission_selection(out, v.selection, depth + 1)
+    out += b"\n"
+    _pad(out, depth)
+    out += b"}"
+
+
+def _write_oa_selector_authorization_operator_set_selector_rule_arguments(out, v, depth):
+    out += b"{"
+    out += b"\n"
+    _pad(out, depth + 1)
+    _esc(out, "expected_revision")
+    out += b": "
+    _esc(out, v.expected_revision)
+    out += b","
+    out += b"\n"
+    _pad(out, depth + 1)
+    _esc(out, "rule")
+    out += b": "
+    _write_selector_rule(out, v.rule, depth + 1)
+    out += b","
+    out += b"\n"
+    _pad(out, depth + 1)
+    _esc(out, "ttl_ms")
+    out += b": "
+    _num(out, v.ttl_ms)
+    out += b","
+    out += b"\n"
+    _pad(out, depth + 1)
+    _esc(out, "why")
+    out += b": "
+    _esc(out, v.why)
+    out += b"\n"
+    _pad(out, depth)
+    out += b"}"
+
+
+def _write_oa_selector_authorization_operator_remove_selector_rule_arguments(out, v, depth):
+    out += b"{"
+    out += b"\n"
+    _pad(out, depth + 1)
+    _esc(out, "expected_revision")
+    out += b": "
+    _esc(out, v.expected_revision)
+    out += b","
+    out += b"\n"
+    _pad(out, depth + 1)
+    _esc(out, "subject")
+    out += b": "
+    _write_subject(out, v.subject, depth + 1)
+    out += b","
+    out += b"\n"
+    _pad(out, depth + 1)
+    _esc(out, "selection")
+    out += b": "
+    _write_permission_selection(out, v.selection, depth + 1)
+    out += b"\n"
+    _pad(out, depth)
+    out += b"}"
+
+
+def _write_oa_selector_authorization_operator_apply_bundle_arguments(out, v, depth):
+    out += b"{"
+    out += b"\n"
+    _pad(out, depth + 1)
+    _esc(out, "expected_revision")
+    out += b": "
+    _esc(out, v.expected_revision)
+    out += b","
+    out += b"\n"
+    _pad(out, depth + 1)
+    _esc(out, "subject")
+    out += b": "
+    _write_subject(out, v.subject, depth + 1)
+    out += b","
+    out += b"\n"
+    _pad(out, depth + 1)
+    _esc(out, "bundle_ref")
+    out += b": "
+    _esc(out, v.bundle_ref)
+    out += b","
+    out += b"\n"
+    _pad(out, depth + 1)
+    _esc(out, "selector")
+    out += b": "
+    _write_resource_selector(out, v.selector, depth + 1)
+    out += b","
+    out += b"\n"
+    _pad(out, depth + 1)
+    _esc(out, "ttl_ms")
+    out += b": "
+    _num(out, v.ttl_ms)
+    out += b","
+    out += b"\n"
+    _pad(out, depth + 1)
+    _esc(out, "why")
+    out += b": "
+    _esc(out, v.why)
+    out += b"\n"
+    _pad(out, depth)
+    out += b"}"
+
+
+def _write_oa_selector_authorization_operator_remove_bundle_arguments(out, v, depth):
+    out += b"{"
+    out += b"\n"
+    _pad(out, depth + 1)
+    _esc(out, "expected_revision")
+    out += b": "
+    _esc(out, v.expected_revision)
+    out += b","
+    out += b"\n"
+    _pad(out, depth + 1)
+    _esc(out, "subject")
+    out += b": "
+    _write_subject(out, v.subject, depth + 1)
+    out += b","
+    out += b"\n"
+    _pad(out, depth + 1)
+    _esc(out, "origin_id")
+    out += b": "
+    _esc(out, v.origin_id)
+    out += b"\n"
+    _pad(out, depth)
+    out += b"}"
+
+
+def _write_oa_selector_authorization_operator_apply_permission_allow_arguments(out, v, depth):
+    out += b"{"
+    out += b"\n"
+    _pad(out, depth + 1)
+    _esc(out, "expected_revision")
+    out += b": "
+    _esc(out, v.expected_revision)
+    out += b","
+    out += b"\n"
+    _pad(out, depth + 1)
+    _esc(out, "question_id")
+    out += b": "
+    _esc(out, v.question_id)
+    out += b"\n"
+    _pad(out, depth)
+    out += b"}"
+
+
+def _write_oa_selector_authorization_operator_undo_permission_effect_arguments(out, v, depth):
+    out += b"{"
+    out += b"\n"
+    _pad(out, depth + 1)
+    _esc(out, "expected_revision")
+    out += b": "
+    _esc(out, v.expected_revision)
+    out += b","
+    out += b"\n"
+    _pad(out, depth + 1)
+    _esc(out, "question_id")
+    out += b": "
+    _esc(out, v.question_id)
     out += b"\n"
     _pad(out, depth)
     out += b"}"
@@ -1300,6 +3350,18 @@ def _write_oa_service_error(out, v, depth):
     out += b"}"
 
 
+def _write_oa_authorization_list_action_descriptions_result(out, v, depth):
+    out += b"{"
+    out += b"\n"
+    _pad(out, depth + 1)
+    _esc(out, "value")
+    out += b": "
+    _write_description_page(out, v.value, depth + 1)
+    out += b"\n"
+    _pad(out, depth)
+    out += b"}"
+
+
 def _write_oa_authorization_decide_result(out, v, depth):
     out += b"{"
     out += b"\n"
@@ -1319,6 +3381,30 @@ def _write_oa_authorization_decide_for_result(out, v, depth):
     _esc(out, "value")
     out += b": "
     _write_decision(out, v.value, depth + 1)
+    out += b"\n"
+    _pad(out, depth)
+    out += b"}"
+
+
+def _write_oa_authorization_operator_register_described_action_result(out, v, depth):
+    out += b"{"
+    out += b"\n"
+    _pad(out, depth + 1)
+    _esc(out, "value")
+    out += b": "
+    _write_description_edit(out, v.value, depth + 1)
+    out += b"\n"
+    _pad(out, depth)
+    out += b"}"
+
+
+def _write_oa_authorization_operator_apply_first_use_allow_result(out, v, depth):
+    out += b"{"
+    out += b"\n"
+    _pad(out, depth + 1)
+    _esc(out, "value")
+    out += b": "
+    _write_policy_edit(out, v.value, depth + 1)
     out += b"\n"
     _pad(out, depth)
     out += b"}"
@@ -1360,7 +3446,43 @@ def _write_oa_authorization_operator_revoke_rule_result(out, v, depth):
     out += b"}"
 
 
+def _write_oa_authorization_operator_stop_answerer_result(out, v, depth):
+    out += b"{"
+    out += b"\n"
+    _pad(out, depth + 1)
+    _esc(out, "value")
+    out += b": "
+    _write_policy_edit(out, v.value, depth + 1)
+    out += b"\n"
+    _pad(out, depth)
+    out += b"}"
+
+
+def _write_oa_authorization_operator_revoke_answer_permits_result(out, v, depth):
+    out += b"{"
+    out += b"\n"
+    _pad(out, depth + 1)
+    _esc(out, "value")
+    out += b": "
+    _write_policy_edit(out, v.value, depth + 1)
+    out += b"\n"
+    _pad(out, depth)
+    out += b"}"
+
+
 def _write_oa_authorization_operator_set_rule_for_result(out, v, depth):
+    out += b"{"
+    out += b"\n"
+    _pad(out, depth + 1)
+    _esc(out, "value")
+    out += b": "
+    _write_policy_edit(out, v.value, depth + 1)
+    out += b"\n"
+    _pad(out, depth)
+    out += b"}"
+
+
+def _write_oa_authorization_operator_set_rules_for_result(out, v, depth):
     out += b"{"
     out += b"\n"
     _pad(out, depth + 1)
@@ -1408,6 +3530,198 @@ def _write_oa_authorization_operator_retire_action_result(out, v, depth):
     out += b"}"
 
 
+def _write_oa_authorization_operator_explain_for_result(out, v, depth):
+    out += b"{"
+    out += b"\n"
+    _pad(out, depth + 1)
+    _esc(out, "value")
+    out += b": "
+    _write_decision_explanation(out, v.value, depth + 1)
+    out += b"\n"
+    _pad(out, depth)
+    out += b"}"
+
+
+def _write_oa_authorization_operator_list_defaults_result(out, v, depth):
+    out += b"{"
+    out += b"\n"
+    _pad(out, depth + 1)
+    _esc(out, "value")
+    out += b": "
+    _write_default_page(out, v.value, depth + 1)
+    out += b"\n"
+    _pad(out, depth)
+    out += b"}"
+
+
+def _write_oa_authorization_operator_set_default_result(out, v, depth):
+    out += b"{"
+    out += b"\n"
+    _pad(out, depth + 1)
+    _esc(out, "value")
+    out += b": "
+    _write_default_edit(out, v.value, depth + 1)
+    out += b"\n"
+    _pad(out, depth)
+    out += b"}"
+
+
+def _write_oa_selector_authorization_list_permission_definitions_result(out, v, depth):
+    out += b"{"
+    out += b"\n"
+    _pad(out, depth + 1)
+    _esc(out, "value")
+    out += b": "
+    _write_permission_definition_page(out, v.value, depth + 1)
+    out += b"\n"
+    _pad(out, depth)
+    out += b"}"
+
+
+def _write_oa_selector_authorization_list_permission_bundles_result(out, v, depth):
+    out += b"{"
+    out += b"\n"
+    _pad(out, depth + 1)
+    _esc(out, "value")
+    out += b": "
+    _write_permission_bundle_page(out, v.value, depth + 1)
+    out += b"\n"
+    _pad(out, depth)
+    out += b"}"
+
+
+def _write_oa_selector_authorization_check_batch_result(out, v, depth):
+    out += b"{"
+    out += b"\n"
+    _pad(out, depth + 1)
+    _esc(out, "value")
+    out += b": "
+    _write_batch_decision(out, v.value, depth + 1)
+    out += b"\n"
+    _pad(out, depth)
+    out += b"}"
+
+
+def _write_oa_selector_authorization_check_batch_for_result(out, v, depth):
+    out += b"{"
+    out += b"\n"
+    _pad(out, depth + 1)
+    _esc(out, "value")
+    out += b": "
+    _write_batch_decision(out, v.value, depth + 1)
+    out += b"\n"
+    _pad(out, depth)
+    out += b"}"
+
+
+def _write_oa_selector_authorization_check_legacy_operation_for_result(out, v, depth):
+    out += b"{"
+    out += b"\n"
+    _pad(out, depth + 1)
+    _esc(out, "value")
+    out += b": "
+    _write_decision(out, v.value, depth + 1)
+    out += b"\n"
+    _pad(out, depth)
+    out += b"}"
+
+
+def _write_oa_selector_authorization_operator_list_selector_rules_result(out, v, depth):
+    out += b"{"
+    out += b"\n"
+    _pad(out, depth + 1)
+    _esc(out, "value")
+    out += b": "
+    _write_selector_rule_page(out, v.value, depth + 1)
+    out += b"\n"
+    _pad(out, depth)
+    out += b"}"
+
+
+def _write_oa_selector_authorization_operator_read_selector_rule_result(out, v, depth):
+    out += b"{"
+    out += b"\n"
+    _pad(out, depth + 1)
+    _esc(out, "value")
+    out += b": "
+    _write_selector_rule_read(out, v.value, depth + 1)
+    out += b"\n"
+    _pad(out, depth)
+    out += b"}"
+
+
+def _write_oa_selector_authorization_operator_set_selector_rule_result(out, v, depth):
+    out += b"{"
+    out += b"\n"
+    _pad(out, depth + 1)
+    _esc(out, "value")
+    out += b": "
+    _write_selector_edit(out, v.value, depth + 1)
+    out += b"\n"
+    _pad(out, depth)
+    out += b"}"
+
+
+def _write_oa_selector_authorization_operator_remove_selector_rule_result(out, v, depth):
+    out += b"{"
+    out += b"\n"
+    _pad(out, depth + 1)
+    _esc(out, "value")
+    out += b": "
+    _write_selector_edit(out, v.value, depth + 1)
+    out += b"\n"
+    _pad(out, depth)
+    out += b"}"
+
+
+def _write_oa_selector_authorization_operator_apply_bundle_result(out, v, depth):
+    out += b"{"
+    out += b"\n"
+    _pad(out, depth + 1)
+    _esc(out, "value")
+    out += b": "
+    _write_selector_edit(out, v.value, depth + 1)
+    out += b"\n"
+    _pad(out, depth)
+    out += b"}"
+
+
+def _write_oa_selector_authorization_operator_remove_bundle_result(out, v, depth):
+    out += b"{"
+    out += b"\n"
+    _pad(out, depth + 1)
+    _esc(out, "value")
+    out += b": "
+    _write_selector_edit(out, v.value, depth + 1)
+    out += b"\n"
+    _pad(out, depth)
+    out += b"}"
+
+
+def _write_oa_selector_authorization_operator_apply_permission_allow_result(out, v, depth):
+    out += b"{"
+    out += b"\n"
+    _pad(out, depth + 1)
+    _esc(out, "value")
+    out += b": "
+    _write_selector_edit(out, v.value, depth + 1)
+    out += b"\n"
+    _pad(out, depth)
+    out += b"}"
+
+
+def _write_oa_selector_authorization_operator_undo_permission_effect_result(out, v, depth):
+    out += b"{"
+    out += b"\n"
+    _pad(out, depth + 1)
+    _esc(out, "value")
+    out += b": "
+    _write_selector_edit(out, v.value, depth + 1)
+    out += b"\n"
+    _pad(out, depth)
+    out += b"}"
+
+
 def encode(v):
     out = bytearray()
     _write_request(out, v, 0)
@@ -1434,12 +3748,13 @@ class Refusal(ValueError):
 
 
 class _Reader:
-    __slots__ = ("buf", "pos", "depth")
+    __slots__ = ("buf", "pos", "depth", "limit")
 
     def __init__(self, buf):
         self.buf = buf
         self.pos = 0
         self.depth = 0
+        self.limit = _DEPTH_LIMIT
 
     def refuse(self, word):
         return Refusal(word, self.pos)
@@ -1453,7 +3768,7 @@ class _Reader:
 
     def enter(self):
         self.depth += 1
-        if self.depth > _DEPTH_LIMIT:
+        if self.depth > self.limit:
             raise self.refuse("depth_exceeded")
 
     def digit(self):
@@ -2441,6 +4756,212 @@ def _read_catalog_entry(r):
     return v
 
 
+def _read_action_description(r):
+    if r.at() != _LBRACE:
+        raise r.refuse("wrong_type")
+    r.enter()
+    r.pos += 1
+    v = ActionDescription()
+    seen = 0
+    r.ws()
+    if r.at() != _RBRACE:
+        while True:
+            r.ws()
+            if r.at() != _QUOTE:
+                raise r.refuse("malformed")
+            key = r.string()
+            r.ws()
+            if r.at() != _COLON:
+                raise r.refuse("malformed")
+            r.pos += 1
+            r.ws()
+            if key == "action":
+                if seen & 1:
+                    raise r.refuse("duplicate_field")
+                seen |= 1
+                v.action = r.string()
+            elif key == "feature_app":
+                if seen & 2:
+                    raise r.refuse("duplicate_field")
+                seen |= 2
+                v.feature_app = _read_subject(r)
+            elif key == "app_label":
+                if seen & 4:
+                    raise r.refuse("duplicate_field")
+                seen |= 4
+                v.app_label = r.string()
+            elif key == "description":
+                if seen & 8:
+                    raise r.refuse("duplicate_field")
+                seen |= 8
+                v.description = r.string()
+            elif key == "declared_risk":
+                if seen & 16:
+                    raise r.refuse("duplicate_field")
+                seen |= 16
+                v.declared_risk = r.string()
+            else:
+                raise r.refuse("unknown_field")
+            r.ws()
+            if r.at() != _COMMA:
+                break
+            r.pos += 1
+    if r.at() != _RBRACE:
+        raise r.refuse("malformed")
+    r.pos += 1
+    r.depth -= 1
+    if seen & 31 != 31:
+        raise r.refuse("missing_field")
+    return v
+
+
+def _read_permission_definition(r):
+    if r.at() != _LBRACE:
+        raise r.refuse("wrong_type")
+    r.enter()
+    r.pos += 1
+    v = PermissionDefinition()
+    seen = 0
+    r.ws()
+    if r.at() != _RBRACE:
+        while True:
+            r.ws()
+            if r.at() != _QUOTE:
+                raise r.refuse("malformed")
+            key = r.string()
+            r.ws()
+            if r.at() != _COLON:
+                raise r.refuse("malformed")
+            r.pos += 1
+            r.ws()
+            if key == "action":
+                if seen & 1:
+                    raise r.refuse("duplicate_field")
+                seen |= 1
+                v.action = r.string()
+            elif key == "owner_contract":
+                if seen & 2:
+                    raise r.refuse("duplicate_field")
+                seen |= 2
+                v.owner_contract = r.string()
+            elif key == "operations":
+                if seen & 4:
+                    raise r.refuse("duplicate_field")
+                seen |= 4
+                v.operations = r.str_list()
+            elif key == "resource_profile":
+                if seen & 8:
+                    raise r.refuse("duplicate_field")
+                seen |= 8
+                v.resource_profile = r.string()
+            elif key == "resource_type":
+                if seen & 16:
+                    raise r.refuse("duplicate_field")
+                seen |= 16
+                v.resource_type = r.string()
+            elif key == "enforced_by":
+                if seen & 32:
+                    raise r.refuse("duplicate_field")
+                seen |= 32
+                v.enforced_by = r.str_list()
+            elif key == "disclosure":
+                if seen & 64:
+                    raise r.refuse("duplicate_field")
+                seen |= 64
+                v.disclosure = r.string()
+            elif key == "lifecycle":
+                if seen & 128:
+                    raise r.refuse("duplicate_field")
+                seen |= 128
+                v.lifecycle = r.string()
+            elif key == "first_use":
+                if seen & 256:
+                    raise r.refuse("duplicate_field")
+                seen |= 256
+                v.first_use = r.string()
+            elif key == "served":
+                if seen & 512:
+                    raise r.refuse("duplicate_field")
+                seen |= 512
+                v.served = r.boolean()
+            else:
+                raise r.refuse("unknown_field")
+            r.ws()
+            if r.at() != _COMMA:
+                break
+            r.pos += 1
+    if r.at() != _RBRACE:
+        raise r.refuse("malformed")
+    r.pos += 1
+    r.depth -= 1
+    if seen & 1023 != 1023:
+        raise r.refuse("missing_field")
+    try:
+        v.first_use = PermissionFirstUse(v.first_use)
+    except ValueError:
+        raise r.refuse("bad_enum") from None
+    return v
+
+
+def _read_described_action(r):
+    if r.at() != _LBRACE:
+        raise r.refuse("wrong_type")
+    r.enter()
+    r.pos += 1
+    v = DescribedAction()
+    seen = 0
+    r.ws()
+    if r.at() != _RBRACE:
+        while True:
+            r.ws()
+            if r.at() != _QUOTE:
+                raise r.refuse("malformed")
+            key = r.string()
+            r.ws()
+            if r.at() != _COLON:
+                raise r.refuse("malformed")
+            r.pos += 1
+            r.ws()
+            if key == "action":
+                if seen & 1:
+                    raise r.refuse("duplicate_field")
+                seen |= 1
+                v.action = r.string()
+            elif key == "choices":
+                if seen & 2:
+                    raise r.refuse("duplicate_field")
+                seen |= 2
+                v.choices = r.str_list()
+            elif key == "description":
+                if seen & 4:
+                    raise r.refuse("duplicate_field")
+                seen |= 4
+                v.description = _read_action_description(r)
+            elif key == "published_by":
+                if seen & 8:
+                    raise r.refuse("duplicate_field")
+                seen |= 8
+                v.published_by = _read_subject(r)
+            elif key == "published_at":
+                if seen & 16:
+                    raise r.refuse("duplicate_field")
+                seen |= 16
+                v.published_at = r.string()
+            else:
+                raise r.refuse("unknown_field")
+            r.ws()
+            if r.at() != _COMMA:
+                break
+            r.pos += 1
+    if r.at() != _RBRACE:
+        raise r.refuse("malformed")
+    r.pos += 1
+    r.depth -= 1
+    if seen & 3 != 3:
+        raise r.refuse("missing_field")
+    return v
+
+
 def _read_action_edit(r):
     if r.at() != _LBRACE:
         raise r.refuse("wrong_type")
@@ -2491,6 +5012,1464 @@ def _read_action_edit(r):
         v.outcome = ActionEditOutcome(v.outcome)
     except ValueError:
         raise r.refuse("bad_enum") from None
+    return v
+
+
+def _read_description_edit(r):
+    if r.at() != _LBRACE:
+        raise r.refuse("wrong_type")
+    r.enter()
+    r.pos += 1
+    v = DescriptionEdit()
+    seen = 0
+    r.ws()
+    if r.at() != _RBRACE:
+        while True:
+            r.ws()
+            if r.at() != _QUOTE:
+                raise r.refuse("malformed")
+            key = r.string()
+            r.ws()
+            if r.at() != _COLON:
+                raise r.refuse("malformed")
+            r.pos += 1
+            r.ws()
+            if key == "outcome":
+                if seen & 1:
+                    raise r.refuse("duplicate_field")
+                seen |= 1
+                v.outcome = r.string()
+            elif key == "revision":
+                if seen & 2:
+                    raise r.refuse("duplicate_field")
+                seen |= 2
+                v.revision = r.string()
+            elif key == "current":
+                if seen & 4:
+                    raise r.refuse("duplicate_field")
+                seen |= 4
+                v.current = _read_described_action(r)
+            else:
+                raise r.refuse("unknown_field")
+            r.ws()
+            if r.at() != _COMMA:
+                break
+            r.pos += 1
+    if r.at() != _RBRACE:
+        raise r.refuse("malformed")
+    r.pos += 1
+    r.depth -= 1
+    if seen & 3 != 3:
+        raise r.refuse("missing_field")
+    try:
+        v.outcome = ActionEditOutcome(v.outcome)
+    except ValueError:
+        raise r.refuse("bad_enum") from None
+    return v
+
+
+def _read_description_page(r):
+    if r.at() != _LBRACE:
+        raise r.refuse("wrong_type")
+    r.enter()
+    r.pos += 1
+    v = DescriptionPage()
+    seen = 0
+    r.ws()
+    if r.at() != _RBRACE:
+        while True:
+            r.ws()
+            if r.at() != _QUOTE:
+                raise r.refuse("malformed")
+            key = r.string()
+            r.ws()
+            if r.at() != _COLON:
+                raise r.refuse("malformed")
+            r.pos += 1
+            r.ws()
+            if key == "outcome":
+                if seen & 1:
+                    raise r.refuse("duplicate_field")
+                seen |= 1
+                v.outcome = r.string()
+            elif key == "revision":
+                if seen & 2:
+                    raise r.refuse("duplicate_field")
+                seen |= 2
+                v.revision = r.string()
+            elif key == "actions":
+                if seen & 4:
+                    raise r.refuse("duplicate_field")
+                seen |= 4
+                v.actions = _read_list(r, _read_described_action)
+            elif key == "next":
+                if seen & 8:
+                    raise r.refuse("duplicate_field")
+                seen |= 8
+                v.next = r.string()
+            elif key == "complete":
+                if seen & 16:
+                    raise r.refuse("duplicate_field")
+                seen |= 16
+                v.complete = r.boolean()
+            else:
+                raise r.refuse("unknown_field")
+            r.ws()
+            if r.at() != _COMMA:
+                break
+            r.pos += 1
+    if r.at() != _RBRACE:
+        raise r.refuse("malformed")
+    r.pos += 1
+    r.depth -= 1
+    if seen & 31 != 31:
+        raise r.refuse("missing_field")
+    try:
+        v.outcome = PolicyPageOutcome(v.outcome)
+    except ValueError:
+        raise r.refuse("bad_enum") from None
+    return v
+
+
+def _read_account_default(r):
+    if r.at() != _LBRACE:
+        raise r.refuse("wrong_type")
+    r.enter()
+    r.pos += 1
+    v = AccountDefault()
+    seen = 0
+    r.ws()
+    if r.at() != _RBRACE:
+        while True:
+            r.ws()
+            if r.at() != _QUOTE:
+                raise r.refuse("malformed")
+            key = r.string()
+            r.ws()
+            if r.at() != _COLON:
+                raise r.refuse("malformed")
+            r.pos += 1
+            r.ws()
+            if key == "name":
+                if seen & 1:
+                    raise r.refuse("duplicate_field")
+                seen |= 1
+                v.name = r.string()
+            elif key == "action":
+                if seen & 2:
+                    raise r.refuse("duplicate_field")
+                seen |= 2
+                v.action = r.string()
+            elif key == "resource":
+                if seen & 4:
+                    raise r.refuse("duplicate_field")
+                seen |= 4
+                v.resource = r.string()
+            elif key == "every_resource":
+                if seen & 8:
+                    raise r.refuse("duplicate_field")
+                seen |= 8
+                v.every_resource = r.boolean()
+            elif key == "on":
+                if seen & 16:
+                    raise r.refuse("duplicate_field")
+                seen |= 16
+                v.on = r.boolean()
+            elif key == "set_by":
+                if seen & 32:
+                    raise r.refuse("duplicate_field")
+                seen |= 32
+                v.set_by = _read_subject(r)
+            elif key == "set_at":
+                if seen & 64:
+                    raise r.refuse("duplicate_field")
+                seen |= 64
+                v.set_at = r.string()
+            else:
+                raise r.refuse("unknown_field")
+            r.ws()
+            if r.at() != _COMMA:
+                break
+            r.pos += 1
+    if r.at() != _RBRACE:
+        raise r.refuse("malformed")
+    r.pos += 1
+    r.depth -= 1
+    if seen & 31 != 31:
+        raise r.refuse("missing_field")
+    return v
+
+
+def _read_default_page(r):
+    if r.at() != _LBRACE:
+        raise r.refuse("wrong_type")
+    r.enter()
+    r.pos += 1
+    v = DefaultPage()
+    seen = 0
+    r.ws()
+    if r.at() != _RBRACE:
+        while True:
+            r.ws()
+            if r.at() != _QUOTE:
+                raise r.refuse("malformed")
+            key = r.string()
+            r.ws()
+            if r.at() != _COLON:
+                raise r.refuse("malformed")
+            r.pos += 1
+            r.ws()
+            if key == "outcome":
+                if seen & 1:
+                    raise r.refuse("duplicate_field")
+                seen |= 1
+                v.outcome = r.string()
+            elif key == "revision":
+                if seen & 2:
+                    raise r.refuse("duplicate_field")
+                seen |= 2
+                v.revision = r.string()
+            elif key == "defaults":
+                if seen & 4:
+                    raise r.refuse("duplicate_field")
+                seen |= 4
+                v.defaults = _read_list(r, _read_account_default)
+            else:
+                raise r.refuse("unknown_field")
+            r.ws()
+            if r.at() != _COMMA:
+                break
+            r.pos += 1
+    if r.at() != _RBRACE:
+        raise r.refuse("malformed")
+    r.pos += 1
+    r.depth -= 1
+    if seen & 7 != 7:
+        raise r.refuse("missing_field")
+    try:
+        v.outcome = PolicyPageOutcome(v.outcome)
+    except ValueError:
+        raise r.refuse("bad_enum") from None
+    return v
+
+
+def _read_default_edit(r):
+    if r.at() != _LBRACE:
+        raise r.refuse("wrong_type")
+    r.enter()
+    r.pos += 1
+    v = DefaultEdit()
+    seen = 0
+    r.ws()
+    if r.at() != _RBRACE:
+        while True:
+            r.ws()
+            if r.at() != _QUOTE:
+                raise r.refuse("malformed")
+            key = r.string()
+            r.ws()
+            if r.at() != _COLON:
+                raise r.refuse("malformed")
+            r.pos += 1
+            r.ws()
+            if key == "outcome":
+                if seen & 1:
+                    raise r.refuse("duplicate_field")
+                seen |= 1
+                v.outcome = r.string()
+            elif key == "revision":
+                if seen & 2:
+                    raise r.refuse("duplicate_field")
+                seen |= 2
+                v.revision = r.string()
+            elif key == "current":
+                if seen & 4:
+                    raise r.refuse("duplicate_field")
+                seen |= 4
+                v.current = _read_account_default(r)
+            else:
+                raise r.refuse("unknown_field")
+            r.ws()
+            if r.at() != _COMMA:
+                break
+            r.pos += 1
+    if r.at() != _RBRACE:
+        raise r.refuse("malformed")
+    r.pos += 1
+    r.depth -= 1
+    if seen & 3 != 3:
+        raise r.refuse("missing_field")
+    try:
+        v.outcome = PolicyEditOutcome(v.outcome)
+    except ValueError:
+        raise r.refuse("bad_enum") from None
+    return v
+
+
+def _read_decision_explanation(r):
+    if r.at() != _LBRACE:
+        raise r.refuse("wrong_type")
+    r.enter()
+    r.pos += 1
+    v = DecisionExplanation()
+    seen = 0
+    r.ws()
+    if r.at() != _RBRACE:
+        while True:
+            r.ws()
+            if r.at() != _QUOTE:
+                raise r.refuse("malformed")
+            key = r.string()
+            r.ws()
+            if r.at() != _COLON:
+                raise r.refuse("malformed")
+            r.pos += 1
+            r.ws()
+            if key == "outcome":
+                if seen & 1:
+                    raise r.refuse("duplicate_field")
+                seen |= 1
+                v.outcome = r.string()
+            elif key == "policy_revision":
+                if seen & 2:
+                    raise r.refuse("duplicate_field")
+                seen |= 2
+                v.policy_revision = r.string()
+            elif key == "source":
+                if seen & 4:
+                    raise r.refuse("duplicate_field")
+                seen |= 4
+                v.source = r.string()
+            elif key == "default_name":
+                if seen & 8:
+                    raise r.refuse("duplicate_field")
+                seen |= 8
+                v.default_name = r.string()
+            else:
+                raise r.refuse("unknown_field")
+            r.ws()
+            if r.at() != _COMMA:
+                break
+            r.pos += 1
+    if r.at() != _RBRACE:
+        raise r.refuse("malformed")
+    r.pos += 1
+    r.depth -= 1
+    if seen & 1 != 1:
+        raise r.refuse("missing_field")
+    try:
+        v.outcome = DecisionOutcome(v.outcome)
+    except ValueError:
+        raise r.refuse("bad_enum") from None
+    if v.source is not None:
+        try:
+            v.source = DecisionSource(v.source)
+        except ValueError:
+            raise r.refuse("bad_enum") from None
+    return v
+
+
+def _read_permission_key(r):
+    if r.at() != _LBRACE:
+        raise r.refuse("wrong_type")
+    r.enter()
+    r.pos += 1
+    v = PermissionKey()
+    seen = 0
+    r.ws()
+    if r.at() != _RBRACE:
+        while True:
+            r.ws()
+            if r.at() != _QUOTE:
+                raise r.refuse("malformed")
+            key = r.string()
+            r.ws()
+            if r.at() != _COLON:
+                raise r.refuse("malformed")
+            r.pos += 1
+            r.ws()
+            if key == "action":
+                if seen & 1:
+                    raise r.refuse("duplicate_field")
+                seen |= 1
+                v.action = r.string()
+            elif key == "resource_profile":
+                if seen & 2:
+                    raise r.refuse("duplicate_field")
+                seen |= 2
+                v.resource_profile = r.string()
+            else:
+                raise r.refuse("unknown_field")
+            r.ws()
+            if r.at() != _COMMA:
+                break
+            r.pos += 1
+    if r.at() != _RBRACE:
+        raise r.refuse("malformed")
+    r.pos += 1
+    r.depth -= 1
+    if seen & 3 != 3:
+        raise r.refuse("missing_field")
+    return v
+
+
+def _read_resource_selector(r):
+    if r.at() != _LBRACE:
+        raise r.refuse("wrong_type")
+    r.enter()
+    r.pos += 1
+    v = ResourceSelector()
+    seen = 0
+    r.ws()
+    if r.at() != _RBRACE:
+        while True:
+            r.ws()
+            if r.at() != _QUOTE:
+                raise r.refuse("malformed")
+            key = r.string()
+            r.ws()
+            if r.at() != _COLON:
+                raise r.refuse("malformed")
+            r.pos += 1
+            r.ws()
+            if key == "kind":
+                if seen & 1:
+                    raise r.refuse("duplicate_field")
+                seen |= 1
+                v.kind = r.string()
+            elif key == "target":
+                if seen & 2:
+                    raise r.refuse("duplicate_field")
+                seen |= 2
+                v.target = _decode_binary(r.string())
+            else:
+                raise r.refuse("unknown_field")
+            r.ws()
+            if r.at() != _COMMA:
+                break
+            r.pos += 1
+    if r.at() != _RBRACE:
+        raise r.refuse("malformed")
+    r.pos += 1
+    r.depth -= 1
+    if seen & 1 != 1:
+        raise r.refuse("missing_field")
+    try:
+        v.kind = ResourceSelectorKind(v.kind)
+    except ValueError:
+        raise r.refuse("bad_enum") from None
+    return v
+
+
+def _read_permission_selection(r):
+    if r.at() != _LBRACE:
+        raise r.refuse("wrong_type")
+    r.enter()
+    r.pos += 1
+    v = PermissionSelection()
+    seen = 0
+    r.ws()
+    if r.at() != _RBRACE:
+        while True:
+            r.ws()
+            if r.at() != _QUOTE:
+                raise r.refuse("malformed")
+            key = r.string()
+            r.ws()
+            if r.at() != _COLON:
+                raise r.refuse("malformed")
+            r.pos += 1
+            r.ws()
+            if key == "permission":
+                if seen & 1:
+                    raise r.refuse("duplicate_field")
+                seen |= 1
+                v.permission = _read_permission_key(r)
+            elif key == "selector":
+                if seen & 2:
+                    raise r.refuse("duplicate_field")
+                seen |= 2
+                v.selector = _read_resource_selector(r)
+            else:
+                raise r.refuse("unknown_field")
+            r.ws()
+            if r.at() != _COMMA:
+                break
+            r.pos += 1
+    if r.at() != _RBRACE:
+        raise r.refuse("malformed")
+    r.pos += 1
+    r.depth -= 1
+    if seen & 3 != 3:
+        raise r.refuse("missing_field")
+    return v
+
+
+def _read_concrete_resource(r):
+    if r.at() != _LBRACE:
+        raise r.refuse("wrong_type")
+    r.enter()
+    r.pos += 1
+    v = ConcreteResource()
+    seen = 0
+    r.ws()
+    if r.at() != _RBRACE:
+        while True:
+            r.ws()
+            if r.at() != _QUOTE:
+                raise r.refuse("malformed")
+            key = r.string()
+            r.ws()
+            if r.at() != _COLON:
+                raise r.refuse("malformed")
+            r.pos += 1
+            r.ws()
+            if key == "permission":
+                if seen & 1:
+                    raise r.refuse("duplicate_field")
+                seen |= 1
+                v.permission = _read_permission_key(r)
+            elif key == "target":
+                if seen & 2:
+                    raise r.refuse("duplicate_field")
+                seen |= 2
+                v.target = _decode_binary(r.string())
+            else:
+                raise r.refuse("unknown_field")
+            r.ws()
+            if r.at() != _COMMA:
+                break
+            r.pos += 1
+    if r.at() != _RBRACE:
+        raise r.refuse("malformed")
+    r.pos += 1
+    r.depth -= 1
+    if seen & 3 != 3:
+        raise r.refuse("missing_field")
+    return v
+
+
+def _read_check_batch_request(r):
+    if r.at() != _LBRACE:
+        raise r.refuse("wrong_type")
+    r.enter()
+    r.pos += 1
+    v = CheckBatchRequest()
+    seen = 0
+    r.ws()
+    if r.at() != _RBRACE:
+        while True:
+            r.ws()
+            if r.at() != _QUOTE:
+                raise r.refuse("malformed")
+            key = r.string()
+            r.ws()
+            if r.at() != _COLON:
+                raise r.refuse("malformed")
+            r.pos += 1
+            r.ws()
+            if key == "expected_revision":
+                if seen & 1:
+                    raise r.refuse("duplicate_field")
+                seen |= 1
+                v.expected_revision = r.string()
+            elif key == "collection_admission":
+                if seen & 2:
+                    raise r.refuse("duplicate_field")
+                seen |= 2
+                v.collection_admission = _read_permission_key(r)
+            elif key == "resources":
+                if seen & 4:
+                    raise r.refuse("duplicate_field")
+                seen |= 4
+                v.resources = _read_list(r, _read_concrete_resource)
+            else:
+                raise r.refuse("unknown_field")
+            r.ws()
+            if r.at() != _COMMA:
+                break
+            r.pos += 1
+    if r.at() != _RBRACE:
+        raise r.refuse("malformed")
+    r.pos += 1
+    r.depth -= 1
+    if seen & 4 != 4:
+        raise r.refuse("missing_field")
+    return v
+
+
+def _read_batch_decision(r):
+    if r.at() != _LBRACE:
+        raise r.refuse("wrong_type")
+    r.enter()
+    r.pos += 1
+    v = BatchDecision()
+    seen = 0
+    r.ws()
+    if r.at() != _RBRACE:
+        while True:
+            r.ws()
+            if r.at() != _QUOTE:
+                raise r.refuse("malformed")
+            key = r.string()
+            r.ws()
+            if r.at() != _COLON:
+                raise r.refuse("malformed")
+            r.pos += 1
+            r.ws()
+            if key == "outcome":
+                if seen & 1:
+                    raise r.refuse("duplicate_field")
+                seen |= 1
+                v.outcome = r.string()
+            elif key == "revision":
+                if seen & 2:
+                    raise r.refuse("duplicate_field")
+                seen |= 2
+                v.revision = r.string()
+            elif key == "collection_outcome":
+                if seen & 4:
+                    raise r.refuse("duplicate_field")
+                seen |= 4
+                v.collection_outcome = r.string()
+            elif key == "outcomes":
+                if seen & 8:
+                    raise r.refuse("duplicate_field")
+                seen |= 8
+                v.outcomes = r.str_list()
+            else:
+                raise r.refuse("unknown_field")
+            r.ws()
+            if r.at() != _COMMA:
+                break
+            r.pos += 1
+    if r.at() != _RBRACE:
+        raise r.refuse("malformed")
+    r.pos += 1
+    r.depth -= 1
+    if seen & 11 != 11:
+        raise r.refuse("missing_field")
+    try:
+        v.outcome = BatchCheckOutcome(v.outcome)
+    except ValueError:
+        raise r.refuse("bad_enum") from None
+    if v.collection_outcome is not None:
+        try:
+            v.collection_outcome = DecisionOutcome(v.collection_outcome)
+        except ValueError:
+            raise r.refuse("bad_enum") from None
+    try:
+        v.outcomes = [DecisionOutcome(item) for item in v.outcomes]
+    except ValueError:
+        raise r.refuse("bad_enum") from None
+    return v
+
+
+def _read_selector_permission_definition(r):
+    if r.at() != _LBRACE:
+        raise r.refuse("wrong_type")
+    r.enter()
+    r.pos += 1
+    v = SelectorPermissionDefinition()
+    seen = 0
+    r.ws()
+    if r.at() != _RBRACE:
+        while True:
+            r.ws()
+            if r.at() != _QUOTE:
+                raise r.refuse("malformed")
+            key = r.string()
+            r.ws()
+            if r.at() != _COLON:
+                raise r.refuse("malformed")
+            r.pos += 1
+            r.ws()
+            if key == "definition":
+                if seen & 1:
+                    raise r.refuse("duplicate_field")
+                seen |= 1
+                v.definition = _read_permission_definition(r)
+            elif key == "label":
+                if seen & 2:
+                    raise r.refuse("duplicate_field")
+                seen |= 2
+                v.label = r.string()
+            elif key == "supported_selectors":
+                if seen & 4:
+                    raise r.refuse("duplicate_field")
+                seen |= 4
+                v.supported_selectors = r.str_list()
+            elif key == "first_use_selectors":
+                if seen & 8:
+                    raise r.refuse("duplicate_field")
+                seen |= 8
+                v.first_use_selectors = r.str_list()
+            elif key == "collection":
+                if seen & 16:
+                    raise r.refuse("duplicate_field")
+                seen |= 16
+                v.collection = r.string()
+            elif key == "all_effect":
+                if seen & 32:
+                    raise r.refuse("duplicate_field")
+                seen |= 32
+                v.all_effect = r.string()
+            elif key == "request_type":
+                if seen & 64:
+                    raise r.refuse("duplicate_field")
+                seen |= 64
+                v.request_type = r.string()
+            else:
+                raise r.refuse("unknown_field")
+            r.ws()
+            if r.at() != _COMMA:
+                break
+            r.pos += 1
+    if r.at() != _RBRACE:
+        raise r.refuse("malformed")
+    r.pos += 1
+    r.depth -= 1
+    if seen & 127 != 127:
+        raise r.refuse("missing_field")
+    try:
+        v.supported_selectors = [ResourceSelectorKind(item) for item in v.supported_selectors]
+    except ValueError:
+        raise r.refuse("bad_enum") from None
+    try:
+        v.first_use_selectors = [ResourceSelectorKind(item) for item in v.first_use_selectors]
+    except ValueError:
+        raise r.refuse("bad_enum") from None
+    return v
+
+
+def _read_permission_definition_page(r):
+    if r.at() != _LBRACE:
+        raise r.refuse("wrong_type")
+    r.enter()
+    r.pos += 1
+    v = PermissionDefinitionPage()
+    seen = 0
+    r.ws()
+    if r.at() != _RBRACE:
+        while True:
+            r.ws()
+            if r.at() != _QUOTE:
+                raise r.refuse("malformed")
+            key = r.string()
+            r.ws()
+            if r.at() != _COLON:
+                raise r.refuse("malformed")
+            r.pos += 1
+            r.ws()
+            if key == "outcome":
+                if seen & 1:
+                    raise r.refuse("duplicate_field")
+                seen |= 1
+                v.outcome = r.string()
+            elif key == "revision":
+                if seen & 2:
+                    raise r.refuse("duplicate_field")
+                seen |= 2
+                v.revision = r.string()
+            elif key == "definitions":
+                if seen & 4:
+                    raise r.refuse("duplicate_field")
+                seen |= 4
+                v.definitions = _read_list(r, _read_selector_permission_definition)
+            elif key == "next":
+                if seen & 8:
+                    raise r.refuse("duplicate_field")
+                seen |= 8
+                v.next = r.string()
+            elif key == "complete":
+                if seen & 16:
+                    raise r.refuse("duplicate_field")
+                seen |= 16
+                v.complete = r.boolean()
+            else:
+                raise r.refuse("unknown_field")
+            r.ws()
+            if r.at() != _COMMA:
+                break
+            r.pos += 1
+    if r.at() != _RBRACE:
+        raise r.refuse("malformed")
+    r.pos += 1
+    r.depth -= 1
+    if seen & 31 != 31:
+        raise r.refuse("missing_field")
+    try:
+        v.outcome = PolicyPageOutcome(v.outcome)
+    except ValueError:
+        raise r.refuse("bad_enum") from None
+    return v
+
+
+def _read_permission_bundle_definition(r):
+    if r.at() != _LBRACE:
+        raise r.refuse("wrong_type")
+    r.enter()
+    r.pos += 1
+    v = PermissionBundleDefinition()
+    seen = 0
+    r.ws()
+    if r.at() != _RBRACE:
+        while True:
+            r.ws()
+            if r.at() != _QUOTE:
+                raise r.refuse("malformed")
+            key = r.string()
+            r.ws()
+            if r.at() != _COLON:
+                raise r.refuse("malformed")
+            r.pos += 1
+            r.ws()
+            if key == "bundle_ref":
+                if seen & 1:
+                    raise r.refuse("duplicate_field")
+                seen |= 1
+                v.bundle_ref = r.string()
+            elif key == "owner_contract":
+                if seen & 2:
+                    raise r.refuse("duplicate_field")
+                seen |= 2
+                v.owner_contract = r.string()
+            elif key == "label":
+                if seen & 4:
+                    raise r.refuse("duplicate_field")
+                seen |= 4
+                v.label = r.string()
+            elif key == "target_type":
+                if seen & 8:
+                    raise r.refuse("duplicate_field")
+                seen |= 8
+                v.target_type = r.string()
+            elif key == "supported_selectors":
+                if seen & 16:
+                    raise r.refuse("duplicate_field")
+                seen |= 16
+                v.supported_selectors = r.str_list()
+            elif key == "members":
+                if seen & 32:
+                    raise r.refuse("duplicate_field")
+                seen |= 32
+                v.members = _read_list(r, _read_permission_key)
+            elif key == "disclosure":
+                if seen & 64:
+                    raise r.refuse("duplicate_field")
+                seen |= 64
+                v.disclosure = r.string()
+            elif key == "definition_digest":
+                if seen & 128:
+                    raise r.refuse("duplicate_field")
+                seen |= 128
+                v.definition_digest = r.string()
+            else:
+                raise r.refuse("unknown_field")
+            r.ws()
+            if r.at() != _COMMA:
+                break
+            r.pos += 1
+    if r.at() != _RBRACE:
+        raise r.refuse("malformed")
+    r.pos += 1
+    r.depth -= 1
+    if seen & 255 != 255:
+        raise r.refuse("missing_field")
+    try:
+        v.supported_selectors = [ResourceSelectorKind(item) for item in v.supported_selectors]
+    except ValueError:
+        raise r.refuse("bad_enum") from None
+    return v
+
+
+def _read_permission_bundle_page(r):
+    if r.at() != _LBRACE:
+        raise r.refuse("wrong_type")
+    r.enter()
+    r.pos += 1
+    v = PermissionBundlePage()
+    seen = 0
+    r.ws()
+    if r.at() != _RBRACE:
+        while True:
+            r.ws()
+            if r.at() != _QUOTE:
+                raise r.refuse("malformed")
+            key = r.string()
+            r.ws()
+            if r.at() != _COLON:
+                raise r.refuse("malformed")
+            r.pos += 1
+            r.ws()
+            if key == "outcome":
+                if seen & 1:
+                    raise r.refuse("duplicate_field")
+                seen |= 1
+                v.outcome = r.string()
+            elif key == "revision":
+                if seen & 2:
+                    raise r.refuse("duplicate_field")
+                seen |= 2
+                v.revision = r.string()
+            elif key == "bundles":
+                if seen & 4:
+                    raise r.refuse("duplicate_field")
+                seen |= 4
+                v.bundles = _read_list(r, _read_permission_bundle_definition)
+            elif key == "next":
+                if seen & 8:
+                    raise r.refuse("duplicate_field")
+                seen |= 8
+                v.next = r.string()
+            elif key == "complete":
+                if seen & 16:
+                    raise r.refuse("duplicate_field")
+                seen |= 16
+                v.complete = r.boolean()
+            else:
+                raise r.refuse("unknown_field")
+            r.ws()
+            if r.at() != _COMMA:
+                break
+            r.pos += 1
+    if r.at() != _RBRACE:
+        raise r.refuse("malformed")
+    r.pos += 1
+    r.depth -= 1
+    if seen & 31 != 31:
+        raise r.refuse("missing_field")
+    try:
+        v.outcome = PolicyPageOutcome(v.outcome)
+    except ValueError:
+        raise r.refuse("bad_enum") from None
+    return v
+
+
+def _read_bundle_expansion(r):
+    if r.at() != _LBRACE:
+        raise r.refuse("wrong_type")
+    r.enter()
+    r.pos += 1
+    v = BundleExpansion()
+    seen = 0
+    r.ws()
+    if r.at() != _RBRACE:
+        while True:
+            r.ws()
+            if r.at() != _QUOTE:
+                raise r.refuse("malformed")
+            key = r.string()
+            r.ws()
+            if r.at() != _COLON:
+                raise r.refuse("malformed")
+            r.pos += 1
+            r.ws()
+            if key == "bundle_ref":
+                if seen & 1:
+                    raise r.refuse("duplicate_field")
+                seen |= 1
+                v.bundle_ref = r.string()
+            elif key == "definition_digest":
+                if seen & 2:
+                    raise r.refuse("duplicate_field")
+                seen |= 2
+                v.definition_digest = r.string()
+            elif key == "selector":
+                if seen & 4:
+                    raise r.refuse("duplicate_field")
+                seen |= 4
+                v.selector = _read_resource_selector(r)
+            elif key == "selections":
+                if seen & 8:
+                    raise r.refuse("duplicate_field")
+                seen |= 8
+                v.selections = _read_list(r, _read_permission_selection)
+            else:
+                raise r.refuse("unknown_field")
+            r.ws()
+            if r.at() != _COMMA:
+                break
+            r.pos += 1
+    if r.at() != _RBRACE:
+        raise r.refuse("malformed")
+    r.pos += 1
+    r.depth -= 1
+    if seen & 15 != 15:
+        raise r.refuse("missing_field")
+    return v
+
+
+def _read_permission_effect(r):
+    if r.at() != _LBRACE:
+        raise r.refuse("wrong_type")
+    r.enter()
+    r.pos += 1
+    v = PermissionEffect()
+    seen = 0
+    r.ws()
+    if r.at() != _RBRACE:
+        while True:
+            r.ws()
+            if r.at() != _QUOTE:
+                raise r.refuse("malformed")
+            key = r.string()
+            r.ws()
+            if r.at() != _COLON:
+                raise r.refuse("malformed")
+            r.pos += 1
+            r.ws()
+            if key == "subject":
+                if seen & 1:
+                    raise r.refuse("duplicate_field")
+                seen |= 1
+                v.subject = _read_subject(r)
+            elif key == "selections":
+                if seen & 2:
+                    raise r.refuse("duplicate_field")
+                seen |= 2
+                v.selections = _read_list(r, _read_permission_selection)
+            elif key == "bundle":
+                if seen & 4:
+                    raise r.refuse("duplicate_field")
+                seen |= 4
+                v.bundle = _read_bundle_expansion(r)
+            else:
+                raise r.refuse("unknown_field")
+            r.ws()
+            if r.at() != _COMMA:
+                break
+            r.pos += 1
+    if r.at() != _RBRACE:
+        raise r.refuse("malformed")
+    r.pos += 1
+    r.depth -= 1
+    if seen & 3 != 3:
+        raise r.refuse("missing_field")
+    return v
+
+
+def _read_selector_rule(r):
+    if r.at() != _LBRACE:
+        raise r.refuse("wrong_type")
+    r.enter()
+    r.pos += 1
+    v = SelectorRule()
+    seen = 0
+    r.ws()
+    if r.at() != _RBRACE:
+        while True:
+            r.ws()
+            if r.at() != _QUOTE:
+                raise r.refuse("malformed")
+            key = r.string()
+            r.ws()
+            if r.at() != _COLON:
+                raise r.refuse("malformed")
+            r.pos += 1
+            r.ws()
+            if key == "subject":
+                if seen & 1:
+                    raise r.refuse("duplicate_field")
+                seen |= 1
+                v.subject = _read_subject(r)
+            elif key == "selection":
+                if seen & 2:
+                    raise r.refuse("duplicate_field")
+                seen |= 2
+                v.selection = _read_permission_selection(r)
+            elif key == "permit":
+                if seen & 4:
+                    raise r.refuse("duplicate_field")
+                seen |= 4
+                v.permit = r.boolean()
+            else:
+                raise r.refuse("unknown_field")
+            r.ws()
+            if r.at() != _COMMA:
+                break
+            r.pos += 1
+    if r.at() != _RBRACE:
+        raise r.refuse("malformed")
+    r.pos += 1
+    r.depth -= 1
+    if seen & 7 != 7:
+        raise r.refuse("missing_field")
+    return v
+
+
+def _read_bundle_origin(r):
+    if r.at() != _LBRACE:
+        raise r.refuse("wrong_type")
+    r.enter()
+    r.pos += 1
+    v = BundleOrigin()
+    seen = 0
+    r.ws()
+    if r.at() != _RBRACE:
+        while True:
+            r.ws()
+            if r.at() != _QUOTE:
+                raise r.refuse("malformed")
+            key = r.string()
+            r.ws()
+            if r.at() != _COLON:
+                raise r.refuse("malformed")
+            r.pos += 1
+            r.ws()
+            if key == "id":
+                if seen & 1:
+                    raise r.refuse("duplicate_field")
+                seen |= 1
+                v.id = r.string()
+            elif key == "expansion":
+                if seen & 2:
+                    raise r.refuse("duplicate_field")
+                seen |= 2
+                v.expansion = _read_bundle_expansion(r)
+            else:
+                raise r.refuse("unknown_field")
+            r.ws()
+            if r.at() != _COMMA:
+                break
+            r.pos += 1
+    if r.at() != _RBRACE:
+        raise r.refuse("malformed")
+    r.pos += 1
+    r.depth -= 1
+    if seen & 3 != 3:
+        raise r.refuse("missing_field")
+    return v
+
+
+def _read_selector_rule_record(r):
+    if r.at() != _LBRACE:
+        raise r.refuse("wrong_type")
+    r.enter()
+    r.pos += 1
+    v = SelectorRuleRecord()
+    seen = 0
+    r.ws()
+    if r.at() != _RBRACE:
+        while True:
+            r.ws()
+            if r.at() != _QUOTE:
+                raise r.refuse("malformed")
+            key = r.string()
+            r.ws()
+            if r.at() != _COLON:
+                raise r.refuse("malformed")
+            r.pos += 1
+            r.ws()
+            if key == "rule":
+                if seen & 1:
+                    raise r.refuse("duplicate_field")
+                seen |= 1
+                v.rule = _read_selector_rule(r)
+            elif key == "set_by":
+                if seen & 2:
+                    raise r.refuse("duplicate_field")
+                seen |= 2
+                v.set_by = _read_subject(r)
+            elif key == "set_at":
+                if seen & 4:
+                    raise r.refuse("duplicate_field")
+                seen |= 4
+                v.set_at = r.string()
+            elif key == "why":
+                if seen & 8:
+                    raise r.refuse("duplicate_field")
+                seen |= 8
+                v.why = r.string()
+            elif key == "expires":
+                if seen & 16:
+                    raise r.refuse("duplicate_field")
+                seen |= 16
+                v.expires = r.string()
+            elif key == "bundle_origin":
+                if seen & 32:
+                    raise r.refuse("duplicate_field")
+                seen |= 32
+                v.bundle_origin = _read_bundle_origin(r)
+            else:
+                raise r.refuse("unknown_field")
+            r.ws()
+            if r.at() != _COMMA:
+                break
+            r.pos += 1
+    if r.at() != _RBRACE:
+        raise r.refuse("malformed")
+    r.pos += 1
+    r.depth -= 1
+    if seen & 31 != 31:
+        raise r.refuse("missing_field")
+    return v
+
+
+def _read_selector_rule_page(r):
+    if r.at() != _LBRACE:
+        raise r.refuse("wrong_type")
+    r.enter()
+    r.pos += 1
+    v = SelectorRulePage()
+    seen = 0
+    r.ws()
+    if r.at() != _RBRACE:
+        while True:
+            r.ws()
+            if r.at() != _QUOTE:
+                raise r.refuse("malformed")
+            key = r.string()
+            r.ws()
+            if r.at() != _COLON:
+                raise r.refuse("malformed")
+            r.pos += 1
+            r.ws()
+            if key == "outcome":
+                if seen & 1:
+                    raise r.refuse("duplicate_field")
+                seen |= 1
+                v.outcome = r.string()
+            elif key == "revision":
+                if seen & 2:
+                    raise r.refuse("duplicate_field")
+                seen |= 2
+                v.revision = r.string()
+            elif key == "records":
+                if seen & 4:
+                    raise r.refuse("duplicate_field")
+                seen |= 4
+                v.records = _read_list(r, _read_selector_rule_record)
+            elif key == "next":
+                if seen & 8:
+                    raise r.refuse("duplicate_field")
+                seen |= 8
+                v.next = r.string()
+            elif key == "complete":
+                if seen & 16:
+                    raise r.refuse("duplicate_field")
+                seen |= 16
+                v.complete = r.boolean()
+            else:
+                raise r.refuse("unknown_field")
+            r.ws()
+            if r.at() != _COMMA:
+                break
+            r.pos += 1
+    if r.at() != _RBRACE:
+        raise r.refuse("malformed")
+    r.pos += 1
+    r.depth -= 1
+    if seen & 31 != 31:
+        raise r.refuse("missing_field")
+    try:
+        v.outcome = PolicyPageOutcome(v.outcome)
+    except ValueError:
+        raise r.refuse("bad_enum") from None
+    return v
+
+
+def _read_selector_rule_read(r):
+    if r.at() != _LBRACE:
+        raise r.refuse("wrong_type")
+    r.enter()
+    r.pos += 1
+    v = SelectorRuleRead()
+    seen = 0
+    r.ws()
+    if r.at() != _RBRACE:
+        while True:
+            r.ws()
+            if r.at() != _QUOTE:
+                raise r.refuse("malformed")
+            key = r.string()
+            r.ws()
+            if r.at() != _COLON:
+                raise r.refuse("malformed")
+            r.pos += 1
+            r.ws()
+            if key == "outcome":
+                if seen & 1:
+                    raise r.refuse("duplicate_field")
+                seen |= 1
+                v.outcome = r.string()
+            elif key == "revision":
+                if seen & 2:
+                    raise r.refuse("duplicate_field")
+                seen |= 2
+                v.revision = r.string()
+            elif key == "record":
+                if seen & 4:
+                    raise r.refuse("duplicate_field")
+                seen |= 4
+                v.record = _read_selector_rule_record(r)
+            else:
+                raise r.refuse("unknown_field")
+            r.ws()
+            if r.at() != _COMMA:
+                break
+            r.pos += 1
+    if r.at() != _RBRACE:
+        raise r.refuse("malformed")
+    r.pos += 1
+    r.depth -= 1
+    if seen & 3 != 3:
+        raise r.refuse("missing_field")
+    try:
+        v.outcome = RuleReadOutcome(v.outcome)
+    except ValueError:
+        raise r.refuse("bad_enum") from None
+    return v
+
+
+def _read_selector_edit(r):
+    if r.at() != _LBRACE:
+        raise r.refuse("wrong_type")
+    r.enter()
+    r.pos += 1
+    v = SelectorEdit()
+    seen = 0
+    r.ws()
+    if r.at() != _RBRACE:
+        while True:
+            r.ws()
+            if r.at() != _QUOTE:
+                raise r.refuse("malformed")
+            key = r.string()
+            r.ws()
+            if r.at() != _COLON:
+                raise r.refuse("malformed")
+            r.pos += 1
+            r.ws()
+            if key == "outcome":
+                if seen & 1:
+                    raise r.refuse("duplicate_field")
+                seen |= 1
+                v.outcome = r.string()
+            elif key == "revision":
+                if seen & 2:
+                    raise r.refuse("duplicate_field")
+                seen |= 2
+                v.revision = r.string()
+            elif key == "current":
+                if seen & 4:
+                    raise r.refuse("duplicate_field")
+                seen |= 4
+                v.current = _read_list(r, _read_selector_rule_record)
+            elif key == "bundle_origin":
+                if seen & 8:
+                    raise r.refuse("duplicate_field")
+                seen |= 8
+                v.bundle_origin = _read_bundle_origin(r)
+            else:
+                raise r.refuse("unknown_field")
+            r.ws()
+            if r.at() != _COMMA:
+                break
+            r.pos += 1
+    if r.at() != _RBRACE:
+        raise r.refuse("malformed")
+    r.pos += 1
+    r.depth -= 1
+    if seen & 7 != 7:
+        raise r.refuse("missing_field")
+    try:
+        v.outcome = PolicyEditOutcome(v.outcome)
+    except ValueError:
+        raise r.refuse("bad_enum") from None
+    return v
+
+
+def _read_legacy_operation_request(r):
+    if r.at() != _LBRACE:
+        raise r.refuse("wrong_type")
+    r.enter()
+    r.pos += 1
+    v = LegacyOperationRequest()
+    seen = 0
+    r.ws()
+    if r.at() != _RBRACE:
+        while True:
+            r.ws()
+            if r.at() != _QUOTE:
+                raise r.refuse("malformed")
+            key = r.string()
+            r.ws()
+            if r.at() != _COLON:
+                raise r.refuse("malformed")
+            r.pos += 1
+            r.ws()
+            if key == "legacy_action":
+                if seen & 1:
+                    raise r.refuse("duplicate_field")
+                seen |= 1
+                v.legacy_action = r.string()
+            elif key == "legacy_resource":
+                if seen & 2:
+                    raise r.refuse("duplicate_field")
+                seen |= 2
+                v.legacy_resource = r.string()
+            elif key == "concrete_operation":
+                if seen & 4:
+                    raise r.refuse("duplicate_field")
+                seen |= 4
+                v.concrete_operation = _read_concrete_resource(r)
+            else:
+                raise r.refuse("unknown_field")
+            r.ws()
+            if r.at() != _COMMA:
+                break
+            r.pos += 1
+    if r.at() != _RBRACE:
+        raise r.refuse("malformed")
+    r.pos += 1
+    r.depth -= 1
+    if seen & 3 != 3:
+        raise r.refuse("missing_field")
+    return v
+
+
+def _read_oa_authorization_list_action_descriptions_arguments(r):
+    if r.at() != _LBRACE:
+        raise r.refuse("wrong_type")
+    r.enter()
+    r.pos += 1
+    v = _AuthorizationListActionDescriptionsArguments()
+    seen = 0
+    r.ws()
+    if r.at() != _RBRACE:
+        while True:
+            r.ws()
+            if r.at() != _QUOTE:
+                raise r.refuse("malformed")
+            key = r.string()
+            r.ws()
+            if r.at() != _COLON:
+                raise r.refuse("malformed")
+            r.pos += 1
+            r.ws()
+            if key == "cursor":
+                if seen & 1:
+                    raise r.refuse("duplicate_field")
+                seen |= 1
+                v.cursor = r.string()
+            elif key == "limit":
+                if seen & 2:
+                    raise r.refuse("duplicate_field")
+                seen |= 2
+                v.limit = r.integer(-9223372036854775808, 9223372036854775807)
+            else:
+                raise r.refuse("unknown_field")
+            r.ws()
+            if r.at() != _COMMA:
+                break
+            r.pos += 1
+    if r.at() != _RBRACE:
+        raise r.refuse("malformed")
+    r.pos += 1
+    r.depth -= 1
+    if seen & 3 != 3:
+        raise r.refuse("missing_field")
     return v
 
 
@@ -2583,6 +6562,94 @@ def _read_oa_authorization_decide_for_arguments(r):
     r.pos += 1
     r.depth -= 1
     if seen & 7 != 7:
+        raise r.refuse("missing_field")
+    return v
+
+
+def _read_oa_authorization_operator_register_described_action_arguments(r):
+    if r.at() != _LBRACE:
+        raise r.refuse("wrong_type")
+    r.enter()
+    r.pos += 1
+    v = _AuthorizationOperatorRegisterDescribedActionArguments()
+    seen = 0
+    r.ws()
+    if r.at() != _RBRACE:
+        while True:
+            r.ws()
+            if r.at() != _QUOTE:
+                raise r.refuse("malformed")
+            key = r.string()
+            r.ws()
+            if r.at() != _COLON:
+                raise r.refuse("malformed")
+            r.pos += 1
+            r.ws()
+            if key == "expected_revision":
+                if seen & 1:
+                    raise r.refuse("duplicate_field")
+                seen |= 1
+                v.expected_revision = r.string()
+            elif key == "description":
+                if seen & 2:
+                    raise r.refuse("duplicate_field")
+                seen |= 2
+                v.description = _read_action_description(r)
+            else:
+                raise r.refuse("unknown_field")
+            r.ws()
+            if r.at() != _COMMA:
+                break
+            r.pos += 1
+    if r.at() != _RBRACE:
+        raise r.refuse("malformed")
+    r.pos += 1
+    r.depth -= 1
+    if seen & 3 != 3:
+        raise r.refuse("missing_field")
+    return v
+
+
+def _read_oa_authorization_operator_apply_first_use_allow_arguments(r):
+    if r.at() != _LBRACE:
+        raise r.refuse("wrong_type")
+    r.enter()
+    r.pos += 1
+    v = _AuthorizationOperatorApplyFirstUseAllowArguments()
+    seen = 0
+    r.ws()
+    if r.at() != _RBRACE:
+        while True:
+            r.ws()
+            if r.at() != _QUOTE:
+                raise r.refuse("malformed")
+            key = r.string()
+            r.ws()
+            if r.at() != _COLON:
+                raise r.refuse("malformed")
+            r.pos += 1
+            r.ws()
+            if key == "expected_revision":
+                if seen & 1:
+                    raise r.refuse("duplicate_field")
+                seen |= 1
+                v.expected_revision = r.string()
+            elif key == "question_id":
+                if seen & 2:
+                    raise r.refuse("duplicate_field")
+                seen |= 2
+                v.question_id = r.string()
+            else:
+                raise r.refuse("unknown_field")
+            r.ws()
+            if r.at() != _COMMA:
+                break
+            r.pos += 1
+    if r.at() != _RBRACE:
+        raise r.refuse("malformed")
+    r.pos += 1
+    r.depth -= 1
+    if seen & 3 != 3:
         raise r.refuse("missing_field")
     return v
 
@@ -2729,6 +6796,119 @@ def _read_oa_authorization_operator_revoke_rule_arguments(r):
     return v
 
 
+def _read_oa_authorization_operator_stop_answerer_arguments(r):
+    if r.at() != _LBRACE:
+        raise r.refuse("wrong_type")
+    r.enter()
+    r.pos += 1
+    v = _AuthorizationOperatorStopAnswererArguments()
+    seen = 0
+    r.ws()
+    if r.at() != _RBRACE:
+        while True:
+            r.ws()
+            if r.at() != _QUOTE:
+                raise r.refuse("malformed")
+            key = r.string()
+            r.ws()
+            if r.at() != _COLON:
+                raise r.refuse("malformed")
+            r.pos += 1
+            r.ws()
+            if key == "expected_revision":
+                if seen & 1:
+                    raise r.refuse("duplicate_field")
+                seen |= 1
+                v.expected_revision = r.string()
+            elif key == "answerer":
+                if seen & 2:
+                    raise r.refuse("duplicate_field")
+                seen |= 2
+                v.answerer = _read_subject(r)
+            elif key == "also_revoke_grants":
+                if seen & 4:
+                    raise r.refuse("duplicate_field")
+                seen |= 4
+                v.also_revoke_grants = r.boolean()
+            else:
+                raise r.refuse("unknown_field")
+            r.ws()
+            if r.at() != _COMMA:
+                break
+            r.pos += 1
+    if r.at() != _RBRACE:
+        raise r.refuse("malformed")
+    r.pos += 1
+    r.depth -= 1
+    if seen & 7 != 7:
+        raise r.refuse("missing_field")
+    return v
+
+
+def _read_oa_authorization_operator_revoke_answer_permits_arguments(r):
+    if r.at() != _LBRACE:
+        raise r.refuse("wrong_type")
+    r.enter()
+    r.pos += 1
+    v = _AuthorizationOperatorRevokeAnswerPermitsArguments()
+    seen = 0
+    r.ws()
+    if r.at() != _RBRACE:
+        while True:
+            r.ws()
+            if r.at() != _QUOTE:
+                raise r.refuse("malformed")
+            key = r.string()
+            r.ws()
+            if r.at() != _COLON:
+                raise r.refuse("malformed")
+            r.pos += 1
+            r.ws()
+            if key == "expected_revision":
+                if seen & 1:
+                    raise r.refuse("duplicate_field")
+                seen |= 1
+                v.expected_revision = r.string()
+            elif key == "answerer":
+                if seen & 2:
+                    raise r.refuse("duplicate_field")
+                seen |= 2
+                v.answerer = _read_subject(r)
+            elif key == "target":
+                if seen & 4:
+                    raise r.refuse("duplicate_field")
+                seen |= 4
+                v.target = _read_subject(r)
+            elif key == "actions":
+                if seen & 8:
+                    raise r.refuse("duplicate_field")
+                seen |= 8
+                v.actions = r.str_list()
+            elif key == "resource":
+                if seen & 16:
+                    raise r.refuse("duplicate_field")
+                seen |= 16
+                v.resource = r.string()
+            elif key == "question_id":
+                if seen & 32:
+                    raise r.refuse("duplicate_field")
+                seen |= 32
+                v.question_id = r.string()
+            else:
+                raise r.refuse("unknown_field")
+            r.ws()
+            if r.at() != _COMMA:
+                break
+            r.pos += 1
+    if r.at() != _RBRACE:
+        raise r.refuse("malformed")
+    r.pos += 1
+    r.depth -= 1
+    if seen & 63 != 63:
+        raise r.refuse("missing_field")
+    return v
+
+
 def _read_oa_authorization_operator_set_rule_for_arguments(r):
     if r.at() != _LBRACE:
         raise r.refuse("wrong_type")
@@ -2758,6 +6938,60 @@ def _read_oa_authorization_operator_set_rule_for_arguments(r):
                     raise r.refuse("duplicate_field")
                 seen |= 2
                 v.rule = _read_policy_rule(r)
+            elif key == "ttl_ms":
+                if seen & 4:
+                    raise r.refuse("duplicate_field")
+                seen |= 4
+                v.ttl_ms = r.integer(-9223372036854775808, 9223372036854775807)
+            elif key == "why":
+                if seen & 8:
+                    raise r.refuse("duplicate_field")
+                seen |= 8
+                v.why = r.string()
+            else:
+                raise r.refuse("unknown_field")
+            r.ws()
+            if r.at() != _COMMA:
+                break
+            r.pos += 1
+    if r.at() != _RBRACE:
+        raise r.refuse("malformed")
+    r.pos += 1
+    r.depth -= 1
+    if seen & 15 != 15:
+        raise r.refuse("missing_field")
+    return v
+
+
+def _read_oa_authorization_operator_set_rules_for_arguments(r):
+    if r.at() != _LBRACE:
+        raise r.refuse("wrong_type")
+    r.enter()
+    r.pos += 1
+    v = _AuthorizationOperatorSetRulesForArguments()
+    seen = 0
+    r.ws()
+    if r.at() != _RBRACE:
+        while True:
+            r.ws()
+            if r.at() != _QUOTE:
+                raise r.refuse("malformed")
+            key = r.string()
+            r.ws()
+            if r.at() != _COLON:
+                raise r.refuse("malformed")
+            r.pos += 1
+            r.ws()
+            if key == "expected_revision":
+                if seen & 1:
+                    raise r.refuse("duplicate_field")
+                seen |= 1
+                v.expected_revision = r.string()
+            elif key == "rules":
+                if seen & 2:
+                    raise r.refuse("duplicate_field")
+                seen |= 2
+                v.rules = _read_list(r, _read_policy_rule)
             elif key == "ttl_ms":
                 if seen & 4:
                     raise r.refuse("duplicate_field")
@@ -2905,6 +7139,745 @@ def _read_oa_authorization_operator_retire_action_arguments(r):
                     raise r.refuse("duplicate_field")
                 seen |= 2
                 v.action = r.string()
+            else:
+                raise r.refuse("unknown_field")
+            r.ws()
+            if r.at() != _COMMA:
+                break
+            r.pos += 1
+    if r.at() != _RBRACE:
+        raise r.refuse("malformed")
+    r.pos += 1
+    r.depth -= 1
+    if seen & 3 != 3:
+        raise r.refuse("missing_field")
+    return v
+
+
+def _read_oa_authorization_operator_explain_for_arguments(r):
+    if r.at() != _LBRACE:
+        raise r.refuse("wrong_type")
+    r.enter()
+    r.pos += 1
+    v = _AuthorizationOperatorExplainForArguments()
+    seen = 0
+    r.ws()
+    if r.at() != _RBRACE:
+        while True:
+            r.ws()
+            if r.at() != _QUOTE:
+                raise r.refuse("malformed")
+            key = r.string()
+            r.ws()
+            if r.at() != _COLON:
+                raise r.refuse("malformed")
+            r.pos += 1
+            r.ws()
+            if key == "subject":
+                if seen & 1:
+                    raise r.refuse("duplicate_field")
+                seen |= 1
+                v.subject = _read_subject(r)
+            elif key == "action":
+                if seen & 2:
+                    raise r.refuse("duplicate_field")
+                seen |= 2
+                v.action = r.string()
+            elif key == "resource":
+                if seen & 4:
+                    raise r.refuse("duplicate_field")
+                seen |= 4
+                v.resource = r.string()
+            else:
+                raise r.refuse("unknown_field")
+            r.ws()
+            if r.at() != _COMMA:
+                break
+            r.pos += 1
+    if r.at() != _RBRACE:
+        raise r.refuse("malformed")
+    r.pos += 1
+    r.depth -= 1
+    if seen & 7 != 7:
+        raise r.refuse("missing_field")
+    return v
+
+
+def _read_oa_authorization_operator_list_defaults_arguments(r):
+    if r.at() != _LBRACE:
+        raise r.refuse("wrong_type")
+    r.enter()
+    r.pos += 1
+    v = _AuthorizationOperatorListDefaultsArguments()
+    seen = 0
+    r.ws()
+    if r.at() != _RBRACE:
+        while True:
+            r.ws()
+            if r.at() != _QUOTE:
+                raise r.refuse("malformed")
+            key = r.string()
+            r.ws()
+            if r.at() != _COLON:
+                raise r.refuse("malformed")
+            r.pos += 1
+            r.ws()
+            if False:
+                pass
+            else:
+                raise r.refuse("unknown_field")
+            r.ws()
+            if r.at() != _COMMA:
+                break
+            r.pos += 1
+    if r.at() != _RBRACE:
+        raise r.refuse("malformed")
+    r.pos += 1
+    r.depth -= 1
+    return v
+
+
+def _read_oa_authorization_operator_set_default_arguments(r):
+    if r.at() != _LBRACE:
+        raise r.refuse("wrong_type")
+    r.enter()
+    r.pos += 1
+    v = _AuthorizationOperatorSetDefaultArguments()
+    seen = 0
+    r.ws()
+    if r.at() != _RBRACE:
+        while True:
+            r.ws()
+            if r.at() != _QUOTE:
+                raise r.refuse("malformed")
+            key = r.string()
+            r.ws()
+            if r.at() != _COLON:
+                raise r.refuse("malformed")
+            r.pos += 1
+            r.ws()
+            if key == "expected_revision":
+                if seen & 1:
+                    raise r.refuse("duplicate_field")
+                seen |= 1
+                v.expected_revision = r.string()
+            elif key == "name":
+                if seen & 2:
+                    raise r.refuse("duplicate_field")
+                seen |= 2
+                v.name = r.string()
+            elif key == "on":
+                if seen & 4:
+                    raise r.refuse("duplicate_field")
+                seen |= 4
+                v.on = r.boolean()
+            else:
+                raise r.refuse("unknown_field")
+            r.ws()
+            if r.at() != _COMMA:
+                break
+            r.pos += 1
+    if r.at() != _RBRACE:
+        raise r.refuse("malformed")
+    r.pos += 1
+    r.depth -= 1
+    if seen & 7 != 7:
+        raise r.refuse("missing_field")
+    return v
+
+
+def _read_oa_selector_authorization_list_permission_definitions_arguments(r):
+    if r.at() != _LBRACE:
+        raise r.refuse("wrong_type")
+    r.enter()
+    r.pos += 1
+    v = _SelectorAuthorizationListPermissionDefinitionsArguments()
+    seen = 0
+    r.ws()
+    if r.at() != _RBRACE:
+        while True:
+            r.ws()
+            if r.at() != _QUOTE:
+                raise r.refuse("malformed")
+            key = r.string()
+            r.ws()
+            if r.at() != _COLON:
+                raise r.refuse("malformed")
+            r.pos += 1
+            r.ws()
+            if key == "cursor":
+                if seen & 1:
+                    raise r.refuse("duplicate_field")
+                seen |= 1
+                v.cursor = r.string()
+            elif key == "limit":
+                if seen & 2:
+                    raise r.refuse("duplicate_field")
+                seen |= 2
+                v.limit = r.integer(-9223372036854775808, 9223372036854775807)
+            else:
+                raise r.refuse("unknown_field")
+            r.ws()
+            if r.at() != _COMMA:
+                break
+            r.pos += 1
+    if r.at() != _RBRACE:
+        raise r.refuse("malformed")
+    r.pos += 1
+    r.depth -= 1
+    if seen & 3 != 3:
+        raise r.refuse("missing_field")
+    return v
+
+
+def _read_oa_selector_authorization_list_permission_bundles_arguments(r):
+    if r.at() != _LBRACE:
+        raise r.refuse("wrong_type")
+    r.enter()
+    r.pos += 1
+    v = _SelectorAuthorizationListPermissionBundlesArguments()
+    seen = 0
+    r.ws()
+    if r.at() != _RBRACE:
+        while True:
+            r.ws()
+            if r.at() != _QUOTE:
+                raise r.refuse("malformed")
+            key = r.string()
+            r.ws()
+            if r.at() != _COLON:
+                raise r.refuse("malformed")
+            r.pos += 1
+            r.ws()
+            if key == "cursor":
+                if seen & 1:
+                    raise r.refuse("duplicate_field")
+                seen |= 1
+                v.cursor = r.string()
+            elif key == "limit":
+                if seen & 2:
+                    raise r.refuse("duplicate_field")
+                seen |= 2
+                v.limit = r.integer(-9223372036854775808, 9223372036854775807)
+            else:
+                raise r.refuse("unknown_field")
+            r.ws()
+            if r.at() != _COMMA:
+                break
+            r.pos += 1
+    if r.at() != _RBRACE:
+        raise r.refuse("malformed")
+    r.pos += 1
+    r.depth -= 1
+    if seen & 3 != 3:
+        raise r.refuse("missing_field")
+    return v
+
+
+def _read_oa_selector_authorization_check_batch_arguments(r):
+    if r.at() != _LBRACE:
+        raise r.refuse("wrong_type")
+    r.enter()
+    r.pos += 1
+    v = _SelectorAuthorizationCheckBatchArguments()
+    seen = 0
+    r.ws()
+    if r.at() != _RBRACE:
+        while True:
+            r.ws()
+            if r.at() != _QUOTE:
+                raise r.refuse("malformed")
+            key = r.string()
+            r.ws()
+            if r.at() != _COLON:
+                raise r.refuse("malformed")
+            r.pos += 1
+            r.ws()
+            if key == "request":
+                if seen & 1:
+                    raise r.refuse("duplicate_field")
+                seen |= 1
+                v.request = _read_check_batch_request(r)
+            else:
+                raise r.refuse("unknown_field")
+            r.ws()
+            if r.at() != _COMMA:
+                break
+            r.pos += 1
+    if r.at() != _RBRACE:
+        raise r.refuse("malformed")
+    r.pos += 1
+    r.depth -= 1
+    if seen & 1 != 1:
+        raise r.refuse("missing_field")
+    return v
+
+
+def _read_oa_selector_authorization_check_batch_for_arguments(r):
+    if r.at() != _LBRACE:
+        raise r.refuse("wrong_type")
+    r.enter()
+    r.pos += 1
+    v = _SelectorAuthorizationCheckBatchForArguments()
+    seen = 0
+    r.ws()
+    if r.at() != _RBRACE:
+        while True:
+            r.ws()
+            if r.at() != _QUOTE:
+                raise r.refuse("malformed")
+            key = r.string()
+            r.ws()
+            if r.at() != _COLON:
+                raise r.refuse("malformed")
+            r.pos += 1
+            r.ws()
+            if key == "subject":
+                if seen & 1:
+                    raise r.refuse("duplicate_field")
+                seen |= 1
+                v.subject = _read_subject(r)
+            elif key == "request":
+                if seen & 2:
+                    raise r.refuse("duplicate_field")
+                seen |= 2
+                v.request = _read_check_batch_request(r)
+            else:
+                raise r.refuse("unknown_field")
+            r.ws()
+            if r.at() != _COMMA:
+                break
+            r.pos += 1
+    if r.at() != _RBRACE:
+        raise r.refuse("malformed")
+    r.pos += 1
+    r.depth -= 1
+    if seen & 3 != 3:
+        raise r.refuse("missing_field")
+    return v
+
+
+def _read_oa_selector_authorization_check_legacy_operation_for_arguments(r):
+    if r.at() != _LBRACE:
+        raise r.refuse("wrong_type")
+    r.enter()
+    r.pos += 1
+    v = _SelectorAuthorizationCheckLegacyOperationForArguments()
+    seen = 0
+    r.ws()
+    if r.at() != _RBRACE:
+        while True:
+            r.ws()
+            if r.at() != _QUOTE:
+                raise r.refuse("malformed")
+            key = r.string()
+            r.ws()
+            if r.at() != _COLON:
+                raise r.refuse("malformed")
+            r.pos += 1
+            r.ws()
+            if key == "subject":
+                if seen & 1:
+                    raise r.refuse("duplicate_field")
+                seen |= 1
+                v.subject = _read_subject(r)
+            elif key == "request":
+                if seen & 2:
+                    raise r.refuse("duplicate_field")
+                seen |= 2
+                v.request = _read_legacy_operation_request(r)
+            else:
+                raise r.refuse("unknown_field")
+            r.ws()
+            if r.at() != _COMMA:
+                break
+            r.pos += 1
+    if r.at() != _RBRACE:
+        raise r.refuse("malformed")
+    r.pos += 1
+    r.depth -= 1
+    if seen & 3 != 3:
+        raise r.refuse("missing_field")
+    return v
+
+
+def _read_oa_selector_authorization_operator_list_selector_rules_arguments(r):
+    if r.at() != _LBRACE:
+        raise r.refuse("wrong_type")
+    r.enter()
+    r.pos += 1
+    v = _SelectorAuthorizationOperatorListSelectorRulesArguments()
+    seen = 0
+    r.ws()
+    if r.at() != _RBRACE:
+        while True:
+            r.ws()
+            if r.at() != _QUOTE:
+                raise r.refuse("malformed")
+            key = r.string()
+            r.ws()
+            if r.at() != _COLON:
+                raise r.refuse("malformed")
+            r.pos += 1
+            r.ws()
+            if key == "cursor":
+                if seen & 1:
+                    raise r.refuse("duplicate_field")
+                seen |= 1
+                v.cursor = r.string()
+            elif key == "limit":
+                if seen & 2:
+                    raise r.refuse("duplicate_field")
+                seen |= 2
+                v.limit = r.integer(-9223372036854775808, 9223372036854775807)
+            else:
+                raise r.refuse("unknown_field")
+            r.ws()
+            if r.at() != _COMMA:
+                break
+            r.pos += 1
+    if r.at() != _RBRACE:
+        raise r.refuse("malformed")
+    r.pos += 1
+    r.depth -= 1
+    if seen & 3 != 3:
+        raise r.refuse("missing_field")
+    return v
+
+
+def _read_oa_selector_authorization_operator_read_selector_rule_arguments(r):
+    if r.at() != _LBRACE:
+        raise r.refuse("wrong_type")
+    r.enter()
+    r.pos += 1
+    v = _SelectorAuthorizationOperatorReadSelectorRuleArguments()
+    seen = 0
+    r.ws()
+    if r.at() != _RBRACE:
+        while True:
+            r.ws()
+            if r.at() != _QUOTE:
+                raise r.refuse("malformed")
+            key = r.string()
+            r.ws()
+            if r.at() != _COLON:
+                raise r.refuse("malformed")
+            r.pos += 1
+            r.ws()
+            if key == "subject":
+                if seen & 1:
+                    raise r.refuse("duplicate_field")
+                seen |= 1
+                v.subject = _read_subject(r)
+            elif key == "selection":
+                if seen & 2:
+                    raise r.refuse("duplicate_field")
+                seen |= 2
+                v.selection = _read_permission_selection(r)
+            else:
+                raise r.refuse("unknown_field")
+            r.ws()
+            if r.at() != _COMMA:
+                break
+            r.pos += 1
+    if r.at() != _RBRACE:
+        raise r.refuse("malformed")
+    r.pos += 1
+    r.depth -= 1
+    if seen & 3 != 3:
+        raise r.refuse("missing_field")
+    return v
+
+
+def _read_oa_selector_authorization_operator_set_selector_rule_arguments(r):
+    if r.at() != _LBRACE:
+        raise r.refuse("wrong_type")
+    r.enter()
+    r.pos += 1
+    v = _SelectorAuthorizationOperatorSetSelectorRuleArguments()
+    seen = 0
+    r.ws()
+    if r.at() != _RBRACE:
+        while True:
+            r.ws()
+            if r.at() != _QUOTE:
+                raise r.refuse("malformed")
+            key = r.string()
+            r.ws()
+            if r.at() != _COLON:
+                raise r.refuse("malformed")
+            r.pos += 1
+            r.ws()
+            if key == "expected_revision":
+                if seen & 1:
+                    raise r.refuse("duplicate_field")
+                seen |= 1
+                v.expected_revision = r.string()
+            elif key == "rule":
+                if seen & 2:
+                    raise r.refuse("duplicate_field")
+                seen |= 2
+                v.rule = _read_selector_rule(r)
+            elif key == "ttl_ms":
+                if seen & 4:
+                    raise r.refuse("duplicate_field")
+                seen |= 4
+                v.ttl_ms = r.integer(-9223372036854775808, 9223372036854775807)
+            elif key == "why":
+                if seen & 8:
+                    raise r.refuse("duplicate_field")
+                seen |= 8
+                v.why = r.string()
+            else:
+                raise r.refuse("unknown_field")
+            r.ws()
+            if r.at() != _COMMA:
+                break
+            r.pos += 1
+    if r.at() != _RBRACE:
+        raise r.refuse("malformed")
+    r.pos += 1
+    r.depth -= 1
+    if seen & 15 != 15:
+        raise r.refuse("missing_field")
+    return v
+
+
+def _read_oa_selector_authorization_operator_remove_selector_rule_arguments(r):
+    if r.at() != _LBRACE:
+        raise r.refuse("wrong_type")
+    r.enter()
+    r.pos += 1
+    v = _SelectorAuthorizationOperatorRemoveSelectorRuleArguments()
+    seen = 0
+    r.ws()
+    if r.at() != _RBRACE:
+        while True:
+            r.ws()
+            if r.at() != _QUOTE:
+                raise r.refuse("malformed")
+            key = r.string()
+            r.ws()
+            if r.at() != _COLON:
+                raise r.refuse("malformed")
+            r.pos += 1
+            r.ws()
+            if key == "expected_revision":
+                if seen & 1:
+                    raise r.refuse("duplicate_field")
+                seen |= 1
+                v.expected_revision = r.string()
+            elif key == "subject":
+                if seen & 2:
+                    raise r.refuse("duplicate_field")
+                seen |= 2
+                v.subject = _read_subject(r)
+            elif key == "selection":
+                if seen & 4:
+                    raise r.refuse("duplicate_field")
+                seen |= 4
+                v.selection = _read_permission_selection(r)
+            else:
+                raise r.refuse("unknown_field")
+            r.ws()
+            if r.at() != _COMMA:
+                break
+            r.pos += 1
+    if r.at() != _RBRACE:
+        raise r.refuse("malformed")
+    r.pos += 1
+    r.depth -= 1
+    if seen & 7 != 7:
+        raise r.refuse("missing_field")
+    return v
+
+
+def _read_oa_selector_authorization_operator_apply_bundle_arguments(r):
+    if r.at() != _LBRACE:
+        raise r.refuse("wrong_type")
+    r.enter()
+    r.pos += 1
+    v = _SelectorAuthorizationOperatorApplyBundleArguments()
+    seen = 0
+    r.ws()
+    if r.at() != _RBRACE:
+        while True:
+            r.ws()
+            if r.at() != _QUOTE:
+                raise r.refuse("malformed")
+            key = r.string()
+            r.ws()
+            if r.at() != _COLON:
+                raise r.refuse("malformed")
+            r.pos += 1
+            r.ws()
+            if key == "expected_revision":
+                if seen & 1:
+                    raise r.refuse("duplicate_field")
+                seen |= 1
+                v.expected_revision = r.string()
+            elif key == "subject":
+                if seen & 2:
+                    raise r.refuse("duplicate_field")
+                seen |= 2
+                v.subject = _read_subject(r)
+            elif key == "bundle_ref":
+                if seen & 4:
+                    raise r.refuse("duplicate_field")
+                seen |= 4
+                v.bundle_ref = r.string()
+            elif key == "selector":
+                if seen & 8:
+                    raise r.refuse("duplicate_field")
+                seen |= 8
+                v.selector = _read_resource_selector(r)
+            elif key == "ttl_ms":
+                if seen & 16:
+                    raise r.refuse("duplicate_field")
+                seen |= 16
+                v.ttl_ms = r.integer(-9223372036854775808, 9223372036854775807)
+            elif key == "why":
+                if seen & 32:
+                    raise r.refuse("duplicate_field")
+                seen |= 32
+                v.why = r.string()
+            else:
+                raise r.refuse("unknown_field")
+            r.ws()
+            if r.at() != _COMMA:
+                break
+            r.pos += 1
+    if r.at() != _RBRACE:
+        raise r.refuse("malformed")
+    r.pos += 1
+    r.depth -= 1
+    if seen & 63 != 63:
+        raise r.refuse("missing_field")
+    return v
+
+
+def _read_oa_selector_authorization_operator_remove_bundle_arguments(r):
+    if r.at() != _LBRACE:
+        raise r.refuse("wrong_type")
+    r.enter()
+    r.pos += 1
+    v = _SelectorAuthorizationOperatorRemoveBundleArguments()
+    seen = 0
+    r.ws()
+    if r.at() != _RBRACE:
+        while True:
+            r.ws()
+            if r.at() != _QUOTE:
+                raise r.refuse("malformed")
+            key = r.string()
+            r.ws()
+            if r.at() != _COLON:
+                raise r.refuse("malformed")
+            r.pos += 1
+            r.ws()
+            if key == "expected_revision":
+                if seen & 1:
+                    raise r.refuse("duplicate_field")
+                seen |= 1
+                v.expected_revision = r.string()
+            elif key == "subject":
+                if seen & 2:
+                    raise r.refuse("duplicate_field")
+                seen |= 2
+                v.subject = _read_subject(r)
+            elif key == "origin_id":
+                if seen & 4:
+                    raise r.refuse("duplicate_field")
+                seen |= 4
+                v.origin_id = r.string()
+            else:
+                raise r.refuse("unknown_field")
+            r.ws()
+            if r.at() != _COMMA:
+                break
+            r.pos += 1
+    if r.at() != _RBRACE:
+        raise r.refuse("malformed")
+    r.pos += 1
+    r.depth -= 1
+    if seen & 7 != 7:
+        raise r.refuse("missing_field")
+    return v
+
+
+def _read_oa_selector_authorization_operator_apply_permission_allow_arguments(r):
+    if r.at() != _LBRACE:
+        raise r.refuse("wrong_type")
+    r.enter()
+    r.pos += 1
+    v = _SelectorAuthorizationOperatorApplyPermissionAllowArguments()
+    seen = 0
+    r.ws()
+    if r.at() != _RBRACE:
+        while True:
+            r.ws()
+            if r.at() != _QUOTE:
+                raise r.refuse("malformed")
+            key = r.string()
+            r.ws()
+            if r.at() != _COLON:
+                raise r.refuse("malformed")
+            r.pos += 1
+            r.ws()
+            if key == "expected_revision":
+                if seen & 1:
+                    raise r.refuse("duplicate_field")
+                seen |= 1
+                v.expected_revision = r.string()
+            elif key == "question_id":
+                if seen & 2:
+                    raise r.refuse("duplicate_field")
+                seen |= 2
+                v.question_id = r.string()
+            else:
+                raise r.refuse("unknown_field")
+            r.ws()
+            if r.at() != _COMMA:
+                break
+            r.pos += 1
+    if r.at() != _RBRACE:
+        raise r.refuse("malformed")
+    r.pos += 1
+    r.depth -= 1
+    if seen & 3 != 3:
+        raise r.refuse("missing_field")
+    return v
+
+
+def _read_oa_selector_authorization_operator_undo_permission_effect_arguments(r):
+    if r.at() != _LBRACE:
+        raise r.refuse("wrong_type")
+    r.enter()
+    r.pos += 1
+    v = _SelectorAuthorizationOperatorUndoPermissionEffectArguments()
+    seen = 0
+    r.ws()
+    if r.at() != _RBRACE:
+        while True:
+            r.ws()
+            if r.at() != _QUOTE:
+                raise r.refuse("malformed")
+            key = r.string()
+            r.ws()
+            if r.at() != _COLON:
+                raise r.refuse("malformed")
+            r.pos += 1
+            r.ws()
+            if key == "expected_revision":
+                if seen & 1:
+                    raise r.refuse("duplicate_field")
+                seen |= 1
+                v.expected_revision = r.string()
+            elif key == "question_id":
+                if seen & 2:
+                    raise r.refuse("duplicate_field")
+                seen |= 2
+                v.question_id = r.string()
             else:
                 raise r.refuse("unknown_field")
             r.ws()
@@ -3077,6 +8050,45 @@ def _read_oa_service_error(r):
     return v
 
 
+def _read_oa_authorization_list_action_descriptions_result(r):
+    if r.at() != _LBRACE:
+        raise r.refuse("wrong_type")
+    r.enter()
+    r.pos += 1
+    v = _AuthorizationListActionDescriptionsResult()
+    seen = 0
+    r.ws()
+    if r.at() != _RBRACE:
+        while True:
+            r.ws()
+            if r.at() != _QUOTE:
+                raise r.refuse("malformed")
+            key = r.string()
+            r.ws()
+            if r.at() != _COLON:
+                raise r.refuse("malformed")
+            r.pos += 1
+            r.ws()
+            if key == "value":
+                if seen & 1:
+                    raise r.refuse("duplicate_field")
+                seen |= 1
+                v.value = _read_description_page(r)
+            else:
+                raise r.refuse("unknown_field")
+            r.ws()
+            if r.at() != _COMMA:
+                break
+            r.pos += 1
+    if r.at() != _RBRACE:
+        raise r.refuse("malformed")
+    r.pos += 1
+    r.depth -= 1
+    if seen & 1 != 1:
+        raise r.refuse("missing_field")
+    return v
+
+
 def _read_oa_authorization_decide_result(r):
     if r.at() != _LBRACE:
         raise r.refuse("wrong_type")
@@ -3140,6 +8152,84 @@ def _read_oa_authorization_decide_for_result(r):
                     raise r.refuse("duplicate_field")
                 seen |= 1
                 v.value = _read_decision(r)
+            else:
+                raise r.refuse("unknown_field")
+            r.ws()
+            if r.at() != _COMMA:
+                break
+            r.pos += 1
+    if r.at() != _RBRACE:
+        raise r.refuse("malformed")
+    r.pos += 1
+    r.depth -= 1
+    if seen & 1 != 1:
+        raise r.refuse("missing_field")
+    return v
+
+
+def _read_oa_authorization_operator_register_described_action_result(r):
+    if r.at() != _LBRACE:
+        raise r.refuse("wrong_type")
+    r.enter()
+    r.pos += 1
+    v = _AuthorizationOperatorRegisterDescribedActionResult()
+    seen = 0
+    r.ws()
+    if r.at() != _RBRACE:
+        while True:
+            r.ws()
+            if r.at() != _QUOTE:
+                raise r.refuse("malformed")
+            key = r.string()
+            r.ws()
+            if r.at() != _COLON:
+                raise r.refuse("malformed")
+            r.pos += 1
+            r.ws()
+            if key == "value":
+                if seen & 1:
+                    raise r.refuse("duplicate_field")
+                seen |= 1
+                v.value = _read_description_edit(r)
+            else:
+                raise r.refuse("unknown_field")
+            r.ws()
+            if r.at() != _COMMA:
+                break
+            r.pos += 1
+    if r.at() != _RBRACE:
+        raise r.refuse("malformed")
+    r.pos += 1
+    r.depth -= 1
+    if seen & 1 != 1:
+        raise r.refuse("missing_field")
+    return v
+
+
+def _read_oa_authorization_operator_apply_first_use_allow_result(r):
+    if r.at() != _LBRACE:
+        raise r.refuse("wrong_type")
+    r.enter()
+    r.pos += 1
+    v = _AuthorizationOperatorApplyFirstUseAllowResult()
+    seen = 0
+    r.ws()
+    if r.at() != _RBRACE:
+        while True:
+            r.ws()
+            if r.at() != _QUOTE:
+                raise r.refuse("malformed")
+            key = r.string()
+            r.ws()
+            if r.at() != _COLON:
+                raise r.refuse("malformed")
+            r.pos += 1
+            r.ws()
+            if key == "value":
+                if seen & 1:
+                    raise r.refuse("duplicate_field")
+                seen |= 1
+                v.value = _read_policy_edit(r)
             else:
                 raise r.refuse("unknown_field")
             r.ws()
@@ -3272,12 +8362,129 @@ def _read_oa_authorization_operator_revoke_rule_result(r):
     return v
 
 
+def _read_oa_authorization_operator_stop_answerer_result(r):
+    if r.at() != _LBRACE:
+        raise r.refuse("wrong_type")
+    r.enter()
+    r.pos += 1
+    v = _AuthorizationOperatorStopAnswererResult()
+    seen = 0
+    r.ws()
+    if r.at() != _RBRACE:
+        while True:
+            r.ws()
+            if r.at() != _QUOTE:
+                raise r.refuse("malformed")
+            key = r.string()
+            r.ws()
+            if r.at() != _COLON:
+                raise r.refuse("malformed")
+            r.pos += 1
+            r.ws()
+            if key == "value":
+                if seen & 1:
+                    raise r.refuse("duplicate_field")
+                seen |= 1
+                v.value = _read_policy_edit(r)
+            else:
+                raise r.refuse("unknown_field")
+            r.ws()
+            if r.at() != _COMMA:
+                break
+            r.pos += 1
+    if r.at() != _RBRACE:
+        raise r.refuse("malformed")
+    r.pos += 1
+    r.depth -= 1
+    if seen & 1 != 1:
+        raise r.refuse("missing_field")
+    return v
+
+
+def _read_oa_authorization_operator_revoke_answer_permits_result(r):
+    if r.at() != _LBRACE:
+        raise r.refuse("wrong_type")
+    r.enter()
+    r.pos += 1
+    v = _AuthorizationOperatorRevokeAnswerPermitsResult()
+    seen = 0
+    r.ws()
+    if r.at() != _RBRACE:
+        while True:
+            r.ws()
+            if r.at() != _QUOTE:
+                raise r.refuse("malformed")
+            key = r.string()
+            r.ws()
+            if r.at() != _COLON:
+                raise r.refuse("malformed")
+            r.pos += 1
+            r.ws()
+            if key == "value":
+                if seen & 1:
+                    raise r.refuse("duplicate_field")
+                seen |= 1
+                v.value = _read_policy_edit(r)
+            else:
+                raise r.refuse("unknown_field")
+            r.ws()
+            if r.at() != _COMMA:
+                break
+            r.pos += 1
+    if r.at() != _RBRACE:
+        raise r.refuse("malformed")
+    r.pos += 1
+    r.depth -= 1
+    if seen & 1 != 1:
+        raise r.refuse("missing_field")
+    return v
+
+
 def _read_oa_authorization_operator_set_rule_for_result(r):
     if r.at() != _LBRACE:
         raise r.refuse("wrong_type")
     r.enter()
     r.pos += 1
     v = _AuthorizationOperatorSetRuleForResult()
+    seen = 0
+    r.ws()
+    if r.at() != _RBRACE:
+        while True:
+            r.ws()
+            if r.at() != _QUOTE:
+                raise r.refuse("malformed")
+            key = r.string()
+            r.ws()
+            if r.at() != _COLON:
+                raise r.refuse("malformed")
+            r.pos += 1
+            r.ws()
+            if key == "value":
+                if seen & 1:
+                    raise r.refuse("duplicate_field")
+                seen |= 1
+                v.value = _read_policy_edit(r)
+            else:
+                raise r.refuse("unknown_field")
+            r.ws()
+            if r.at() != _COMMA:
+                break
+            r.pos += 1
+    if r.at() != _RBRACE:
+        raise r.refuse("malformed")
+    r.pos += 1
+    r.depth -= 1
+    if seen & 1 != 1:
+        raise r.refuse("missing_field")
+    return v
+
+
+def _read_oa_authorization_operator_set_rules_for_result(r):
+    if r.at() != _LBRACE:
+        raise r.refuse("wrong_type")
+    r.enter()
+    r.pos += 1
+    v = _AuthorizationOperatorSetRulesForResult()
     seen = 0
     r.ws()
     if r.at() != _RBRACE:
@@ -3428,6 +8635,630 @@ def _read_oa_authorization_operator_retire_action_result(r):
     return v
 
 
+def _read_oa_authorization_operator_explain_for_result(r):
+    if r.at() != _LBRACE:
+        raise r.refuse("wrong_type")
+    r.enter()
+    r.pos += 1
+    v = _AuthorizationOperatorExplainForResult()
+    seen = 0
+    r.ws()
+    if r.at() != _RBRACE:
+        while True:
+            r.ws()
+            if r.at() != _QUOTE:
+                raise r.refuse("malformed")
+            key = r.string()
+            r.ws()
+            if r.at() != _COLON:
+                raise r.refuse("malformed")
+            r.pos += 1
+            r.ws()
+            if key == "value":
+                if seen & 1:
+                    raise r.refuse("duplicate_field")
+                seen |= 1
+                v.value = _read_decision_explanation(r)
+            else:
+                raise r.refuse("unknown_field")
+            r.ws()
+            if r.at() != _COMMA:
+                break
+            r.pos += 1
+    if r.at() != _RBRACE:
+        raise r.refuse("malformed")
+    r.pos += 1
+    r.depth -= 1
+    if seen & 1 != 1:
+        raise r.refuse("missing_field")
+    return v
+
+
+def _read_oa_authorization_operator_list_defaults_result(r):
+    if r.at() != _LBRACE:
+        raise r.refuse("wrong_type")
+    r.enter()
+    r.pos += 1
+    v = _AuthorizationOperatorListDefaultsResult()
+    seen = 0
+    r.ws()
+    if r.at() != _RBRACE:
+        while True:
+            r.ws()
+            if r.at() != _QUOTE:
+                raise r.refuse("malformed")
+            key = r.string()
+            r.ws()
+            if r.at() != _COLON:
+                raise r.refuse("malformed")
+            r.pos += 1
+            r.ws()
+            if key == "value":
+                if seen & 1:
+                    raise r.refuse("duplicate_field")
+                seen |= 1
+                v.value = _read_default_page(r)
+            else:
+                raise r.refuse("unknown_field")
+            r.ws()
+            if r.at() != _COMMA:
+                break
+            r.pos += 1
+    if r.at() != _RBRACE:
+        raise r.refuse("malformed")
+    r.pos += 1
+    r.depth -= 1
+    if seen & 1 != 1:
+        raise r.refuse("missing_field")
+    return v
+
+
+def _read_oa_authorization_operator_set_default_result(r):
+    if r.at() != _LBRACE:
+        raise r.refuse("wrong_type")
+    r.enter()
+    r.pos += 1
+    v = _AuthorizationOperatorSetDefaultResult()
+    seen = 0
+    r.ws()
+    if r.at() != _RBRACE:
+        while True:
+            r.ws()
+            if r.at() != _QUOTE:
+                raise r.refuse("malformed")
+            key = r.string()
+            r.ws()
+            if r.at() != _COLON:
+                raise r.refuse("malformed")
+            r.pos += 1
+            r.ws()
+            if key == "value":
+                if seen & 1:
+                    raise r.refuse("duplicate_field")
+                seen |= 1
+                v.value = _read_default_edit(r)
+            else:
+                raise r.refuse("unknown_field")
+            r.ws()
+            if r.at() != _COMMA:
+                break
+            r.pos += 1
+    if r.at() != _RBRACE:
+        raise r.refuse("malformed")
+    r.pos += 1
+    r.depth -= 1
+    if seen & 1 != 1:
+        raise r.refuse("missing_field")
+    return v
+
+
+def _read_oa_selector_authorization_list_permission_definitions_result(r):
+    if r.at() != _LBRACE:
+        raise r.refuse("wrong_type")
+    r.enter()
+    r.pos += 1
+    v = _SelectorAuthorizationListPermissionDefinitionsResult()
+    seen = 0
+    r.ws()
+    if r.at() != _RBRACE:
+        while True:
+            r.ws()
+            if r.at() != _QUOTE:
+                raise r.refuse("malformed")
+            key = r.string()
+            r.ws()
+            if r.at() != _COLON:
+                raise r.refuse("malformed")
+            r.pos += 1
+            r.ws()
+            if key == "value":
+                if seen & 1:
+                    raise r.refuse("duplicate_field")
+                seen |= 1
+                v.value = _read_permission_definition_page(r)
+            else:
+                raise r.refuse("unknown_field")
+            r.ws()
+            if r.at() != _COMMA:
+                break
+            r.pos += 1
+    if r.at() != _RBRACE:
+        raise r.refuse("malformed")
+    r.pos += 1
+    r.depth -= 1
+    if seen & 1 != 1:
+        raise r.refuse("missing_field")
+    return v
+
+
+def _read_oa_selector_authorization_list_permission_bundles_result(r):
+    if r.at() != _LBRACE:
+        raise r.refuse("wrong_type")
+    r.enter()
+    r.pos += 1
+    v = _SelectorAuthorizationListPermissionBundlesResult()
+    seen = 0
+    r.ws()
+    if r.at() != _RBRACE:
+        while True:
+            r.ws()
+            if r.at() != _QUOTE:
+                raise r.refuse("malformed")
+            key = r.string()
+            r.ws()
+            if r.at() != _COLON:
+                raise r.refuse("malformed")
+            r.pos += 1
+            r.ws()
+            if key == "value":
+                if seen & 1:
+                    raise r.refuse("duplicate_field")
+                seen |= 1
+                v.value = _read_permission_bundle_page(r)
+            else:
+                raise r.refuse("unknown_field")
+            r.ws()
+            if r.at() != _COMMA:
+                break
+            r.pos += 1
+    if r.at() != _RBRACE:
+        raise r.refuse("malformed")
+    r.pos += 1
+    r.depth -= 1
+    if seen & 1 != 1:
+        raise r.refuse("missing_field")
+    return v
+
+
+def _read_oa_selector_authorization_check_batch_result(r):
+    if r.at() != _LBRACE:
+        raise r.refuse("wrong_type")
+    r.enter()
+    r.pos += 1
+    v = _SelectorAuthorizationCheckBatchResult()
+    seen = 0
+    r.ws()
+    if r.at() != _RBRACE:
+        while True:
+            r.ws()
+            if r.at() != _QUOTE:
+                raise r.refuse("malformed")
+            key = r.string()
+            r.ws()
+            if r.at() != _COLON:
+                raise r.refuse("malformed")
+            r.pos += 1
+            r.ws()
+            if key == "value":
+                if seen & 1:
+                    raise r.refuse("duplicate_field")
+                seen |= 1
+                v.value = _read_batch_decision(r)
+            else:
+                raise r.refuse("unknown_field")
+            r.ws()
+            if r.at() != _COMMA:
+                break
+            r.pos += 1
+    if r.at() != _RBRACE:
+        raise r.refuse("malformed")
+    r.pos += 1
+    r.depth -= 1
+    if seen & 1 != 1:
+        raise r.refuse("missing_field")
+    return v
+
+
+def _read_oa_selector_authorization_check_batch_for_result(r):
+    if r.at() != _LBRACE:
+        raise r.refuse("wrong_type")
+    r.enter()
+    r.pos += 1
+    v = _SelectorAuthorizationCheckBatchForResult()
+    seen = 0
+    r.ws()
+    if r.at() != _RBRACE:
+        while True:
+            r.ws()
+            if r.at() != _QUOTE:
+                raise r.refuse("malformed")
+            key = r.string()
+            r.ws()
+            if r.at() != _COLON:
+                raise r.refuse("malformed")
+            r.pos += 1
+            r.ws()
+            if key == "value":
+                if seen & 1:
+                    raise r.refuse("duplicate_field")
+                seen |= 1
+                v.value = _read_batch_decision(r)
+            else:
+                raise r.refuse("unknown_field")
+            r.ws()
+            if r.at() != _COMMA:
+                break
+            r.pos += 1
+    if r.at() != _RBRACE:
+        raise r.refuse("malformed")
+    r.pos += 1
+    r.depth -= 1
+    if seen & 1 != 1:
+        raise r.refuse("missing_field")
+    return v
+
+
+def _read_oa_selector_authorization_check_legacy_operation_for_result(r):
+    if r.at() != _LBRACE:
+        raise r.refuse("wrong_type")
+    r.enter()
+    r.pos += 1
+    v = _SelectorAuthorizationCheckLegacyOperationForResult()
+    seen = 0
+    r.ws()
+    if r.at() != _RBRACE:
+        while True:
+            r.ws()
+            if r.at() != _QUOTE:
+                raise r.refuse("malformed")
+            key = r.string()
+            r.ws()
+            if r.at() != _COLON:
+                raise r.refuse("malformed")
+            r.pos += 1
+            r.ws()
+            if key == "value":
+                if seen & 1:
+                    raise r.refuse("duplicate_field")
+                seen |= 1
+                v.value = _read_decision(r)
+            else:
+                raise r.refuse("unknown_field")
+            r.ws()
+            if r.at() != _COMMA:
+                break
+            r.pos += 1
+    if r.at() != _RBRACE:
+        raise r.refuse("malformed")
+    r.pos += 1
+    r.depth -= 1
+    if seen & 1 != 1:
+        raise r.refuse("missing_field")
+    return v
+
+
+def _read_oa_selector_authorization_operator_list_selector_rules_result(r):
+    if r.at() != _LBRACE:
+        raise r.refuse("wrong_type")
+    r.enter()
+    r.pos += 1
+    v = _SelectorAuthorizationOperatorListSelectorRulesResult()
+    seen = 0
+    r.ws()
+    if r.at() != _RBRACE:
+        while True:
+            r.ws()
+            if r.at() != _QUOTE:
+                raise r.refuse("malformed")
+            key = r.string()
+            r.ws()
+            if r.at() != _COLON:
+                raise r.refuse("malformed")
+            r.pos += 1
+            r.ws()
+            if key == "value":
+                if seen & 1:
+                    raise r.refuse("duplicate_field")
+                seen |= 1
+                v.value = _read_selector_rule_page(r)
+            else:
+                raise r.refuse("unknown_field")
+            r.ws()
+            if r.at() != _COMMA:
+                break
+            r.pos += 1
+    if r.at() != _RBRACE:
+        raise r.refuse("malformed")
+    r.pos += 1
+    r.depth -= 1
+    if seen & 1 != 1:
+        raise r.refuse("missing_field")
+    return v
+
+
+def _read_oa_selector_authorization_operator_read_selector_rule_result(r):
+    if r.at() != _LBRACE:
+        raise r.refuse("wrong_type")
+    r.enter()
+    r.pos += 1
+    v = _SelectorAuthorizationOperatorReadSelectorRuleResult()
+    seen = 0
+    r.ws()
+    if r.at() != _RBRACE:
+        while True:
+            r.ws()
+            if r.at() != _QUOTE:
+                raise r.refuse("malformed")
+            key = r.string()
+            r.ws()
+            if r.at() != _COLON:
+                raise r.refuse("malformed")
+            r.pos += 1
+            r.ws()
+            if key == "value":
+                if seen & 1:
+                    raise r.refuse("duplicate_field")
+                seen |= 1
+                v.value = _read_selector_rule_read(r)
+            else:
+                raise r.refuse("unknown_field")
+            r.ws()
+            if r.at() != _COMMA:
+                break
+            r.pos += 1
+    if r.at() != _RBRACE:
+        raise r.refuse("malformed")
+    r.pos += 1
+    r.depth -= 1
+    if seen & 1 != 1:
+        raise r.refuse("missing_field")
+    return v
+
+
+def _read_oa_selector_authorization_operator_set_selector_rule_result(r):
+    if r.at() != _LBRACE:
+        raise r.refuse("wrong_type")
+    r.enter()
+    r.pos += 1
+    v = _SelectorAuthorizationOperatorSetSelectorRuleResult()
+    seen = 0
+    r.ws()
+    if r.at() != _RBRACE:
+        while True:
+            r.ws()
+            if r.at() != _QUOTE:
+                raise r.refuse("malformed")
+            key = r.string()
+            r.ws()
+            if r.at() != _COLON:
+                raise r.refuse("malformed")
+            r.pos += 1
+            r.ws()
+            if key == "value":
+                if seen & 1:
+                    raise r.refuse("duplicate_field")
+                seen |= 1
+                v.value = _read_selector_edit(r)
+            else:
+                raise r.refuse("unknown_field")
+            r.ws()
+            if r.at() != _COMMA:
+                break
+            r.pos += 1
+    if r.at() != _RBRACE:
+        raise r.refuse("malformed")
+    r.pos += 1
+    r.depth -= 1
+    if seen & 1 != 1:
+        raise r.refuse("missing_field")
+    return v
+
+
+def _read_oa_selector_authorization_operator_remove_selector_rule_result(r):
+    if r.at() != _LBRACE:
+        raise r.refuse("wrong_type")
+    r.enter()
+    r.pos += 1
+    v = _SelectorAuthorizationOperatorRemoveSelectorRuleResult()
+    seen = 0
+    r.ws()
+    if r.at() != _RBRACE:
+        while True:
+            r.ws()
+            if r.at() != _QUOTE:
+                raise r.refuse("malformed")
+            key = r.string()
+            r.ws()
+            if r.at() != _COLON:
+                raise r.refuse("malformed")
+            r.pos += 1
+            r.ws()
+            if key == "value":
+                if seen & 1:
+                    raise r.refuse("duplicate_field")
+                seen |= 1
+                v.value = _read_selector_edit(r)
+            else:
+                raise r.refuse("unknown_field")
+            r.ws()
+            if r.at() != _COMMA:
+                break
+            r.pos += 1
+    if r.at() != _RBRACE:
+        raise r.refuse("malformed")
+    r.pos += 1
+    r.depth -= 1
+    if seen & 1 != 1:
+        raise r.refuse("missing_field")
+    return v
+
+
+def _read_oa_selector_authorization_operator_apply_bundle_result(r):
+    if r.at() != _LBRACE:
+        raise r.refuse("wrong_type")
+    r.enter()
+    r.pos += 1
+    v = _SelectorAuthorizationOperatorApplyBundleResult()
+    seen = 0
+    r.ws()
+    if r.at() != _RBRACE:
+        while True:
+            r.ws()
+            if r.at() != _QUOTE:
+                raise r.refuse("malformed")
+            key = r.string()
+            r.ws()
+            if r.at() != _COLON:
+                raise r.refuse("malformed")
+            r.pos += 1
+            r.ws()
+            if key == "value":
+                if seen & 1:
+                    raise r.refuse("duplicate_field")
+                seen |= 1
+                v.value = _read_selector_edit(r)
+            else:
+                raise r.refuse("unknown_field")
+            r.ws()
+            if r.at() != _COMMA:
+                break
+            r.pos += 1
+    if r.at() != _RBRACE:
+        raise r.refuse("malformed")
+    r.pos += 1
+    r.depth -= 1
+    if seen & 1 != 1:
+        raise r.refuse("missing_field")
+    return v
+
+
+def _read_oa_selector_authorization_operator_remove_bundle_result(r):
+    if r.at() != _LBRACE:
+        raise r.refuse("wrong_type")
+    r.enter()
+    r.pos += 1
+    v = _SelectorAuthorizationOperatorRemoveBundleResult()
+    seen = 0
+    r.ws()
+    if r.at() != _RBRACE:
+        while True:
+            r.ws()
+            if r.at() != _QUOTE:
+                raise r.refuse("malformed")
+            key = r.string()
+            r.ws()
+            if r.at() != _COLON:
+                raise r.refuse("malformed")
+            r.pos += 1
+            r.ws()
+            if key == "value":
+                if seen & 1:
+                    raise r.refuse("duplicate_field")
+                seen |= 1
+                v.value = _read_selector_edit(r)
+            else:
+                raise r.refuse("unknown_field")
+            r.ws()
+            if r.at() != _COMMA:
+                break
+            r.pos += 1
+    if r.at() != _RBRACE:
+        raise r.refuse("malformed")
+    r.pos += 1
+    r.depth -= 1
+    if seen & 1 != 1:
+        raise r.refuse("missing_field")
+    return v
+
+
+def _read_oa_selector_authorization_operator_apply_permission_allow_result(r):
+    if r.at() != _LBRACE:
+        raise r.refuse("wrong_type")
+    r.enter()
+    r.pos += 1
+    v = _SelectorAuthorizationOperatorApplyPermissionAllowResult()
+    seen = 0
+    r.ws()
+    if r.at() != _RBRACE:
+        while True:
+            r.ws()
+            if r.at() != _QUOTE:
+                raise r.refuse("malformed")
+            key = r.string()
+            r.ws()
+            if r.at() != _COLON:
+                raise r.refuse("malformed")
+            r.pos += 1
+            r.ws()
+            if key == "value":
+                if seen & 1:
+                    raise r.refuse("duplicate_field")
+                seen |= 1
+                v.value = _read_selector_edit(r)
+            else:
+                raise r.refuse("unknown_field")
+            r.ws()
+            if r.at() != _COMMA:
+                break
+            r.pos += 1
+    if r.at() != _RBRACE:
+        raise r.refuse("malformed")
+    r.pos += 1
+    r.depth -= 1
+    if seen & 1 != 1:
+        raise r.refuse("missing_field")
+    return v
+
+
+def _read_oa_selector_authorization_operator_undo_permission_effect_result(r):
+    if r.at() != _LBRACE:
+        raise r.refuse("wrong_type")
+    r.enter()
+    r.pos += 1
+    v = _SelectorAuthorizationOperatorUndoPermissionEffectResult()
+    seen = 0
+    r.ws()
+    if r.at() != _RBRACE:
+        while True:
+            r.ws()
+            if r.at() != _QUOTE:
+                raise r.refuse("malformed")
+            key = r.string()
+            r.ws()
+            if r.at() != _COLON:
+                raise r.refuse("malformed")
+            r.pos += 1
+            r.ws()
+            if key == "value":
+                if seen & 1:
+                    raise r.refuse("duplicate_field")
+                seen |= 1
+                v.value = _read_selector_edit(r)
+            else:
+                raise r.refuse("unknown_field")
+            r.ws()
+            if r.at() != _COMMA:
+                break
+            r.pos += 1
+    if r.at() != _RBRACE:
+        raise r.refuse("malformed")
+    r.pos += 1
+    r.depth -= 1
+    if seen & 1 != 1:
+        raise r.refuse("missing_field")
+    return v
+
+
 def decode(data):
     r = _Reader(bytes(data))
     r.ws()
@@ -3440,11 +9271,29 @@ def decode(data):
 
 # _REFUSALS is in the order two of them are chosen between.
 
-_REFUSALS = ["malformed", "bad_string", "number_spelling", "wrong_type", "depth_exceeded", "duplicate_key", "duplicate_field", "unknown_field", "missing_field", "bad_enum", "trailing_bytes"]
+_REFUSALS = ["malformed", "bad_string", "number_spelling", "wrong_type", "depth_exceeded", "duplicate_key", "duplicate_field", "unknown_field", "missing_field", "bad_enum", "bad_binary", "trailing_bytes"]
 
 
 def _refusal_rank(word):
     return _REFUSALS.index(word) if word in _REFUSALS else -1
+
+import base64
+import binascii
+
+def _encode_binary(value):
+    if type(value) is not bytes:
+        raise Refusal("wrong_type", 0)
+    return base64.b64encode(value).decode("ascii")
+
+def _decode_binary(text):
+    def bad():
+        raise _Reader(b"").refuse("bad_binary")
+    try:
+        result = base64.b64decode(text, validate=True)
+    except (ValueError, binascii.Error):
+        bad()
+    if _encode_binary(result) != text: bad()
+    return result
 
 
 class DispatchError(ValueError):
@@ -3488,7 +9337,9 @@ def _service_check(kind, value, depth=0):
     # Python coercions must not silently change typed service arguments.
     if depth >= _DEPTH_LIMIT and (kind.startswith(("list<", "map<")) or kind in _SERVICE_RECORDS):
         raise Refusal("depth_exceeded", 0)
-    if kind == "string":
+    if kind == "binary":
+        valid = type(value) is bytes
+    elif kind == "string":
         valid = type(value) is str
     elif kind == "enum":
         valid = value is None or isinstance(value, str)
@@ -3571,28 +9422,100 @@ _SERVICE_RECORDS = {
     "RuleRecord": (RuleRecord, [("rule", "PolicyRule", "never"), ("set_by", "Subject", "never"), ("set_at", "string", "never"), ("why", "string", "never"), ("expires", "string", "never"), ]),
     "RuleRead": (RuleRead, [("outcome", "enum", "never"), ("revision", "string", "never"), ("record", "RuleRecord", "absent"), ]),
     "CatalogEntry": (CatalogEntry, [("action", "string", "never"), ("registered_by", "Subject", "never"), ("registered_at", "string", "never"), ]),
+    "ActionDescription": (ActionDescription, [("action", "string", "never"), ("feature_app", "Subject", "never"), ("app_label", "string", "never"), ("description", "string", "never"), ("declared_risk", "string", "never"), ]),
+    "PermissionDefinition": (PermissionDefinition, [("action", "string", "never"), ("owner_contract", "string", "never"), ("operations", "list<string>", "never"), ("resource_profile", "string", "never"), ("resource_type", "string", "never"), ("enforced_by", "list<string>", "never"), ("disclosure", "string", "never"), ("lifecycle", "string", "never"), ("first_use", "enum", "never"), ("served", "bool", "never"), ]),
+    "DescribedAction": (DescribedAction, [("action", "string", "never"), ("choices", "list<string>", "never"), ("description", "ActionDescription", "absent"), ("published_by", "Subject", "absent"), ("published_at", "string", "absent"), ]),
     "ActionEdit": (ActionEdit, [("outcome", "enum", "never"), ("revision", "string", "never"), ("current", "CatalogEntry", "absent"), ]),
+    "DescriptionEdit": (DescriptionEdit, [("outcome", "enum", "never"), ("revision", "string", "never"), ("current", "DescribedAction", "absent"), ]),
+    "DescriptionPage": (DescriptionPage, [("outcome", "enum", "never"), ("revision", "string", "never"), ("actions", "list<DescribedAction>", "never"), ("next", "string", "never"), ("complete", "bool", "never"), ]),
+    "AccountDefault": (AccountDefault, [("name", "string", "never"), ("action", "string", "never"), ("resource", "string", "never"), ("every_resource", "bool", "never"), ("on", "bool", "never"), ("set_by", "Subject", "absent"), ("set_at", "string", "absent"), ]),
+    "DefaultPage": (DefaultPage, [("outcome", "enum", "never"), ("revision", "string", "never"), ("defaults", "list<AccountDefault>", "never"), ]),
+    "DefaultEdit": (DefaultEdit, [("outcome", "enum", "never"), ("revision", "string", "never"), ("current", "AccountDefault", "absent"), ]),
+    "DecisionExplanation": (DecisionExplanation, [("outcome", "enum", "never"), ("policy_revision", "string", "absent"), ("source", "enum", "absent"), ("default_name", "string", "absent"), ]),
+    "PermissionKey": (PermissionKey, [("action", "string", "never"), ("resource_profile", "string", "never"), ]),
+    "ResourceSelector": (ResourceSelector, [("kind", "enum", "never"), ("target", "binary", "absent"), ]),
+    "PermissionSelection": (PermissionSelection, [("permission", "PermissionKey", "never"), ("selector", "ResourceSelector", "never"), ]),
+    "ConcreteResource": (ConcreteResource, [("permission", "PermissionKey", "never"), ("target", "binary", "never"), ]),
+    "CheckBatchRequest": (CheckBatchRequest, [("expected_revision", "string", "absent"), ("collection_admission", "PermissionKey", "absent"), ("resources", "list<ConcreteResource>", "never"), ]),
+    "BatchDecision": (BatchDecision, [("outcome", "enum", "never"), ("revision", "string", "never"), ("collection_outcome", "enum", "absent"), ("outcomes", "list<enum>", "never"), ]),
+    "SelectorPermissionDefinition": (SelectorPermissionDefinition, [("definition", "PermissionDefinition", "never"), ("label", "string", "never"), ("supported_selectors", "list<enum>", "never"), ("first_use_selectors", "list<enum>", "never"), ("collection", "string", "never"), ("all_effect", "string", "never"), ("request_type", "string", "never"), ]),
+    "PermissionDefinitionPage": (PermissionDefinitionPage, [("outcome", "enum", "never"), ("revision", "string", "never"), ("definitions", "list<SelectorPermissionDefinition>", "never"), ("next", "string", "never"), ("complete", "bool", "never"), ]),
+    "PermissionBundleDefinition": (PermissionBundleDefinition, [("bundle_ref", "string", "never"), ("owner_contract", "string", "never"), ("label", "string", "never"), ("target_type", "string", "never"), ("supported_selectors", "list<enum>", "never"), ("members", "list<PermissionKey>", "never"), ("disclosure", "string", "never"), ("definition_digest", "string", "never"), ]),
+    "PermissionBundlePage": (PermissionBundlePage, [("outcome", "enum", "never"), ("revision", "string", "never"), ("bundles", "list<PermissionBundleDefinition>", "never"), ("next", "string", "never"), ("complete", "bool", "never"), ]),
+    "BundleExpansion": (BundleExpansion, [("bundle_ref", "string", "never"), ("definition_digest", "string", "never"), ("selector", "ResourceSelector", "never"), ("selections", "list<PermissionSelection>", "never"), ]),
+    "PermissionEffect": (PermissionEffect, [("subject", "Subject", "never"), ("selections", "list<PermissionSelection>", "never"), ("bundle", "BundleExpansion", "absent"), ]),
+    "SelectorRule": (SelectorRule, [("subject", "Subject", "never"), ("selection", "PermissionSelection", "never"), ("permit", "bool", "never"), ]),
+    "BundleOrigin": (BundleOrigin, [("id", "string", "never"), ("expansion", "BundleExpansion", "never"), ]),
+    "SelectorRuleRecord": (SelectorRuleRecord, [("rule", "SelectorRule", "never"), ("set_by", "Subject", "never"), ("set_at", "string", "never"), ("why", "string", "never"), ("expires", "string", "never"), ("bundle_origin", "BundleOrigin", "absent"), ]),
+    "SelectorRulePage": (SelectorRulePage, [("outcome", "enum", "never"), ("revision", "string", "never"), ("records", "list<SelectorRuleRecord>", "never"), ("next", "string", "never"), ("complete", "bool", "never"), ]),
+    "SelectorRuleRead": (SelectorRuleRead, [("outcome", "enum", "never"), ("revision", "string", "never"), ("record", "SelectorRuleRecord", "absent"), ]),
+    "SelectorEdit": (SelectorEdit, [("outcome", "enum", "never"), ("revision", "string", "never"), ("current", "list<SelectorRuleRecord>", "never"), ("bundle_origin", "BundleOrigin", "absent"), ]),
+    "LegacyOperationRequest": (LegacyOperationRequest, [("legacy_action", "string", "never"), ("legacy_resource", "string", "never"), ("concrete_operation", "ConcreteResource", "absent"), ]),
+    "OAAuthorizationListActionDescriptionsArguments": (_AuthorizationListActionDescriptionsArguments, [("cursor", "string", "never"), ("limit", "i64", "never"), ]),
     "OAAuthorizationDecideArguments": (_AuthorizationDecideArguments, [("action", "string", "never"), ("resource", "string", "never"), ]),
     "OAAuthorizationDecideForArguments": (_AuthorizationDecideForArguments, [("subject", "Subject", "never"), ("action", "string", "never"), ("resource", "string", "never"), ]),
+    "OAAuthorizationOperatorRegisterDescribedActionArguments": (_AuthorizationOperatorRegisterDescribedActionArguments, [("expected_revision", "string", "never"), ("description", "ActionDescription", "never"), ]),
+    "OAAuthorizationOperatorApplyFirstUseAllowArguments": (_AuthorizationOperatorApplyFirstUseAllowArguments, [("expected_revision", "string", "never"), ("question_id", "string", "never"), ]),
     "OAAuthorizationOperatorListPolicyArguments": (_AuthorizationOperatorListPolicyArguments, [("cursor", "string", "never"), ("limit", "i64", "never"), ]),
     "OAAuthorizationOperatorSetRuleArguments": (_AuthorizationOperatorSetRuleArguments, [("expected_revision", "string", "never"), ("rule", "PolicyRule", "never"), ]),
     "OAAuthorizationOperatorRevokeRuleArguments": (_AuthorizationOperatorRevokeRuleArguments, [("expected_revision", "string", "never"), ("subject", "Subject", "never"), ("action", "string", "never"), ("resource", "string", "never"), ]),
+    "OAAuthorizationOperatorStopAnswererArguments": (_AuthorizationOperatorStopAnswererArguments, [("expected_revision", "string", "never"), ("answerer", "Subject", "never"), ("also_revoke_grants", "bool", "never"), ]),
+    "OAAuthorizationOperatorRevokeAnswerPermitsArguments": (_AuthorizationOperatorRevokeAnswerPermitsArguments, [("expected_revision", "string", "never"), ("answerer", "Subject", "never"), ("target", "Subject", "never"), ("actions", "list<string>", "never"), ("resource", "string", "never"), ("question_id", "string", "never"), ]),
     "OAAuthorizationOperatorSetRuleForArguments": (_AuthorizationOperatorSetRuleForArguments, [("expected_revision", "string", "never"), ("rule", "PolicyRule", "never"), ("ttl_ms", "i64", "never"), ("why", "string", "never"), ]),
+    "OAAuthorizationOperatorSetRulesForArguments": (_AuthorizationOperatorSetRulesForArguments, [("expected_revision", "string", "never"), ("rules", "list<PolicyRule>", "never"), ("ttl_ms", "i64", "never"), ("why", "string", "never"), ]),
     "OAAuthorizationOperatorReadRuleArguments": (_AuthorizationOperatorReadRuleArguments, [("subject", "Subject", "never"), ("action", "string", "never"), ("resource", "string", "never"), ]),
     "OAAuthorizationOperatorRegisterActionArguments": (_AuthorizationOperatorRegisterActionArguments, [("expected_revision", "string", "never"), ("action", "string", "never"), ]),
     "OAAuthorizationOperatorRetireActionArguments": (_AuthorizationOperatorRetireActionArguments, [("expected_revision", "string", "never"), ("action", "string", "never"), ]),
+    "OAAuthorizationOperatorExplainForArguments": (_AuthorizationOperatorExplainForArguments, [("subject", "Subject", "never"), ("action", "string", "never"), ("resource", "string", "never"), ]),
+    "OAAuthorizationOperatorListDefaultsArguments": (_AuthorizationOperatorListDefaultsArguments, []),
+    "OAAuthorizationOperatorSetDefaultArguments": (_AuthorizationOperatorSetDefaultArguments, [("expected_revision", "string", "never"), ("name", "string", "never"), ("on", "bool", "never"), ]),
+    "OASelectorAuthorizationListPermissionDefinitionsArguments": (_SelectorAuthorizationListPermissionDefinitionsArguments, [("cursor", "string", "never"), ("limit", "i64", "never"), ]),
+    "OASelectorAuthorizationListPermissionBundlesArguments": (_SelectorAuthorizationListPermissionBundlesArguments, [("cursor", "string", "never"), ("limit", "i64", "never"), ]),
+    "OASelectorAuthorizationCheckBatchArguments": (_SelectorAuthorizationCheckBatchArguments, [("request", "CheckBatchRequest", "never"), ]),
+    "OASelectorAuthorizationCheckBatchForArguments": (_SelectorAuthorizationCheckBatchForArguments, [("subject", "Subject", "never"), ("request", "CheckBatchRequest", "never"), ]),
+    "OASelectorAuthorizationCheckLegacyOperationForArguments": (_SelectorAuthorizationCheckLegacyOperationForArguments, [("subject", "Subject", "never"), ("request", "LegacyOperationRequest", "never"), ]),
+    "OASelectorAuthorizationOperatorListSelectorRulesArguments": (_SelectorAuthorizationOperatorListSelectorRulesArguments, [("cursor", "string", "never"), ("limit", "i64", "never"), ]),
+    "OASelectorAuthorizationOperatorReadSelectorRuleArguments": (_SelectorAuthorizationOperatorReadSelectorRuleArguments, [("subject", "Subject", "never"), ("selection", "PermissionSelection", "never"), ]),
+    "OASelectorAuthorizationOperatorSetSelectorRuleArguments": (_SelectorAuthorizationOperatorSetSelectorRuleArguments, [("expected_revision", "string", "never"), ("rule", "SelectorRule", "never"), ("ttl_ms", "i64", "never"), ("why", "string", "never"), ]),
+    "OASelectorAuthorizationOperatorRemoveSelectorRuleArguments": (_SelectorAuthorizationOperatorRemoveSelectorRuleArguments, [("expected_revision", "string", "never"), ("subject", "Subject", "never"), ("selection", "PermissionSelection", "never"), ]),
+    "OASelectorAuthorizationOperatorApplyBundleArguments": (_SelectorAuthorizationOperatorApplyBundleArguments, [("expected_revision", "string", "never"), ("subject", "Subject", "never"), ("bundle_ref", "string", "never"), ("selector", "ResourceSelector", "never"), ("ttl_ms", "i64", "never"), ("why", "string", "never"), ]),
+    "OASelectorAuthorizationOperatorRemoveBundleArguments": (_SelectorAuthorizationOperatorRemoveBundleArguments, [("expected_revision", "string", "never"), ("subject", "Subject", "never"), ("origin_id", "string", "never"), ]),
+    "OASelectorAuthorizationOperatorApplyPermissionAllowArguments": (_SelectorAuthorizationOperatorApplyPermissionAllowArguments, [("expected_revision", "string", "never"), ("question_id", "string", "never"), ]),
+    "OASelectorAuthorizationOperatorUndoPermissionEffectArguments": (_SelectorAuthorizationOperatorUndoPermissionEffectArguments, [("expected_revision", "string", "never"), ("question_id", "string", "never"), ]),
     "OAServiceFrame": (_ServiceFrame, [("version", "i32", "never"), ("service", "string", "never"), ("method", "string", "never"), ("arguments", "json", "never"), ]),
     "OAServiceReply": (_ServiceReply, [("version", "i32", "never"), ("service", "string", "never"), ("method", "string", "never"), ("ok", "bool", "never"), ("payload", "json", "never"), ]),
     "OAServiceError": (_ServiceError, [("code", "string", "never"), ("message", "string", "never"), ]),
+    "OAAuthorizationListActionDescriptionsResult": (_AuthorizationListActionDescriptionsResult, [("value", "DescriptionPage", "never"), ]),
     "OAAuthorizationDecideResult": (_AuthorizationDecideResult, [("value", "Decision", "never"), ]),
     "OAAuthorizationDecideForResult": (_AuthorizationDecideForResult, [("value", "Decision", "never"), ]),
+    "OAAuthorizationOperatorRegisterDescribedActionResult": (_AuthorizationOperatorRegisterDescribedActionResult, [("value", "DescriptionEdit", "never"), ]),
+    "OAAuthorizationOperatorApplyFirstUseAllowResult": (_AuthorizationOperatorApplyFirstUseAllowResult, [("value", "PolicyEdit", "never"), ]),
     "OAAuthorizationOperatorListPolicyResult": (_AuthorizationOperatorListPolicyResult, [("value", "PolicyPage", "never"), ]),
     "OAAuthorizationOperatorSetRuleResult": (_AuthorizationOperatorSetRuleResult, [("value", "PolicyEdit", "never"), ]),
     "OAAuthorizationOperatorRevokeRuleResult": (_AuthorizationOperatorRevokeRuleResult, [("value", "PolicyEdit", "never"), ]),
+    "OAAuthorizationOperatorStopAnswererResult": (_AuthorizationOperatorStopAnswererResult, [("value", "PolicyEdit", "never"), ]),
+    "OAAuthorizationOperatorRevokeAnswerPermitsResult": (_AuthorizationOperatorRevokeAnswerPermitsResult, [("value", "PolicyEdit", "never"), ]),
     "OAAuthorizationOperatorSetRuleForResult": (_AuthorizationOperatorSetRuleForResult, [("value", "PolicyEdit", "never"), ]),
+    "OAAuthorizationOperatorSetRulesForResult": (_AuthorizationOperatorSetRulesForResult, [("value", "PolicyEdit", "never"), ]),
     "OAAuthorizationOperatorReadRuleResult": (_AuthorizationOperatorReadRuleResult, [("value", "RuleRead", "never"), ]),
     "OAAuthorizationOperatorRegisterActionResult": (_AuthorizationOperatorRegisterActionResult, [("value", "ActionEdit", "never"), ]),
     "OAAuthorizationOperatorRetireActionResult": (_AuthorizationOperatorRetireActionResult, [("value", "ActionEdit", "never"), ]),
+    "OAAuthorizationOperatorExplainForResult": (_AuthorizationOperatorExplainForResult, [("value", "DecisionExplanation", "never"), ]),
+    "OAAuthorizationOperatorListDefaultsResult": (_AuthorizationOperatorListDefaultsResult, [("value", "DefaultPage", "never"), ]),
+    "OAAuthorizationOperatorSetDefaultResult": (_AuthorizationOperatorSetDefaultResult, [("value", "DefaultEdit", "never"), ]),
+    "OASelectorAuthorizationListPermissionDefinitionsResult": (_SelectorAuthorizationListPermissionDefinitionsResult, [("value", "PermissionDefinitionPage", "never"), ]),
+    "OASelectorAuthorizationListPermissionBundlesResult": (_SelectorAuthorizationListPermissionBundlesResult, [("value", "PermissionBundlePage", "never"), ]),
+    "OASelectorAuthorizationCheckBatchResult": (_SelectorAuthorizationCheckBatchResult, [("value", "BatchDecision", "never"), ]),
+    "OASelectorAuthorizationCheckBatchForResult": (_SelectorAuthorizationCheckBatchForResult, [("value", "BatchDecision", "never"), ]),
+    "OASelectorAuthorizationCheckLegacyOperationForResult": (_SelectorAuthorizationCheckLegacyOperationForResult, [("value", "Decision", "never"), ]),
+    "OASelectorAuthorizationOperatorListSelectorRulesResult": (_SelectorAuthorizationOperatorListSelectorRulesResult, [("value", "SelectorRulePage", "never"), ]),
+    "OASelectorAuthorizationOperatorReadSelectorRuleResult": (_SelectorAuthorizationOperatorReadSelectorRuleResult, [("value", "SelectorRuleRead", "never"), ]),
+    "OASelectorAuthorizationOperatorSetSelectorRuleResult": (_SelectorAuthorizationOperatorSetSelectorRuleResult, [("value", "SelectorEdit", "never"), ]),
+    "OASelectorAuthorizationOperatorRemoveSelectorRuleResult": (_SelectorAuthorizationOperatorRemoveSelectorRuleResult, [("value", "SelectorEdit", "never"), ]),
+    "OASelectorAuthorizationOperatorApplyBundleResult": (_SelectorAuthorizationOperatorApplyBundleResult, [("value", "SelectorEdit", "never"), ]),
+    "OASelectorAuthorizationOperatorRemoveBundleResult": (_SelectorAuthorizationOperatorRemoveBundleResult, [("value", "SelectorEdit", "never"), ]),
+    "OASelectorAuthorizationOperatorApplyPermissionAllowResult": (_SelectorAuthorizationOperatorApplyPermissionAllowResult, [("value", "SelectorEdit", "never"), ]),
+    "OASelectorAuthorizationOperatorUndoPermissionEffectResult": (_SelectorAuthorizationOperatorUndoPermissionEffectResult, [("value", "SelectorEdit", "never"), ]),
 }
 
 
@@ -3602,6 +9525,15 @@ class Authorization:
     refused decisions never permit. Explicitly authorized operator configuration
     registers actions and grants/revokes exact rules; no serialized awake lease
     is introduced."""
+
+    def list_action_descriptions(self, cursor: str, limit: int) -> DescriptionPage:
+        """Read published descriptive metadata for the current catalogue under
+        same-account receiving Program admission. No rules are exposed. Pages
+        carry one durable revision; continuations bind subject, host epoch and
+        revision and return gap after change/restart. Requested limit is 1..64
+        and encoded replies are at most 256 KiB. Recheck admission before
+        returning. An earlier authorization@1 service returns unknown_method."""
+        raise NotImplementedError
 
     def decide(self, action: str, resource: str) -> Decision:
         """Evaluate the bound receiving account/program against an exact
@@ -3623,6 +9555,19 @@ class AuthorizationClient(Authorization):
 
     def __init__(self, transport):
         self._transport = transport
+
+    def list_action_descriptions(self, cursor: str, limit: int) -> DescriptionPage:
+        _service_check("string", cursor)
+        _service_check("i64", limit)
+        _args = _AuthorizationListActionDescriptionsArguments()
+        _args.cursor = cursor
+        _args.limit = limit
+        _arguments = _service_encode(_write_oa_authorization_list_action_descriptions_arguments, _args, 1)
+        _service_decode(_read_oa_authorization_list_action_descriptions_arguments, _arguments, 1)
+        _request = _service_request("abstraction.rights/authorization@1", "ListActionDescriptions", _arguments)
+        _payload = _service_response(self._transport.exchange_frame(_request), "abstraction.rights/authorization@1", "ListActionDescriptions")
+        _result = _service_decode(_read_oa_authorization_list_action_descriptions_result, _payload, 1)
+        return _result.value
 
     def decide(self, action: str, resource: str) -> Decision:
         _service_check("string", action)
@@ -3662,6 +9607,35 @@ class AuthorizationOperator:
     or provider path is accepted. Resource services remain the receiving
     enforcement points. Legacy bearer and awake lease behavior is separate."""
 
+    def register_described_action(self, expected_revision: str, description: ActionDescription) -> DescriptionEdit:
+        """Under existing explicit operator authority, atomically register an
+        action and publish/correct its descriptive metadata at the expected
+        durable revision. The service records the receiving publisher and
+        service time. Recheck context and authority after lock waiting. A
+        metadata edit changes no rule, expiry or completed-answer receipt,
+        including first publication on an action with existing rules. A stable
+        action identifies its existing feature; actual changed semantics require
+        a new action/version at the app owner. Metadata is no proof of behavior.
+        An earlier operator@1 service returns unknown_method; never fall back to
+        name-only registration while claiming published description."""
+        raise NotImplementedError
+
+    def apply_first_use_allow(self, expected_revision: str, question_id: str) -> PolicyEdit:
+        """Apply the complete exact permit or paired permits derived by trusted
+        runtime composition from this retained operator Allow and its runtime
+        admission. No caller supplies targets or rules. Authorization, question
+        occurrence and revision are checked while the Book is pinned and the
+        rights edit is locked. Commit complete permits and private durable
+        success proof in the same rights replacement; a first receipt-only
+        commit changes revision when permits already match. A previously
+        completed ID conflicts without rewriting rights, including after
+        revocation or expiry. Failed writes retain the answer for explicit
+        Retry. Missing composition is unavailable; missing, pending, foreign,
+        responder or non-Allow records are invalid. Both IDs and revision are
+        bounded to 128 UTF-8 bytes. An earlier operator@1 service returns
+        unknown_method; callers must not fall back to an untracked permit write."""
+        raise NotImplementedError
+
     def list_policy(self, cursor: str, limit: int) -> PolicyPage:
         """Read bounded current rules and catalogue under explicit operator
         authorization. Every continuation rechecks authorization; no enumeration
@@ -3686,12 +9660,40 @@ class AuthorizationOperator:
         It does not cancel an existing connection-owned awake lease."""
         raise NotImplementedError
 
+    def stop_answerer(self, expected_revision: str, answerer: Subject, also_revoke_grants: bool) -> PolicyEdit:
+        """Atomically remove an answerer's question.answer/apps enrollment if the
+        revision matches. When also_revoke_grants is true, remove current
+        permits set by that answerer in the same edit; denies and rules set by
+        another program stay. With false, prior permits retain their stored
+        expiry. Stop ends future answers and never exits the answerer's process.
+        Authorization and revision are rechecked after lock waiting."""
+        raise NotImplementedError
+
+    def revoke_answer_permits(self, expected_revision: str, answerer: Subject, target: Subject, actions: list[str], resource: str, question_id: str) -> PolicyEdit:
+        """Atomically remove any still-current permit among one or two exact
+        targets whose private question ID and setter match this retained
+        first-use answer. Earlier or later grants, person edits, blocks and
+        expired effects stay; zero matches or a revision change conflicts. The
+        asks answer record stays; this method is the permission effect of the
+        Panel's Undo. Authorization is rechecked after lock waiting."""
+        raise NotImplementedError
+
     def set_rule_for(self, expected_revision: str, rule: PolicyRule, ttl_ms: int, why: str) -> PolicyEdit:
         """As SetRule, recording why and an expiry ttl_ms after the service's edit
         time. ttl_ms 0 sets no expiry; otherwise it is 1..31536000000. why is
         0..256 UTF-8 bytes without control characters. A retained rule with the
         same permit, reason and expiry is a no-op; any other difference writes,
         including a new expiry."""
+        raise NotImplementedError
+
+    def set_rules_for(self, expected_revision: str, rules: list[PolicyRule], ttl_ms: int, why: str) -> PolicyEdit:
+        """Atomically set one or two exact rules with the same target subject,
+        resource and permit, and distinct catalogued actions. The operator's
+        authorized intent may replace a previous opposite rule. All members are
+        validated before one revision and authority check under the rights edit
+        lock; the batch writes all or none with one setter, time, reason and
+        expiry. ttl_ms and why have SetRuleFor's bounds. A prior operator@1
+        service returns unknown_method."""
         raise NotImplementedError
 
     def read_rule(self, subject: Subject, action: str, resource: str) -> RuleRead:
@@ -3715,12 +9717,61 @@ class AuthorizationOperator:
         Decisions on a retired action read unknown_action."""
         raise NotImplementedError
 
+    def explain_for(self, subject: Subject, action: str, resource: str) -> DecisionExplanation:
+        """Under operator authorization, rechecked before returning, evaluate
+        subject on one exact action/resource exactly as a decision does and
+        report the step that decided it (RIGHTS-O14). It asks nobody, records
+        nothing and changes no rule or cache. An earlier operator@1 service
+        returns unknown_method."""
+        raise NotImplementedError
+
+    def list_defaults(self) -> DefaultPage:
+        """Read every configured account-wide default and its switch under operator
+        authorization, rechecked before returning. An earlier operator@1 service
+        returns unknown_method."""
+        raise NotImplementedError
+
+    def set_default(self, expected_revision: str, name: str, on: bool) -> DefaultEdit:
+        """Atomically compare the expected durable revision and turn one configured
+        account-wide default on or off, recording the operator subject and
+        service time. An unconfigured name is invalid. Authorization and
+        revision are rechecked after lock waiting. The next fresh decision
+        observes the switch. No rule is written or removed. An earlier
+        operator@1 service returns unknown_method."""
+        raise NotImplementedError
+
 
 class AuthorizationOperatorClient(AuthorizationOperator):
     """Calls abstraction.rights/operator@1 through a transport that exchanges frames."""
 
     def __init__(self, transport):
         self._transport = transport
+
+    def register_described_action(self, expected_revision: str, description: ActionDescription) -> DescriptionEdit:
+        _service_check("string", expected_revision)
+        _service_check("ActionDescription", description)
+        _args = _AuthorizationOperatorRegisterDescribedActionArguments()
+        _args.expected_revision = expected_revision
+        _args.description = description
+        _arguments = _service_encode(_write_oa_authorization_operator_register_described_action_arguments, _args, 1)
+        _service_decode(_read_oa_authorization_operator_register_described_action_arguments, _arguments, 1)
+        _request = _service_request("abstraction.rights/operator@1", "RegisterDescribedAction", _arguments)
+        _payload = _service_response(self._transport.exchange_frame(_request), "abstraction.rights/operator@1", "RegisterDescribedAction")
+        _result = _service_decode(_read_oa_authorization_operator_register_described_action_result, _payload, 1)
+        return _result.value
+
+    def apply_first_use_allow(self, expected_revision: str, question_id: str) -> PolicyEdit:
+        _service_check("string", expected_revision)
+        _service_check("string", question_id)
+        _args = _AuthorizationOperatorApplyFirstUseAllowArguments()
+        _args.expected_revision = expected_revision
+        _args.question_id = question_id
+        _arguments = _service_encode(_write_oa_authorization_operator_apply_first_use_allow_arguments, _args, 1)
+        _service_decode(_read_oa_authorization_operator_apply_first_use_allow_arguments, _arguments, 1)
+        _request = _service_request("abstraction.rights/operator@1", "ApplyFirstUseAllow", _arguments)
+        _payload = _service_response(self._transport.exchange_frame(_request), "abstraction.rights/operator@1", "ApplyFirstUseAllow")
+        _result = _service_decode(_read_oa_authorization_operator_apply_first_use_allow_result, _payload, 1)
+        return _result.value
 
     def list_policy(self, cursor: str, limit: int) -> PolicyPage:
         _service_check("string", cursor)
@@ -3765,6 +9816,42 @@ class AuthorizationOperatorClient(AuthorizationOperator):
         _result = _service_decode(_read_oa_authorization_operator_revoke_rule_result, _payload, 1)
         return _result.value
 
+    def stop_answerer(self, expected_revision: str, answerer: Subject, also_revoke_grants: bool) -> PolicyEdit:
+        _service_check("string", expected_revision)
+        _service_check("Subject", answerer)
+        _service_check("bool", also_revoke_grants)
+        _args = _AuthorizationOperatorStopAnswererArguments()
+        _args.expected_revision = expected_revision
+        _args.answerer = answerer
+        _args.also_revoke_grants = also_revoke_grants
+        _arguments = _service_encode(_write_oa_authorization_operator_stop_answerer_arguments, _args, 1)
+        _service_decode(_read_oa_authorization_operator_stop_answerer_arguments, _arguments, 1)
+        _request = _service_request("abstraction.rights/operator@1", "StopAnswerer", _arguments)
+        _payload = _service_response(self._transport.exchange_frame(_request), "abstraction.rights/operator@1", "StopAnswerer")
+        _result = _service_decode(_read_oa_authorization_operator_stop_answerer_result, _payload, 1)
+        return _result.value
+
+    def revoke_answer_permits(self, expected_revision: str, answerer: Subject, target: Subject, actions: list[str], resource: str, question_id: str) -> PolicyEdit:
+        _service_check("string", expected_revision)
+        _service_check("Subject", answerer)
+        _service_check("Subject", target)
+        _service_check("list<string>", actions)
+        _service_check("string", resource)
+        _service_check("string", question_id)
+        _args = _AuthorizationOperatorRevokeAnswerPermitsArguments()
+        _args.expected_revision = expected_revision
+        _args.answerer = answerer
+        _args.target = target
+        _args.actions = actions
+        _args.resource = resource
+        _args.question_id = question_id
+        _arguments = _service_encode(_write_oa_authorization_operator_revoke_answer_permits_arguments, _args, 1)
+        _service_decode(_read_oa_authorization_operator_revoke_answer_permits_arguments, _arguments, 1)
+        _request = _service_request("abstraction.rights/operator@1", "RevokeAnswerPermits", _arguments)
+        _payload = _service_response(self._transport.exchange_frame(_request), "abstraction.rights/operator@1", "RevokeAnswerPermits")
+        _result = _service_decode(_read_oa_authorization_operator_revoke_answer_permits_result, _payload, 1)
+        return _result.value
+
     def set_rule_for(self, expected_revision: str, rule: PolicyRule, ttl_ms: int, why: str) -> PolicyEdit:
         _service_check("string", expected_revision)
         _service_check("PolicyRule", rule)
@@ -3780,6 +9867,23 @@ class AuthorizationOperatorClient(AuthorizationOperator):
         _request = _service_request("abstraction.rights/operator@1", "SetRuleFor", _arguments)
         _payload = _service_response(self._transport.exchange_frame(_request), "abstraction.rights/operator@1", "SetRuleFor")
         _result = _service_decode(_read_oa_authorization_operator_set_rule_for_result, _payload, 1)
+        return _result.value
+
+    def set_rules_for(self, expected_revision: str, rules: list[PolicyRule], ttl_ms: int, why: str) -> PolicyEdit:
+        _service_check("string", expected_revision)
+        _service_check("list<PolicyRule>", rules)
+        _service_check("i64", ttl_ms)
+        _service_check("string", why)
+        _args = _AuthorizationOperatorSetRulesForArguments()
+        _args.expected_revision = expected_revision
+        _args.rules = rules
+        _args.ttl_ms = ttl_ms
+        _args.why = why
+        _arguments = _service_encode(_write_oa_authorization_operator_set_rules_for_arguments, _args, 1)
+        _service_decode(_read_oa_authorization_operator_set_rules_for_arguments, _arguments, 1)
+        _request = _service_request("abstraction.rights/operator@1", "SetRulesFor", _arguments)
+        _payload = _service_response(self._transport.exchange_frame(_request), "abstraction.rights/operator@1", "SetRulesFor")
+        _result = _service_decode(_read_oa_authorization_operator_set_rules_for_result, _payload, 1)
         return _result.value
 
     def read_rule(self, subject: Subject, action: str, resource: str) -> RuleRead:
@@ -3822,3 +9926,1986 @@ class AuthorizationOperatorClient(AuthorizationOperator):
         _payload = _service_response(self._transport.exchange_frame(_request), "abstraction.rights/operator@1", "RetireAction")
         _result = _service_decode(_read_oa_authorization_operator_retire_action_result, _payload, 1)
         return _result.value
+
+    def explain_for(self, subject: Subject, action: str, resource: str) -> DecisionExplanation:
+        _service_check("Subject", subject)
+        _service_check("string", action)
+        _service_check("string", resource)
+        _args = _AuthorizationOperatorExplainForArguments()
+        _args.subject = subject
+        _args.action = action
+        _args.resource = resource
+        _arguments = _service_encode(_write_oa_authorization_operator_explain_for_arguments, _args, 1)
+        _service_decode(_read_oa_authorization_operator_explain_for_arguments, _arguments, 1)
+        _request = _service_request("abstraction.rights/operator@1", "ExplainFor", _arguments)
+        _payload = _service_response(self._transport.exchange_frame(_request), "abstraction.rights/operator@1", "ExplainFor")
+        _result = _service_decode(_read_oa_authorization_operator_explain_for_result, _payload, 1)
+        return _result.value
+
+    def list_defaults(self) -> DefaultPage:
+        _args = _AuthorizationOperatorListDefaultsArguments()
+        _arguments = _service_encode(_write_oa_authorization_operator_list_defaults_arguments, _args, 1)
+        _service_decode(_read_oa_authorization_operator_list_defaults_arguments, _arguments, 1)
+        _request = _service_request("abstraction.rights/operator@1", "ListDefaults", _arguments)
+        _payload = _service_response(self._transport.exchange_frame(_request), "abstraction.rights/operator@1", "ListDefaults")
+        _result = _service_decode(_read_oa_authorization_operator_list_defaults_result, _payload, 1)
+        return _result.value
+
+    def set_default(self, expected_revision: str, name: str, on: bool) -> DefaultEdit:
+        _service_check("string", expected_revision)
+        _service_check("string", name)
+        _service_check("bool", on)
+        _args = _AuthorizationOperatorSetDefaultArguments()
+        _args.expected_revision = expected_revision
+        _args.name = name
+        _args.on = on
+        _arguments = _service_encode(_write_oa_authorization_operator_set_default_arguments, _args, 1)
+        _service_decode(_read_oa_authorization_operator_set_default_arguments, _arguments, 1)
+        _request = _service_request("abstraction.rights/operator@1", "SetDefault", _arguments)
+        _payload = _service_response(self._transport.exchange_frame(_request), "abstraction.rights/operator@1", "SetDefault")
+        _result = _service_decode(_read_oa_authorization_operator_set_default_result, _payload, 1)
+        return _result.value
+
+
+class SelectorAuthorization:
+
+    def list_permission_definitions(self, cursor: str, limit: int) -> PermissionDefinitionPage:
+        raise NotImplementedError
+
+    def list_permission_bundles(self, cursor: str, limit: int) -> PermissionBundlePage:
+        raise NotImplementedError
+
+    def check_batch(self, request: CheckBatchRequest) -> BatchDecision:
+        raise NotImplementedError
+
+    def check_batch_for(self, subject: Subject, request: CheckBatchRequest) -> BatchDecision:
+        raise NotImplementedError
+
+    def check_legacy_operation_for(self, subject: Subject, request: LegacyOperationRequest) -> Decision:
+        raise NotImplementedError
+
+
+class SelectorAuthorizationClient(SelectorAuthorization):
+    """Calls abstraction.rights/authorization@2 through a transport that exchanges frames."""
+
+    def __init__(self, transport):
+        self._transport = transport
+
+    def list_permission_definitions(self, cursor: str, limit: int) -> PermissionDefinitionPage:
+        _service_check("string", cursor)
+        _service_check("i64", limit)
+        _args = _SelectorAuthorizationListPermissionDefinitionsArguments()
+        _args.cursor = cursor
+        _args.limit = limit
+        _arguments = _service_encode(_write_oa_selector_authorization_list_permission_definitions_arguments, _args, 1)
+        _service_decode(_read_oa_selector_authorization_list_permission_definitions_arguments, _arguments, 1)
+        _request = _service_request("abstraction.rights/authorization@2", "ListPermissionDefinitions", _arguments)
+        _payload = _service_response(self._transport.exchange_frame(_request), "abstraction.rights/authorization@2", "ListPermissionDefinitions")
+        _result = _service_decode(_read_oa_selector_authorization_list_permission_definitions_result, _payload, 1)
+        return _result.value
+
+    def list_permission_bundles(self, cursor: str, limit: int) -> PermissionBundlePage:
+        _service_check("string", cursor)
+        _service_check("i64", limit)
+        _args = _SelectorAuthorizationListPermissionBundlesArguments()
+        _args.cursor = cursor
+        _args.limit = limit
+        _arguments = _service_encode(_write_oa_selector_authorization_list_permission_bundles_arguments, _args, 1)
+        _service_decode(_read_oa_selector_authorization_list_permission_bundles_arguments, _arguments, 1)
+        _request = _service_request("abstraction.rights/authorization@2", "ListPermissionBundles", _arguments)
+        _payload = _service_response(self._transport.exchange_frame(_request), "abstraction.rights/authorization@2", "ListPermissionBundles")
+        _result = _service_decode(_read_oa_selector_authorization_list_permission_bundles_result, _payload, 1)
+        return _result.value
+
+    def check_batch(self, request: CheckBatchRequest) -> BatchDecision:
+        _service_check("CheckBatchRequest", request)
+        _args = _SelectorAuthorizationCheckBatchArguments()
+        _args.request = request
+        _arguments = _service_encode(_write_oa_selector_authorization_check_batch_arguments, _args, 1)
+        _service_decode(_read_oa_selector_authorization_check_batch_arguments, _arguments, 1)
+        _request = _service_request("abstraction.rights/authorization@2", "CheckBatch", _arguments)
+        _payload = _service_response(self._transport.exchange_frame(_request), "abstraction.rights/authorization@2", "CheckBatch")
+        _result = _service_decode(_read_oa_selector_authorization_check_batch_result, _payload, 1)
+        return _result.value
+
+    def check_batch_for(self, subject: Subject, request: CheckBatchRequest) -> BatchDecision:
+        _service_check("Subject", subject)
+        _service_check("CheckBatchRequest", request)
+        _args = _SelectorAuthorizationCheckBatchForArguments()
+        _args.subject = subject
+        _args.request = request
+        _arguments = _service_encode(_write_oa_selector_authorization_check_batch_for_arguments, _args, 1)
+        _service_decode(_read_oa_selector_authorization_check_batch_for_arguments, _arguments, 1)
+        _request = _service_request("abstraction.rights/authorization@2", "CheckBatchFor", _arguments)
+        _payload = _service_response(self._transport.exchange_frame(_request), "abstraction.rights/authorization@2", "CheckBatchFor")
+        _result = _service_decode(_read_oa_selector_authorization_check_batch_for_result, _payload, 1)
+        return _result.value
+
+    def check_legacy_operation_for(self, subject: Subject, request: LegacyOperationRequest) -> Decision:
+        _service_check("Subject", subject)
+        _service_check("LegacyOperationRequest", request)
+        _args = _SelectorAuthorizationCheckLegacyOperationForArguments()
+        _args.subject = subject
+        _args.request = request
+        _arguments = _service_encode(_write_oa_selector_authorization_check_legacy_operation_for_arguments, _args, 1)
+        _service_decode(_read_oa_selector_authorization_check_legacy_operation_for_arguments, _arguments, 1)
+        _request = _service_request("abstraction.rights/authorization@2", "CheckLegacyOperationFor", _arguments)
+        _payload = _service_response(self._transport.exchange_frame(_request), "abstraction.rights/authorization@2", "CheckLegacyOperationFor")
+        _result = _service_decode(_read_oa_selector_authorization_check_legacy_operation_for_result, _payload, 1)
+        return _result.value
+
+
+class SelectorAuthorizationOperator:
+    """Existing explicit operator admission, receiving provenance and in-lock
+    authority recheck apply. First-use methods accept no caller-supplied
+    targets: trusted composition resolves and pins the new typed Book
+    occurrence. Existing operator@1 completion records are preserved with their
+    original semantics."""
+
+    def list_selector_rules(self, cursor: str, limit: int) -> SelectorRulePage:
+        raise NotImplementedError
+
+    def read_selector_rule(self, subject: Subject, selection: PermissionSelection) -> SelectorRuleRead:
+        raise NotImplementedError
+
+    def set_selector_rule(self, expected_revision: str, rule: SelectorRule, ttl_ms: int, why: str) -> SelectorEdit:
+        raise NotImplementedError
+
+    def remove_selector_rule(self, expected_revision: str, subject: Subject, selection: PermissionSelection) -> SelectorEdit:
+        raise NotImplementedError
+
+    def apply_bundle(self, expected_revision: str, subject: Subject, bundle_ref: str, selector: ResourceSelector, ttl_ms: int, why: str) -> SelectorEdit:
+        raise NotImplementedError
+
+    def remove_bundle(self, expected_revision: str, subject: Subject, origin_id: str) -> SelectorEdit:
+        raise NotImplementedError
+
+    def apply_permission_allow(self, expected_revision: str, question_id: str) -> SelectorEdit:
+        raise NotImplementedError
+
+    def undo_permission_effect(self, expected_revision: str, question_id: str) -> SelectorEdit:
+        raise NotImplementedError
+
+
+class SelectorAuthorizationOperatorClient(SelectorAuthorizationOperator):
+    """Calls abstraction.rights/operator@2 through a transport that exchanges frames."""
+
+    def __init__(self, transport):
+        self._transport = transport
+
+    def list_selector_rules(self, cursor: str, limit: int) -> SelectorRulePage:
+        _service_check("string", cursor)
+        _service_check("i64", limit)
+        _args = _SelectorAuthorizationOperatorListSelectorRulesArguments()
+        _args.cursor = cursor
+        _args.limit = limit
+        _arguments = _service_encode(_write_oa_selector_authorization_operator_list_selector_rules_arguments, _args, 1)
+        _service_decode(_read_oa_selector_authorization_operator_list_selector_rules_arguments, _arguments, 1)
+        _request = _service_request("abstraction.rights/operator@2", "ListSelectorRules", _arguments)
+        _payload = _service_response(self._transport.exchange_frame(_request), "abstraction.rights/operator@2", "ListSelectorRules")
+        _result = _service_decode(_read_oa_selector_authorization_operator_list_selector_rules_result, _payload, 1)
+        return _result.value
+
+    def read_selector_rule(self, subject: Subject, selection: PermissionSelection) -> SelectorRuleRead:
+        _service_check("Subject", subject)
+        _service_check("PermissionSelection", selection)
+        _args = _SelectorAuthorizationOperatorReadSelectorRuleArguments()
+        _args.subject = subject
+        _args.selection = selection
+        _arguments = _service_encode(_write_oa_selector_authorization_operator_read_selector_rule_arguments, _args, 1)
+        _service_decode(_read_oa_selector_authorization_operator_read_selector_rule_arguments, _arguments, 1)
+        _request = _service_request("abstraction.rights/operator@2", "ReadSelectorRule", _arguments)
+        _payload = _service_response(self._transport.exchange_frame(_request), "abstraction.rights/operator@2", "ReadSelectorRule")
+        _result = _service_decode(_read_oa_selector_authorization_operator_read_selector_rule_result, _payload, 1)
+        return _result.value
+
+    def set_selector_rule(self, expected_revision: str, rule: SelectorRule, ttl_ms: int, why: str) -> SelectorEdit:
+        _service_check("string", expected_revision)
+        _service_check("SelectorRule", rule)
+        _service_check("i64", ttl_ms)
+        _service_check("string", why)
+        _args = _SelectorAuthorizationOperatorSetSelectorRuleArguments()
+        _args.expected_revision = expected_revision
+        _args.rule = rule
+        _args.ttl_ms = ttl_ms
+        _args.why = why
+        _arguments = _service_encode(_write_oa_selector_authorization_operator_set_selector_rule_arguments, _args, 1)
+        _service_decode(_read_oa_selector_authorization_operator_set_selector_rule_arguments, _arguments, 1)
+        _request = _service_request("abstraction.rights/operator@2", "SetSelectorRule", _arguments)
+        _payload = _service_response(self._transport.exchange_frame(_request), "abstraction.rights/operator@2", "SetSelectorRule")
+        _result = _service_decode(_read_oa_selector_authorization_operator_set_selector_rule_result, _payload, 1)
+        return _result.value
+
+    def remove_selector_rule(self, expected_revision: str, subject: Subject, selection: PermissionSelection) -> SelectorEdit:
+        _service_check("string", expected_revision)
+        _service_check("Subject", subject)
+        _service_check("PermissionSelection", selection)
+        _args = _SelectorAuthorizationOperatorRemoveSelectorRuleArguments()
+        _args.expected_revision = expected_revision
+        _args.subject = subject
+        _args.selection = selection
+        _arguments = _service_encode(_write_oa_selector_authorization_operator_remove_selector_rule_arguments, _args, 1)
+        _service_decode(_read_oa_selector_authorization_operator_remove_selector_rule_arguments, _arguments, 1)
+        _request = _service_request("abstraction.rights/operator@2", "RemoveSelectorRule", _arguments)
+        _payload = _service_response(self._transport.exchange_frame(_request), "abstraction.rights/operator@2", "RemoveSelectorRule")
+        _result = _service_decode(_read_oa_selector_authorization_operator_remove_selector_rule_result, _payload, 1)
+        return _result.value
+
+    def apply_bundle(self, expected_revision: str, subject: Subject, bundle_ref: str, selector: ResourceSelector, ttl_ms: int, why: str) -> SelectorEdit:
+        _service_check("string", expected_revision)
+        _service_check("Subject", subject)
+        _service_check("string", bundle_ref)
+        _service_check("ResourceSelector", selector)
+        _service_check("i64", ttl_ms)
+        _service_check("string", why)
+        _args = _SelectorAuthorizationOperatorApplyBundleArguments()
+        _args.expected_revision = expected_revision
+        _args.subject = subject
+        _args.bundle_ref = bundle_ref
+        _args.selector = selector
+        _args.ttl_ms = ttl_ms
+        _args.why = why
+        _arguments = _service_encode(_write_oa_selector_authorization_operator_apply_bundle_arguments, _args, 1)
+        _service_decode(_read_oa_selector_authorization_operator_apply_bundle_arguments, _arguments, 1)
+        _request = _service_request("abstraction.rights/operator@2", "ApplyBundle", _arguments)
+        _payload = _service_response(self._transport.exchange_frame(_request), "abstraction.rights/operator@2", "ApplyBundle")
+        _result = _service_decode(_read_oa_selector_authorization_operator_apply_bundle_result, _payload, 1)
+        return _result.value
+
+    def remove_bundle(self, expected_revision: str, subject: Subject, origin_id: str) -> SelectorEdit:
+        _service_check("string", expected_revision)
+        _service_check("Subject", subject)
+        _service_check("string", origin_id)
+        _args = _SelectorAuthorizationOperatorRemoveBundleArguments()
+        _args.expected_revision = expected_revision
+        _args.subject = subject
+        _args.origin_id = origin_id
+        _arguments = _service_encode(_write_oa_selector_authorization_operator_remove_bundle_arguments, _args, 1)
+        _service_decode(_read_oa_selector_authorization_operator_remove_bundle_arguments, _arguments, 1)
+        _request = _service_request("abstraction.rights/operator@2", "RemoveBundle", _arguments)
+        _payload = _service_response(self._transport.exchange_frame(_request), "abstraction.rights/operator@2", "RemoveBundle")
+        _result = _service_decode(_read_oa_selector_authorization_operator_remove_bundle_result, _payload, 1)
+        return _result.value
+
+    def apply_permission_allow(self, expected_revision: str, question_id: str) -> SelectorEdit:
+        _service_check("string", expected_revision)
+        _service_check("string", question_id)
+        _args = _SelectorAuthorizationOperatorApplyPermissionAllowArguments()
+        _args.expected_revision = expected_revision
+        _args.question_id = question_id
+        _arguments = _service_encode(_write_oa_selector_authorization_operator_apply_permission_allow_arguments, _args, 1)
+        _service_decode(_read_oa_selector_authorization_operator_apply_permission_allow_arguments, _arguments, 1)
+        _request = _service_request("abstraction.rights/operator@2", "ApplyPermissionAllow", _arguments)
+        _payload = _service_response(self._transport.exchange_frame(_request), "abstraction.rights/operator@2", "ApplyPermissionAllow")
+        _result = _service_decode(_read_oa_selector_authorization_operator_apply_permission_allow_result, _payload, 1)
+        return _result.value
+
+    def undo_permission_effect(self, expected_revision: str, question_id: str) -> SelectorEdit:
+        _service_check("string", expected_revision)
+        _service_check("string", question_id)
+        _args = _SelectorAuthorizationOperatorUndoPermissionEffectArguments()
+        _args.expected_revision = expected_revision
+        _args.question_id = question_id
+        _arguments = _service_encode(_write_oa_selector_authorization_operator_undo_permission_effect_arguments, _args, 1)
+        _service_decode(_read_oa_selector_authorization_operator_undo_permission_effect_arguments, _arguments, 1)
+        _request = _service_request("abstraction.rights/operator@2", "UndoPermissionEffect", _arguments)
+        _payload = _service_response(self._transport.exchange_frame(_request), "abstraction.rights/operator@2", "UndoPermissionEffect")
+        _result = _service_decode(_read_oa_selector_authorization_operator_undo_permission_effect_result, _payload, 1)
+        return _result.value
+
+
+_NAMED_IMPORTED = {}
+
+_NAMED_RECORDS = {
+    "Request": (Request, [("op", "string", "never"), ("name", "string", "absent"), ("rights", "list<string>", "zero"), ("secret", "string", "absent"), ("token", "string", "absent"), ("right", "string", "absent"), ("why", "string", "absent"), ("app", "string", "absent"), ("admin", "string", "absent"), ]),
+    "AppMetadata": (AppMetadata, [("id", "string", "never"), ("name", "string", "never"), ("rights", "list<string>", "never"), ("registered", "string", "never"), ]),
+    "HoldMetadata": (HoldMetadata, [("app", "string", "never"), ("name", "string", "never"), ("right", "string", "never"), ("why", "string", "never"), ("since", "string", "never"), ]),
+    "ResponseMetadata": (ResponseMetadata, [("code", "string", "absent"), ("error", "string", "absent"), ("secret", "string", "absent"), ("token", "string", "absent"), ("expires", "string", "absent"), ("app", "AppMetadata", "absent"), ("right", "string", "absent"), ("apps", "list<AppMetadata>", "zero"), ("holds", "list<HoldMetadata>", "zero"), ]),
+    "Subject": (Subject, [("account", "string", "never"), ("program", "string", "never"), ]),
+    "Decision": (Decision, [("outcome", "enum", "never"), ("policy_revision", "string", "absent"), ]),
+    "PolicyRule": (PolicyRule, [("subject", "Subject", "never"), ("action", "string", "never"), ("resource", "string", "never"), ("permit", "bool", "never"), ]),
+    "PolicyPage": (PolicyPage, [("outcome", "enum", "never"), ("revision", "string", "never"), ("catalog", "list<string>", "never"), ("rules", "list<PolicyRule>", "never"), ("next", "string", "never"), ("complete", "bool", "never"), ]),
+    "PolicyEdit": (PolicyEdit, [("outcome", "enum", "never"), ("revision", "string", "never"), ("current", "PolicyRule", "absent"), ]),
+    "RuleRecord": (RuleRecord, [("rule", "PolicyRule", "never"), ("set_by", "Subject", "never"), ("set_at", "string", "never"), ("why", "string", "never"), ("expires", "string", "never"), ]),
+    "RuleRead": (RuleRead, [("outcome", "enum", "never"), ("revision", "string", "never"), ("record", "RuleRecord", "absent"), ]),
+    "CatalogEntry": (CatalogEntry, [("action", "string", "never"), ("registered_by", "Subject", "never"), ("registered_at", "string", "never"), ]),
+    "ActionDescription": (ActionDescription, [("action", "string", "never"), ("feature_app", "Subject", "never"), ("app_label", "string", "never"), ("description", "string", "never"), ("declared_risk", "string", "never"), ]),
+    "PermissionDefinition": (PermissionDefinition, [("action", "string", "never"), ("owner_contract", "string", "never"), ("operations", "list<string>", "never"), ("resource_profile", "string", "never"), ("resource_type", "string", "never"), ("enforced_by", "list<string>", "never"), ("disclosure", "string", "never"), ("lifecycle", "string", "never"), ("first_use", "enum", "never"), ("served", "bool", "never"), ]),
+    "DescribedAction": (DescribedAction, [("action", "string", "never"), ("choices", "list<string>", "never"), ("description", "ActionDescription", "absent"), ("published_by", "Subject", "absent"), ("published_at", "string", "absent"), ]),
+    "ActionEdit": (ActionEdit, [("outcome", "enum", "never"), ("revision", "string", "never"), ("current", "CatalogEntry", "absent"), ]),
+    "DescriptionEdit": (DescriptionEdit, [("outcome", "enum", "never"), ("revision", "string", "never"), ("current", "DescribedAction", "absent"), ]),
+    "DescriptionPage": (DescriptionPage, [("outcome", "enum", "never"), ("revision", "string", "never"), ("actions", "list<DescribedAction>", "never"), ("next", "string", "never"), ("complete", "bool", "never"), ]),
+    "AccountDefault": (AccountDefault, [("name", "string", "never"), ("action", "string", "never"), ("resource", "string", "never"), ("every_resource", "bool", "never"), ("on", "bool", "never"), ("set_by", "Subject", "absent"), ("set_at", "string", "absent"), ]),
+    "DefaultPage": (DefaultPage, [("outcome", "enum", "never"), ("revision", "string", "never"), ("defaults", "list<AccountDefault>", "never"), ]),
+    "DefaultEdit": (DefaultEdit, [("outcome", "enum", "never"), ("revision", "string", "never"), ("current", "AccountDefault", "absent"), ]),
+    "DecisionExplanation": (DecisionExplanation, [("outcome", "enum", "never"), ("policy_revision", "string", "absent"), ("source", "enum", "absent"), ("default_name", "string", "absent"), ]),
+    "PermissionKey": (PermissionKey, [("action", "string", "never"), ("resource_profile", "string", "never"), ]),
+    "ResourceSelector": (ResourceSelector, [("kind", "enum", "never"), ("target", "binary", "absent"), ]),
+    "PermissionSelection": (PermissionSelection, [("permission", "PermissionKey", "never"), ("selector", "ResourceSelector", "never"), ]),
+    "ConcreteResource": (ConcreteResource, [("permission", "PermissionKey", "never"), ("target", "binary", "never"), ]),
+    "CheckBatchRequest": (CheckBatchRequest, [("expected_revision", "string", "absent"), ("collection_admission", "PermissionKey", "absent"), ("resources", "list<ConcreteResource>", "never"), ]),
+    "BatchDecision": (BatchDecision, [("outcome", "enum", "never"), ("revision", "string", "never"), ("collection_outcome", "enum", "absent"), ("outcomes", "list<enum>", "never"), ]),
+    "SelectorPermissionDefinition": (SelectorPermissionDefinition, [("definition", "PermissionDefinition", "never"), ("label", "string", "never"), ("supported_selectors", "list<enum>", "never"), ("first_use_selectors", "list<enum>", "never"), ("collection", "string", "never"), ("all_effect", "string", "never"), ("request_type", "string", "never"), ]),
+    "PermissionDefinitionPage": (PermissionDefinitionPage, [("outcome", "enum", "never"), ("revision", "string", "never"), ("definitions", "list<SelectorPermissionDefinition>", "never"), ("next", "string", "never"), ("complete", "bool", "never"), ]),
+    "PermissionBundleDefinition": (PermissionBundleDefinition, [("bundle_ref", "string", "never"), ("owner_contract", "string", "never"), ("label", "string", "never"), ("target_type", "string", "never"), ("supported_selectors", "list<enum>", "never"), ("members", "list<PermissionKey>", "never"), ("disclosure", "string", "never"), ("definition_digest", "string", "never"), ]),
+    "PermissionBundlePage": (PermissionBundlePage, [("outcome", "enum", "never"), ("revision", "string", "never"), ("bundles", "list<PermissionBundleDefinition>", "never"), ("next", "string", "never"), ("complete", "bool", "never"), ]),
+    "BundleExpansion": (BundleExpansion, [("bundle_ref", "string", "never"), ("definition_digest", "string", "never"), ("selector", "ResourceSelector", "never"), ("selections", "list<PermissionSelection>", "never"), ]),
+    "PermissionEffect": (PermissionEffect, [("subject", "Subject", "never"), ("selections", "list<PermissionSelection>", "never"), ("bundle", "BundleExpansion", "absent"), ]),
+    "SelectorRule": (SelectorRule, [("subject", "Subject", "never"), ("selection", "PermissionSelection", "never"), ("permit", "bool", "never"), ]),
+    "BundleOrigin": (BundleOrigin, [("id", "string", "never"), ("expansion", "BundleExpansion", "never"), ]),
+    "SelectorRuleRecord": (SelectorRuleRecord, [("rule", "SelectorRule", "never"), ("set_by", "Subject", "never"), ("set_at", "string", "never"), ("why", "string", "never"), ("expires", "string", "never"), ("bundle_origin", "BundleOrigin", "absent"), ]),
+    "SelectorRulePage": (SelectorRulePage, [("outcome", "enum", "never"), ("revision", "string", "never"), ("records", "list<SelectorRuleRecord>", "never"), ("next", "string", "never"), ("complete", "bool", "never"), ]),
+    "SelectorRuleRead": (SelectorRuleRead, [("outcome", "enum", "never"), ("revision", "string", "never"), ("record", "SelectorRuleRecord", "absent"), ]),
+    "SelectorEdit": (SelectorEdit, [("outcome", "enum", "never"), ("revision", "string", "never"), ("current", "list<SelectorRuleRecord>", "never"), ("bundle_origin", "BundleOrigin", "absent"), ]),
+    "LegacyOperationRequest": (LegacyOperationRequest, [("legacy_action", "string", "never"), ("legacy_resource", "string", "never"), ("concrete_operation", "ConcreteResource", "absent"), ]),
+}
+
+
+def _named_check(kind, value, depth=0, limit=_DEPTH_LIMIT):
+    # Python coercions must not silently change typed service arguments.
+    if depth >= limit and (kind.startswith(("list<", "map<")) or kind in _NAMED_RECORDS):
+        raise Refusal("depth_exceeded", 0)
+    if kind == "binary":
+        valid = type(value) is bytes
+    elif kind == "string":
+        valid = type(value) is str
+    elif kind == "enum":
+        valid = value is None or isinstance(value, str)
+    elif kind in ("i32", "i64"):
+        valid = type(value) is int
+        if valid:
+            limit = 1 << (31 if kind == "i32" else 63)
+            if not -limit <= value < limit:
+                raise Refusal("number_spelling", 0)
+    elif kind == "bool":
+        valid = type(value) is bool
+    elif kind == "json":
+        valid = isinstance(value, (str, bytes, bytearray, memoryview))
+    elif kind.startswith("list<"):
+        valid = type(value) is list
+        if valid:
+            for item in value:
+                _named_check(kind[5:-1], item, depth + 1, limit)
+    elif kind.startswith("map<string,"):
+        valid = type(value) is dict
+        if valid:
+            for key, item in value.items():
+                _named_check("string", key, depth + 1, limit)
+                _named_check(kind[11:-1], item, depth + 1, limit)
+    elif kind in _NAMED_IMPORTED:
+        cls, check = _NAMED_IMPORTED[kind]
+        valid = isinstance(value, cls)
+        if valid:
+            check(value, depth, limit)
+    else:
+        cls, fields = _NAMED_RECORDS[kind]
+        valid = isinstance(value, cls)
+        if valid:
+            for name, field_kind, omit in fields:
+                if not hasattr(value, name):
+                    raise Refusal("missing_field", 0)
+                item = getattr(value, name)
+                if omit == "absent" and item is None:
+                    continue
+                _named_check(field_kind, item, depth + 1, limit)
+    if not valid:
+        raise Refusal("wrong_type", 0)
+
+
+def _check_request(v, depth=0, limit=_DEPTH_LIMIT):
+    _named_check("Request", v, depth, min(limit, _DEPTH_LIMIT))
+
+
+def _check_app_metadata(v, depth=0, limit=_DEPTH_LIMIT):
+    _named_check("AppMetadata", v, depth, min(limit, _DEPTH_LIMIT))
+
+
+def _check_hold_metadata(v, depth=0, limit=_DEPTH_LIMIT):
+    _named_check("HoldMetadata", v, depth, min(limit, _DEPTH_LIMIT))
+
+
+def _check_response_metadata(v, depth=0, limit=_DEPTH_LIMIT):
+    _named_check("ResponseMetadata", v, depth, min(limit, _DEPTH_LIMIT))
+
+
+def _check_subject(v, depth=0, limit=_DEPTH_LIMIT):
+    _named_check("Subject", v, depth, min(limit, _DEPTH_LIMIT))
+
+
+def _check_decision(v, depth=0, limit=_DEPTH_LIMIT):
+    _named_check("Decision", v, depth, min(limit, _DEPTH_LIMIT))
+
+
+def _check_policy_rule(v, depth=0, limit=_DEPTH_LIMIT):
+    _named_check("PolicyRule", v, depth, min(limit, _DEPTH_LIMIT))
+
+
+def _check_policy_page(v, depth=0, limit=_DEPTH_LIMIT):
+    _named_check("PolicyPage", v, depth, min(limit, _DEPTH_LIMIT))
+
+
+def _check_policy_edit(v, depth=0, limit=_DEPTH_LIMIT):
+    _named_check("PolicyEdit", v, depth, min(limit, _DEPTH_LIMIT))
+
+
+def _check_rule_record(v, depth=0, limit=_DEPTH_LIMIT):
+    _named_check("RuleRecord", v, depth, min(limit, _DEPTH_LIMIT))
+
+
+def _check_rule_read(v, depth=0, limit=_DEPTH_LIMIT):
+    _named_check("RuleRead", v, depth, min(limit, _DEPTH_LIMIT))
+
+
+def _check_catalog_entry(v, depth=0, limit=_DEPTH_LIMIT):
+    _named_check("CatalogEntry", v, depth, min(limit, _DEPTH_LIMIT))
+
+
+def _check_action_description(v, depth=0, limit=_DEPTH_LIMIT):
+    _named_check("ActionDescription", v, depth, min(limit, _DEPTH_LIMIT))
+
+
+def _check_permission_definition(v, depth=0, limit=_DEPTH_LIMIT):
+    _named_check("PermissionDefinition", v, depth, min(limit, _DEPTH_LIMIT))
+
+
+def _check_described_action(v, depth=0, limit=_DEPTH_LIMIT):
+    _named_check("DescribedAction", v, depth, min(limit, _DEPTH_LIMIT))
+
+
+def _check_action_edit(v, depth=0, limit=_DEPTH_LIMIT):
+    _named_check("ActionEdit", v, depth, min(limit, _DEPTH_LIMIT))
+
+
+def _check_description_edit(v, depth=0, limit=_DEPTH_LIMIT):
+    _named_check("DescriptionEdit", v, depth, min(limit, _DEPTH_LIMIT))
+
+
+def _check_description_page(v, depth=0, limit=_DEPTH_LIMIT):
+    _named_check("DescriptionPage", v, depth, min(limit, _DEPTH_LIMIT))
+
+
+def _check_account_default(v, depth=0, limit=_DEPTH_LIMIT):
+    _named_check("AccountDefault", v, depth, min(limit, _DEPTH_LIMIT))
+
+
+def _check_default_page(v, depth=0, limit=_DEPTH_LIMIT):
+    _named_check("DefaultPage", v, depth, min(limit, _DEPTH_LIMIT))
+
+
+def _check_default_edit(v, depth=0, limit=_DEPTH_LIMIT):
+    _named_check("DefaultEdit", v, depth, min(limit, _DEPTH_LIMIT))
+
+
+def _check_decision_explanation(v, depth=0, limit=_DEPTH_LIMIT):
+    _named_check("DecisionExplanation", v, depth, min(limit, _DEPTH_LIMIT))
+
+
+def _check_permission_key(v, depth=0, limit=_DEPTH_LIMIT):
+    _named_check("PermissionKey", v, depth, min(limit, _DEPTH_LIMIT))
+
+
+def _check_resource_selector(v, depth=0, limit=_DEPTH_LIMIT):
+    _named_check("ResourceSelector", v, depth, min(limit, _DEPTH_LIMIT))
+
+
+def _check_permission_selection(v, depth=0, limit=_DEPTH_LIMIT):
+    _named_check("PermissionSelection", v, depth, min(limit, _DEPTH_LIMIT))
+
+
+def _check_concrete_resource(v, depth=0, limit=_DEPTH_LIMIT):
+    _named_check("ConcreteResource", v, depth, min(limit, _DEPTH_LIMIT))
+
+
+def _check_check_batch_request(v, depth=0, limit=_DEPTH_LIMIT):
+    _named_check("CheckBatchRequest", v, depth, min(limit, _DEPTH_LIMIT))
+
+
+def _check_batch_decision(v, depth=0, limit=_DEPTH_LIMIT):
+    _named_check("BatchDecision", v, depth, min(limit, _DEPTH_LIMIT))
+
+
+def _check_selector_permission_definition(v, depth=0, limit=_DEPTH_LIMIT):
+    _named_check("SelectorPermissionDefinition", v, depth, min(limit, _DEPTH_LIMIT))
+
+
+def _check_permission_definition_page(v, depth=0, limit=_DEPTH_LIMIT):
+    _named_check("PermissionDefinitionPage", v, depth, min(limit, _DEPTH_LIMIT))
+
+
+def _check_permission_bundle_definition(v, depth=0, limit=_DEPTH_LIMIT):
+    _named_check("PermissionBundleDefinition", v, depth, min(limit, _DEPTH_LIMIT))
+
+
+def _check_permission_bundle_page(v, depth=0, limit=_DEPTH_LIMIT):
+    _named_check("PermissionBundlePage", v, depth, min(limit, _DEPTH_LIMIT))
+
+
+def _check_bundle_expansion(v, depth=0, limit=_DEPTH_LIMIT):
+    _named_check("BundleExpansion", v, depth, min(limit, _DEPTH_LIMIT))
+
+
+def _check_permission_effect(v, depth=0, limit=_DEPTH_LIMIT):
+    _named_check("PermissionEffect", v, depth, min(limit, _DEPTH_LIMIT))
+
+
+def _check_selector_rule(v, depth=0, limit=_DEPTH_LIMIT):
+    _named_check("SelectorRule", v, depth, min(limit, _DEPTH_LIMIT))
+
+
+def _check_bundle_origin(v, depth=0, limit=_DEPTH_LIMIT):
+    _named_check("BundleOrigin", v, depth, min(limit, _DEPTH_LIMIT))
+
+
+def _check_selector_rule_record(v, depth=0, limit=_DEPTH_LIMIT):
+    _named_check("SelectorRuleRecord", v, depth, min(limit, _DEPTH_LIMIT))
+
+
+def _check_selector_rule_page(v, depth=0, limit=_DEPTH_LIMIT):
+    _named_check("SelectorRulePage", v, depth, min(limit, _DEPTH_LIMIT))
+
+
+def _check_selector_rule_read(v, depth=0, limit=_DEPTH_LIMIT):
+    _named_check("SelectorRuleRead", v, depth, min(limit, _DEPTH_LIMIT))
+
+
+def _check_selector_edit(v, depth=0, limit=_DEPTH_LIMIT):
+    _named_check("SelectorEdit", v, depth, min(limit, _DEPTH_LIMIT))
+
+
+def _check_legacy_operation_request(v, depth=0, limit=_DEPTH_LIMIT):
+    _named_check("LegacyOperationRequest", v, depth, min(limit, _DEPTH_LIMIT))
+
+
+def _decode_request_at(data, depth, limit):
+    r = _Reader(bytes(data))
+    if depth < 0 or limit < 1:
+        raise r.refuse("depth_exceeded")
+    r.depth = depth
+    r.limit = min(limit, _DEPTH_LIMIT)
+    r.ws()
+    v = _read_request(r)
+    return v, r.pos
+
+
+def _encode_request_at(v, depth):
+    if depth < 0 or depth >= _DEPTH_LIMIT:
+        raise _Reader(b"").refuse("depth_exceeded")
+    _check_request(v, depth, _DEPTH_LIMIT)
+    out = bytearray()
+    _write_request(out, v, depth)
+    _decode_request_at(out, depth, _DEPTH_LIMIT)
+    return bytes(out)
+
+
+def encode_request(v):
+    return _encode_request_at(v, 0) + "\n".encode()
+
+
+def decode_request(data):
+    v, n = _decode_request_at(data, 0, _DEPTH_LIMIT)
+    r = _Reader(bytes(data))
+    r.pos = n
+    r.ws()
+    if r.pos != len(r.buf):
+        raise r.refuse("trailing_bytes")
+    return v
+
+
+def _decode_app_metadata_at(data, depth, limit):
+    r = _Reader(bytes(data))
+    if depth < 0 or limit < 1:
+        raise r.refuse("depth_exceeded")
+    r.depth = depth
+    r.limit = min(limit, _DEPTH_LIMIT)
+    r.ws()
+    v = _read_app_metadata(r)
+    return v, r.pos
+
+
+def _encode_app_metadata_at(v, depth):
+    if depth < 0 or depth >= _DEPTH_LIMIT:
+        raise _Reader(b"").refuse("depth_exceeded")
+    _check_app_metadata(v, depth, _DEPTH_LIMIT)
+    out = bytearray()
+    _write_app_metadata(out, v, depth)
+    _decode_app_metadata_at(out, depth, _DEPTH_LIMIT)
+    return bytes(out)
+
+
+def encode_app_metadata(v):
+    return _encode_app_metadata_at(v, 0) + "\n".encode()
+
+
+def decode_app_metadata(data):
+    v, n = _decode_app_metadata_at(data, 0, _DEPTH_LIMIT)
+    r = _Reader(bytes(data))
+    r.pos = n
+    r.ws()
+    if r.pos != len(r.buf):
+        raise r.refuse("trailing_bytes")
+    return v
+
+
+def _decode_hold_metadata_at(data, depth, limit):
+    r = _Reader(bytes(data))
+    if depth < 0 or limit < 1:
+        raise r.refuse("depth_exceeded")
+    r.depth = depth
+    r.limit = min(limit, _DEPTH_LIMIT)
+    r.ws()
+    v = _read_hold_metadata(r)
+    return v, r.pos
+
+
+def _encode_hold_metadata_at(v, depth):
+    if depth < 0 or depth >= _DEPTH_LIMIT:
+        raise _Reader(b"").refuse("depth_exceeded")
+    _check_hold_metadata(v, depth, _DEPTH_LIMIT)
+    out = bytearray()
+    _write_hold_metadata(out, v, depth)
+    _decode_hold_metadata_at(out, depth, _DEPTH_LIMIT)
+    return bytes(out)
+
+
+def encode_hold_metadata(v):
+    return _encode_hold_metadata_at(v, 0) + "\n".encode()
+
+
+def decode_hold_metadata(data):
+    v, n = _decode_hold_metadata_at(data, 0, _DEPTH_LIMIT)
+    r = _Reader(bytes(data))
+    r.pos = n
+    r.ws()
+    if r.pos != len(r.buf):
+        raise r.refuse("trailing_bytes")
+    return v
+
+
+def _decode_response_metadata_at(data, depth, limit):
+    r = _Reader(bytes(data))
+    if depth < 0 or limit < 1:
+        raise r.refuse("depth_exceeded")
+    r.depth = depth
+    r.limit = min(limit, _DEPTH_LIMIT)
+    r.ws()
+    v = _read_response_metadata(r)
+    return v, r.pos
+
+
+def _encode_response_metadata_at(v, depth):
+    if depth < 0 or depth >= _DEPTH_LIMIT:
+        raise _Reader(b"").refuse("depth_exceeded")
+    _check_response_metadata(v, depth, _DEPTH_LIMIT)
+    out = bytearray()
+    _write_response_metadata(out, v, depth)
+    _decode_response_metadata_at(out, depth, _DEPTH_LIMIT)
+    return bytes(out)
+
+
+def encode_response_metadata(v):
+    return _encode_response_metadata_at(v, 0) + "\n".encode()
+
+
+def decode_response_metadata(data):
+    v, n = _decode_response_metadata_at(data, 0, _DEPTH_LIMIT)
+    r = _Reader(bytes(data))
+    r.pos = n
+    r.ws()
+    if r.pos != len(r.buf):
+        raise r.refuse("trailing_bytes")
+    return v
+
+
+def _decode_subject_at(data, depth, limit):
+    r = _Reader(bytes(data))
+    if depth < 0 or limit < 1:
+        raise r.refuse("depth_exceeded")
+    r.depth = depth
+    r.limit = min(limit, _DEPTH_LIMIT)
+    r.ws()
+    v = _read_subject(r)
+    return v, r.pos
+
+
+def _encode_subject_at(v, depth):
+    if depth < 0 or depth >= _DEPTH_LIMIT:
+        raise _Reader(b"").refuse("depth_exceeded")
+    _check_subject(v, depth, _DEPTH_LIMIT)
+    out = bytearray()
+    _write_subject(out, v, depth)
+    _decode_subject_at(out, depth, _DEPTH_LIMIT)
+    return bytes(out)
+
+
+def encode_subject(v):
+    return _encode_subject_at(v, 0) + "\n".encode()
+
+
+def decode_subject(data):
+    v, n = _decode_subject_at(data, 0, _DEPTH_LIMIT)
+    r = _Reader(bytes(data))
+    r.pos = n
+    r.ws()
+    if r.pos != len(r.buf):
+        raise r.refuse("trailing_bytes")
+    return v
+
+
+def _decode_decision_at(data, depth, limit):
+    r = _Reader(bytes(data))
+    if depth < 0 or limit < 1:
+        raise r.refuse("depth_exceeded")
+    r.depth = depth
+    r.limit = min(limit, _DEPTH_LIMIT)
+    r.ws()
+    v = _read_decision(r)
+    return v, r.pos
+
+
+def _encode_decision_at(v, depth):
+    if depth < 0 or depth >= _DEPTH_LIMIT:
+        raise _Reader(b"").refuse("depth_exceeded")
+    _check_decision(v, depth, _DEPTH_LIMIT)
+    out = bytearray()
+    _write_decision(out, v, depth)
+    _decode_decision_at(out, depth, _DEPTH_LIMIT)
+    return bytes(out)
+
+
+def encode_decision(v):
+    return _encode_decision_at(v, 0) + "\n".encode()
+
+
+def decode_decision(data):
+    v, n = _decode_decision_at(data, 0, _DEPTH_LIMIT)
+    r = _Reader(bytes(data))
+    r.pos = n
+    r.ws()
+    if r.pos != len(r.buf):
+        raise r.refuse("trailing_bytes")
+    return v
+
+
+def _decode_policy_rule_at(data, depth, limit):
+    r = _Reader(bytes(data))
+    if depth < 0 or limit < 1:
+        raise r.refuse("depth_exceeded")
+    r.depth = depth
+    r.limit = min(limit, _DEPTH_LIMIT)
+    r.ws()
+    v = _read_policy_rule(r)
+    return v, r.pos
+
+
+def _encode_policy_rule_at(v, depth):
+    if depth < 0 or depth >= _DEPTH_LIMIT:
+        raise _Reader(b"").refuse("depth_exceeded")
+    _check_policy_rule(v, depth, _DEPTH_LIMIT)
+    out = bytearray()
+    _write_policy_rule(out, v, depth)
+    _decode_policy_rule_at(out, depth, _DEPTH_LIMIT)
+    return bytes(out)
+
+
+def encode_policy_rule(v):
+    return _encode_policy_rule_at(v, 0) + "\n".encode()
+
+
+def decode_policy_rule(data):
+    v, n = _decode_policy_rule_at(data, 0, _DEPTH_LIMIT)
+    r = _Reader(bytes(data))
+    r.pos = n
+    r.ws()
+    if r.pos != len(r.buf):
+        raise r.refuse("trailing_bytes")
+    return v
+
+
+def _decode_policy_page_at(data, depth, limit):
+    r = _Reader(bytes(data))
+    if depth < 0 or limit < 1:
+        raise r.refuse("depth_exceeded")
+    r.depth = depth
+    r.limit = min(limit, _DEPTH_LIMIT)
+    r.ws()
+    v = _read_policy_page(r)
+    return v, r.pos
+
+
+def _encode_policy_page_at(v, depth):
+    if depth < 0 or depth >= _DEPTH_LIMIT:
+        raise _Reader(b"").refuse("depth_exceeded")
+    _check_policy_page(v, depth, _DEPTH_LIMIT)
+    out = bytearray()
+    _write_policy_page(out, v, depth)
+    _decode_policy_page_at(out, depth, _DEPTH_LIMIT)
+    return bytes(out)
+
+
+def encode_policy_page(v):
+    return _encode_policy_page_at(v, 0) + "\n".encode()
+
+
+def decode_policy_page(data):
+    v, n = _decode_policy_page_at(data, 0, _DEPTH_LIMIT)
+    r = _Reader(bytes(data))
+    r.pos = n
+    r.ws()
+    if r.pos != len(r.buf):
+        raise r.refuse("trailing_bytes")
+    return v
+
+
+def _decode_policy_edit_at(data, depth, limit):
+    r = _Reader(bytes(data))
+    if depth < 0 or limit < 1:
+        raise r.refuse("depth_exceeded")
+    r.depth = depth
+    r.limit = min(limit, _DEPTH_LIMIT)
+    r.ws()
+    v = _read_policy_edit(r)
+    return v, r.pos
+
+
+def _encode_policy_edit_at(v, depth):
+    if depth < 0 or depth >= _DEPTH_LIMIT:
+        raise _Reader(b"").refuse("depth_exceeded")
+    _check_policy_edit(v, depth, _DEPTH_LIMIT)
+    out = bytearray()
+    _write_policy_edit(out, v, depth)
+    _decode_policy_edit_at(out, depth, _DEPTH_LIMIT)
+    return bytes(out)
+
+
+def encode_policy_edit(v):
+    return _encode_policy_edit_at(v, 0) + "\n".encode()
+
+
+def decode_policy_edit(data):
+    v, n = _decode_policy_edit_at(data, 0, _DEPTH_LIMIT)
+    r = _Reader(bytes(data))
+    r.pos = n
+    r.ws()
+    if r.pos != len(r.buf):
+        raise r.refuse("trailing_bytes")
+    return v
+
+
+def _decode_rule_record_at(data, depth, limit):
+    r = _Reader(bytes(data))
+    if depth < 0 or limit < 1:
+        raise r.refuse("depth_exceeded")
+    r.depth = depth
+    r.limit = min(limit, _DEPTH_LIMIT)
+    r.ws()
+    v = _read_rule_record(r)
+    return v, r.pos
+
+
+def _encode_rule_record_at(v, depth):
+    if depth < 0 or depth >= _DEPTH_LIMIT:
+        raise _Reader(b"").refuse("depth_exceeded")
+    _check_rule_record(v, depth, _DEPTH_LIMIT)
+    out = bytearray()
+    _write_rule_record(out, v, depth)
+    _decode_rule_record_at(out, depth, _DEPTH_LIMIT)
+    return bytes(out)
+
+
+def encode_rule_record(v):
+    return _encode_rule_record_at(v, 0) + "\n".encode()
+
+
+def decode_rule_record(data):
+    v, n = _decode_rule_record_at(data, 0, _DEPTH_LIMIT)
+    r = _Reader(bytes(data))
+    r.pos = n
+    r.ws()
+    if r.pos != len(r.buf):
+        raise r.refuse("trailing_bytes")
+    return v
+
+
+def _decode_rule_read_at(data, depth, limit):
+    r = _Reader(bytes(data))
+    if depth < 0 or limit < 1:
+        raise r.refuse("depth_exceeded")
+    r.depth = depth
+    r.limit = min(limit, _DEPTH_LIMIT)
+    r.ws()
+    v = _read_rule_read(r)
+    return v, r.pos
+
+
+def _encode_rule_read_at(v, depth):
+    if depth < 0 or depth >= _DEPTH_LIMIT:
+        raise _Reader(b"").refuse("depth_exceeded")
+    _check_rule_read(v, depth, _DEPTH_LIMIT)
+    out = bytearray()
+    _write_rule_read(out, v, depth)
+    _decode_rule_read_at(out, depth, _DEPTH_LIMIT)
+    return bytes(out)
+
+
+def encode_rule_read(v):
+    return _encode_rule_read_at(v, 0) + "\n".encode()
+
+
+def decode_rule_read(data):
+    v, n = _decode_rule_read_at(data, 0, _DEPTH_LIMIT)
+    r = _Reader(bytes(data))
+    r.pos = n
+    r.ws()
+    if r.pos != len(r.buf):
+        raise r.refuse("trailing_bytes")
+    return v
+
+
+def _decode_catalog_entry_at(data, depth, limit):
+    r = _Reader(bytes(data))
+    if depth < 0 or limit < 1:
+        raise r.refuse("depth_exceeded")
+    r.depth = depth
+    r.limit = min(limit, _DEPTH_LIMIT)
+    r.ws()
+    v = _read_catalog_entry(r)
+    return v, r.pos
+
+
+def _encode_catalog_entry_at(v, depth):
+    if depth < 0 or depth >= _DEPTH_LIMIT:
+        raise _Reader(b"").refuse("depth_exceeded")
+    _check_catalog_entry(v, depth, _DEPTH_LIMIT)
+    out = bytearray()
+    _write_catalog_entry(out, v, depth)
+    _decode_catalog_entry_at(out, depth, _DEPTH_LIMIT)
+    return bytes(out)
+
+
+def encode_catalog_entry(v):
+    return _encode_catalog_entry_at(v, 0) + "\n".encode()
+
+
+def decode_catalog_entry(data):
+    v, n = _decode_catalog_entry_at(data, 0, _DEPTH_LIMIT)
+    r = _Reader(bytes(data))
+    r.pos = n
+    r.ws()
+    if r.pos != len(r.buf):
+        raise r.refuse("trailing_bytes")
+    return v
+
+
+def _decode_action_description_at(data, depth, limit):
+    r = _Reader(bytes(data))
+    if depth < 0 or limit < 1:
+        raise r.refuse("depth_exceeded")
+    r.depth = depth
+    r.limit = min(limit, _DEPTH_LIMIT)
+    r.ws()
+    v = _read_action_description(r)
+    return v, r.pos
+
+
+def _encode_action_description_at(v, depth):
+    if depth < 0 or depth >= _DEPTH_LIMIT:
+        raise _Reader(b"").refuse("depth_exceeded")
+    _check_action_description(v, depth, _DEPTH_LIMIT)
+    out = bytearray()
+    _write_action_description(out, v, depth)
+    _decode_action_description_at(out, depth, _DEPTH_LIMIT)
+    return bytes(out)
+
+
+def encode_action_description(v):
+    return _encode_action_description_at(v, 0) + "\n".encode()
+
+
+def decode_action_description(data):
+    v, n = _decode_action_description_at(data, 0, _DEPTH_LIMIT)
+    r = _Reader(bytes(data))
+    r.pos = n
+    r.ws()
+    if r.pos != len(r.buf):
+        raise r.refuse("trailing_bytes")
+    return v
+
+
+def _decode_permission_definition_at(data, depth, limit):
+    r = _Reader(bytes(data))
+    if depth < 0 or limit < 1:
+        raise r.refuse("depth_exceeded")
+    r.depth = depth
+    r.limit = min(limit, _DEPTH_LIMIT)
+    r.ws()
+    v = _read_permission_definition(r)
+    return v, r.pos
+
+
+def _encode_permission_definition_at(v, depth):
+    if depth < 0 or depth >= _DEPTH_LIMIT:
+        raise _Reader(b"").refuse("depth_exceeded")
+    _check_permission_definition(v, depth, _DEPTH_LIMIT)
+    out = bytearray()
+    _write_permission_definition(out, v, depth)
+    _decode_permission_definition_at(out, depth, _DEPTH_LIMIT)
+    return bytes(out)
+
+
+def encode_permission_definition(v):
+    return _encode_permission_definition_at(v, 0) + "\n".encode()
+
+
+def decode_permission_definition(data):
+    v, n = _decode_permission_definition_at(data, 0, _DEPTH_LIMIT)
+    r = _Reader(bytes(data))
+    r.pos = n
+    r.ws()
+    if r.pos != len(r.buf):
+        raise r.refuse("trailing_bytes")
+    return v
+
+
+def _decode_described_action_at(data, depth, limit):
+    r = _Reader(bytes(data))
+    if depth < 0 or limit < 1:
+        raise r.refuse("depth_exceeded")
+    r.depth = depth
+    r.limit = min(limit, _DEPTH_LIMIT)
+    r.ws()
+    v = _read_described_action(r)
+    return v, r.pos
+
+
+def _encode_described_action_at(v, depth):
+    if depth < 0 or depth >= _DEPTH_LIMIT:
+        raise _Reader(b"").refuse("depth_exceeded")
+    _check_described_action(v, depth, _DEPTH_LIMIT)
+    out = bytearray()
+    _write_described_action(out, v, depth)
+    _decode_described_action_at(out, depth, _DEPTH_LIMIT)
+    return bytes(out)
+
+
+def encode_described_action(v):
+    return _encode_described_action_at(v, 0) + "\n".encode()
+
+
+def decode_described_action(data):
+    v, n = _decode_described_action_at(data, 0, _DEPTH_LIMIT)
+    r = _Reader(bytes(data))
+    r.pos = n
+    r.ws()
+    if r.pos != len(r.buf):
+        raise r.refuse("trailing_bytes")
+    return v
+
+
+def _decode_action_edit_at(data, depth, limit):
+    r = _Reader(bytes(data))
+    if depth < 0 or limit < 1:
+        raise r.refuse("depth_exceeded")
+    r.depth = depth
+    r.limit = min(limit, _DEPTH_LIMIT)
+    r.ws()
+    v = _read_action_edit(r)
+    return v, r.pos
+
+
+def _encode_action_edit_at(v, depth):
+    if depth < 0 or depth >= _DEPTH_LIMIT:
+        raise _Reader(b"").refuse("depth_exceeded")
+    _check_action_edit(v, depth, _DEPTH_LIMIT)
+    out = bytearray()
+    _write_action_edit(out, v, depth)
+    _decode_action_edit_at(out, depth, _DEPTH_LIMIT)
+    return bytes(out)
+
+
+def encode_action_edit(v):
+    return _encode_action_edit_at(v, 0) + "\n".encode()
+
+
+def decode_action_edit(data):
+    v, n = _decode_action_edit_at(data, 0, _DEPTH_LIMIT)
+    r = _Reader(bytes(data))
+    r.pos = n
+    r.ws()
+    if r.pos != len(r.buf):
+        raise r.refuse("trailing_bytes")
+    return v
+
+
+def _decode_description_edit_at(data, depth, limit):
+    r = _Reader(bytes(data))
+    if depth < 0 or limit < 1:
+        raise r.refuse("depth_exceeded")
+    r.depth = depth
+    r.limit = min(limit, _DEPTH_LIMIT)
+    r.ws()
+    v = _read_description_edit(r)
+    return v, r.pos
+
+
+def _encode_description_edit_at(v, depth):
+    if depth < 0 or depth >= _DEPTH_LIMIT:
+        raise _Reader(b"").refuse("depth_exceeded")
+    _check_description_edit(v, depth, _DEPTH_LIMIT)
+    out = bytearray()
+    _write_description_edit(out, v, depth)
+    _decode_description_edit_at(out, depth, _DEPTH_LIMIT)
+    return bytes(out)
+
+
+def encode_description_edit(v):
+    return _encode_description_edit_at(v, 0) + "\n".encode()
+
+
+def decode_description_edit(data):
+    v, n = _decode_description_edit_at(data, 0, _DEPTH_LIMIT)
+    r = _Reader(bytes(data))
+    r.pos = n
+    r.ws()
+    if r.pos != len(r.buf):
+        raise r.refuse("trailing_bytes")
+    return v
+
+
+def _decode_description_page_at(data, depth, limit):
+    r = _Reader(bytes(data))
+    if depth < 0 or limit < 1:
+        raise r.refuse("depth_exceeded")
+    r.depth = depth
+    r.limit = min(limit, _DEPTH_LIMIT)
+    r.ws()
+    v = _read_description_page(r)
+    return v, r.pos
+
+
+def _encode_description_page_at(v, depth):
+    if depth < 0 or depth >= _DEPTH_LIMIT:
+        raise _Reader(b"").refuse("depth_exceeded")
+    _check_description_page(v, depth, _DEPTH_LIMIT)
+    out = bytearray()
+    _write_description_page(out, v, depth)
+    _decode_description_page_at(out, depth, _DEPTH_LIMIT)
+    return bytes(out)
+
+
+def encode_description_page(v):
+    return _encode_description_page_at(v, 0) + "\n".encode()
+
+
+def decode_description_page(data):
+    v, n = _decode_description_page_at(data, 0, _DEPTH_LIMIT)
+    r = _Reader(bytes(data))
+    r.pos = n
+    r.ws()
+    if r.pos != len(r.buf):
+        raise r.refuse("trailing_bytes")
+    return v
+
+
+def _decode_account_default_at(data, depth, limit):
+    r = _Reader(bytes(data))
+    if depth < 0 or limit < 1:
+        raise r.refuse("depth_exceeded")
+    r.depth = depth
+    r.limit = min(limit, _DEPTH_LIMIT)
+    r.ws()
+    v = _read_account_default(r)
+    return v, r.pos
+
+
+def _encode_account_default_at(v, depth):
+    if depth < 0 or depth >= _DEPTH_LIMIT:
+        raise _Reader(b"").refuse("depth_exceeded")
+    _check_account_default(v, depth, _DEPTH_LIMIT)
+    out = bytearray()
+    _write_account_default(out, v, depth)
+    _decode_account_default_at(out, depth, _DEPTH_LIMIT)
+    return bytes(out)
+
+
+def encode_account_default(v):
+    return _encode_account_default_at(v, 0) + "\n".encode()
+
+
+def decode_account_default(data):
+    v, n = _decode_account_default_at(data, 0, _DEPTH_LIMIT)
+    r = _Reader(bytes(data))
+    r.pos = n
+    r.ws()
+    if r.pos != len(r.buf):
+        raise r.refuse("trailing_bytes")
+    return v
+
+
+def _decode_default_page_at(data, depth, limit):
+    r = _Reader(bytes(data))
+    if depth < 0 or limit < 1:
+        raise r.refuse("depth_exceeded")
+    r.depth = depth
+    r.limit = min(limit, _DEPTH_LIMIT)
+    r.ws()
+    v = _read_default_page(r)
+    return v, r.pos
+
+
+def _encode_default_page_at(v, depth):
+    if depth < 0 or depth >= _DEPTH_LIMIT:
+        raise _Reader(b"").refuse("depth_exceeded")
+    _check_default_page(v, depth, _DEPTH_LIMIT)
+    out = bytearray()
+    _write_default_page(out, v, depth)
+    _decode_default_page_at(out, depth, _DEPTH_LIMIT)
+    return bytes(out)
+
+
+def encode_default_page(v):
+    return _encode_default_page_at(v, 0) + "\n".encode()
+
+
+def decode_default_page(data):
+    v, n = _decode_default_page_at(data, 0, _DEPTH_LIMIT)
+    r = _Reader(bytes(data))
+    r.pos = n
+    r.ws()
+    if r.pos != len(r.buf):
+        raise r.refuse("trailing_bytes")
+    return v
+
+
+def _decode_default_edit_at(data, depth, limit):
+    r = _Reader(bytes(data))
+    if depth < 0 or limit < 1:
+        raise r.refuse("depth_exceeded")
+    r.depth = depth
+    r.limit = min(limit, _DEPTH_LIMIT)
+    r.ws()
+    v = _read_default_edit(r)
+    return v, r.pos
+
+
+def _encode_default_edit_at(v, depth):
+    if depth < 0 or depth >= _DEPTH_LIMIT:
+        raise _Reader(b"").refuse("depth_exceeded")
+    _check_default_edit(v, depth, _DEPTH_LIMIT)
+    out = bytearray()
+    _write_default_edit(out, v, depth)
+    _decode_default_edit_at(out, depth, _DEPTH_LIMIT)
+    return bytes(out)
+
+
+def encode_default_edit(v):
+    return _encode_default_edit_at(v, 0) + "\n".encode()
+
+
+def decode_default_edit(data):
+    v, n = _decode_default_edit_at(data, 0, _DEPTH_LIMIT)
+    r = _Reader(bytes(data))
+    r.pos = n
+    r.ws()
+    if r.pos != len(r.buf):
+        raise r.refuse("trailing_bytes")
+    return v
+
+
+def _decode_decision_explanation_at(data, depth, limit):
+    r = _Reader(bytes(data))
+    if depth < 0 or limit < 1:
+        raise r.refuse("depth_exceeded")
+    r.depth = depth
+    r.limit = min(limit, _DEPTH_LIMIT)
+    r.ws()
+    v = _read_decision_explanation(r)
+    return v, r.pos
+
+
+def _encode_decision_explanation_at(v, depth):
+    if depth < 0 or depth >= _DEPTH_LIMIT:
+        raise _Reader(b"").refuse("depth_exceeded")
+    _check_decision_explanation(v, depth, _DEPTH_LIMIT)
+    out = bytearray()
+    _write_decision_explanation(out, v, depth)
+    _decode_decision_explanation_at(out, depth, _DEPTH_LIMIT)
+    return bytes(out)
+
+
+def encode_decision_explanation(v):
+    return _encode_decision_explanation_at(v, 0) + "\n".encode()
+
+
+def decode_decision_explanation(data):
+    v, n = _decode_decision_explanation_at(data, 0, _DEPTH_LIMIT)
+    r = _Reader(bytes(data))
+    r.pos = n
+    r.ws()
+    if r.pos != len(r.buf):
+        raise r.refuse("trailing_bytes")
+    return v
+
+
+def _decode_permission_key_at(data, depth, limit):
+    r = _Reader(bytes(data))
+    if depth < 0 or limit < 1:
+        raise r.refuse("depth_exceeded")
+    r.depth = depth
+    r.limit = min(limit, _DEPTH_LIMIT)
+    r.ws()
+    v = _read_permission_key(r)
+    return v, r.pos
+
+
+def _encode_permission_key_at(v, depth):
+    if depth < 0 or depth >= _DEPTH_LIMIT:
+        raise _Reader(b"").refuse("depth_exceeded")
+    _check_permission_key(v, depth, _DEPTH_LIMIT)
+    out = bytearray()
+    _write_permission_key(out, v, depth)
+    _decode_permission_key_at(out, depth, _DEPTH_LIMIT)
+    return bytes(out)
+
+
+def encode_permission_key(v):
+    return _encode_permission_key_at(v, 0) + "\n".encode()
+
+
+def decode_permission_key(data):
+    v, n = _decode_permission_key_at(data, 0, _DEPTH_LIMIT)
+    r = _Reader(bytes(data))
+    r.pos = n
+    r.ws()
+    if r.pos != len(r.buf):
+        raise r.refuse("trailing_bytes")
+    return v
+
+
+def _decode_resource_selector_at(data, depth, limit):
+    r = _Reader(bytes(data))
+    if depth < 0 or limit < 1:
+        raise r.refuse("depth_exceeded")
+    r.depth = depth
+    r.limit = min(limit, _DEPTH_LIMIT)
+    r.ws()
+    v = _read_resource_selector(r)
+    return v, r.pos
+
+
+def _encode_resource_selector_at(v, depth):
+    if depth < 0 or depth >= _DEPTH_LIMIT:
+        raise _Reader(b"").refuse("depth_exceeded")
+    _check_resource_selector(v, depth, _DEPTH_LIMIT)
+    out = bytearray()
+    _write_resource_selector(out, v, depth)
+    _decode_resource_selector_at(out, depth, _DEPTH_LIMIT)
+    return bytes(out)
+
+
+def encode_resource_selector(v):
+    return _encode_resource_selector_at(v, 0) + "\n".encode()
+
+
+def decode_resource_selector(data):
+    v, n = _decode_resource_selector_at(data, 0, _DEPTH_LIMIT)
+    r = _Reader(bytes(data))
+    r.pos = n
+    r.ws()
+    if r.pos != len(r.buf):
+        raise r.refuse("trailing_bytes")
+    return v
+
+
+def _decode_permission_selection_at(data, depth, limit):
+    r = _Reader(bytes(data))
+    if depth < 0 or limit < 1:
+        raise r.refuse("depth_exceeded")
+    r.depth = depth
+    r.limit = min(limit, _DEPTH_LIMIT)
+    r.ws()
+    v = _read_permission_selection(r)
+    return v, r.pos
+
+
+def _encode_permission_selection_at(v, depth):
+    if depth < 0 or depth >= _DEPTH_LIMIT:
+        raise _Reader(b"").refuse("depth_exceeded")
+    _check_permission_selection(v, depth, _DEPTH_LIMIT)
+    out = bytearray()
+    _write_permission_selection(out, v, depth)
+    _decode_permission_selection_at(out, depth, _DEPTH_LIMIT)
+    return bytes(out)
+
+
+def encode_permission_selection(v):
+    return _encode_permission_selection_at(v, 0) + "\n".encode()
+
+
+def decode_permission_selection(data):
+    v, n = _decode_permission_selection_at(data, 0, _DEPTH_LIMIT)
+    r = _Reader(bytes(data))
+    r.pos = n
+    r.ws()
+    if r.pos != len(r.buf):
+        raise r.refuse("trailing_bytes")
+    return v
+
+
+def _decode_concrete_resource_at(data, depth, limit):
+    r = _Reader(bytes(data))
+    if depth < 0 or limit < 1:
+        raise r.refuse("depth_exceeded")
+    r.depth = depth
+    r.limit = min(limit, _DEPTH_LIMIT)
+    r.ws()
+    v = _read_concrete_resource(r)
+    return v, r.pos
+
+
+def _encode_concrete_resource_at(v, depth):
+    if depth < 0 or depth >= _DEPTH_LIMIT:
+        raise _Reader(b"").refuse("depth_exceeded")
+    _check_concrete_resource(v, depth, _DEPTH_LIMIT)
+    out = bytearray()
+    _write_concrete_resource(out, v, depth)
+    _decode_concrete_resource_at(out, depth, _DEPTH_LIMIT)
+    return bytes(out)
+
+
+def encode_concrete_resource(v):
+    return _encode_concrete_resource_at(v, 0) + "\n".encode()
+
+
+def decode_concrete_resource(data):
+    v, n = _decode_concrete_resource_at(data, 0, _DEPTH_LIMIT)
+    r = _Reader(bytes(data))
+    r.pos = n
+    r.ws()
+    if r.pos != len(r.buf):
+        raise r.refuse("trailing_bytes")
+    return v
+
+
+def _decode_check_batch_request_at(data, depth, limit):
+    r = _Reader(bytes(data))
+    if depth < 0 or limit < 1:
+        raise r.refuse("depth_exceeded")
+    r.depth = depth
+    r.limit = min(limit, _DEPTH_LIMIT)
+    r.ws()
+    v = _read_check_batch_request(r)
+    return v, r.pos
+
+
+def _encode_check_batch_request_at(v, depth):
+    if depth < 0 or depth >= _DEPTH_LIMIT:
+        raise _Reader(b"").refuse("depth_exceeded")
+    _check_check_batch_request(v, depth, _DEPTH_LIMIT)
+    out = bytearray()
+    _write_check_batch_request(out, v, depth)
+    _decode_check_batch_request_at(out, depth, _DEPTH_LIMIT)
+    return bytes(out)
+
+
+def encode_check_batch_request(v):
+    return _encode_check_batch_request_at(v, 0) + "\n".encode()
+
+
+def decode_check_batch_request(data):
+    v, n = _decode_check_batch_request_at(data, 0, _DEPTH_LIMIT)
+    r = _Reader(bytes(data))
+    r.pos = n
+    r.ws()
+    if r.pos != len(r.buf):
+        raise r.refuse("trailing_bytes")
+    return v
+
+
+def _decode_batch_decision_at(data, depth, limit):
+    r = _Reader(bytes(data))
+    if depth < 0 or limit < 1:
+        raise r.refuse("depth_exceeded")
+    r.depth = depth
+    r.limit = min(limit, _DEPTH_LIMIT)
+    r.ws()
+    v = _read_batch_decision(r)
+    return v, r.pos
+
+
+def _encode_batch_decision_at(v, depth):
+    if depth < 0 or depth >= _DEPTH_LIMIT:
+        raise _Reader(b"").refuse("depth_exceeded")
+    _check_batch_decision(v, depth, _DEPTH_LIMIT)
+    out = bytearray()
+    _write_batch_decision(out, v, depth)
+    _decode_batch_decision_at(out, depth, _DEPTH_LIMIT)
+    return bytes(out)
+
+
+def encode_batch_decision(v):
+    return _encode_batch_decision_at(v, 0) + "\n".encode()
+
+
+def decode_batch_decision(data):
+    v, n = _decode_batch_decision_at(data, 0, _DEPTH_LIMIT)
+    r = _Reader(bytes(data))
+    r.pos = n
+    r.ws()
+    if r.pos != len(r.buf):
+        raise r.refuse("trailing_bytes")
+    return v
+
+
+def _decode_selector_permission_definition_at(data, depth, limit):
+    r = _Reader(bytes(data))
+    if depth < 0 or limit < 1:
+        raise r.refuse("depth_exceeded")
+    r.depth = depth
+    r.limit = min(limit, _DEPTH_LIMIT)
+    r.ws()
+    v = _read_selector_permission_definition(r)
+    return v, r.pos
+
+
+def _encode_selector_permission_definition_at(v, depth):
+    if depth < 0 or depth >= _DEPTH_LIMIT:
+        raise _Reader(b"").refuse("depth_exceeded")
+    _check_selector_permission_definition(v, depth, _DEPTH_LIMIT)
+    out = bytearray()
+    _write_selector_permission_definition(out, v, depth)
+    _decode_selector_permission_definition_at(out, depth, _DEPTH_LIMIT)
+    return bytes(out)
+
+
+def encode_selector_permission_definition(v):
+    return _encode_selector_permission_definition_at(v, 0) + "\n".encode()
+
+
+def decode_selector_permission_definition(data):
+    v, n = _decode_selector_permission_definition_at(data, 0, _DEPTH_LIMIT)
+    r = _Reader(bytes(data))
+    r.pos = n
+    r.ws()
+    if r.pos != len(r.buf):
+        raise r.refuse("trailing_bytes")
+    return v
+
+
+def _decode_permission_definition_page_at(data, depth, limit):
+    r = _Reader(bytes(data))
+    if depth < 0 or limit < 1:
+        raise r.refuse("depth_exceeded")
+    r.depth = depth
+    r.limit = min(limit, _DEPTH_LIMIT)
+    r.ws()
+    v = _read_permission_definition_page(r)
+    return v, r.pos
+
+
+def _encode_permission_definition_page_at(v, depth):
+    if depth < 0 or depth >= _DEPTH_LIMIT:
+        raise _Reader(b"").refuse("depth_exceeded")
+    _check_permission_definition_page(v, depth, _DEPTH_LIMIT)
+    out = bytearray()
+    _write_permission_definition_page(out, v, depth)
+    _decode_permission_definition_page_at(out, depth, _DEPTH_LIMIT)
+    return bytes(out)
+
+
+def encode_permission_definition_page(v):
+    return _encode_permission_definition_page_at(v, 0) + "\n".encode()
+
+
+def decode_permission_definition_page(data):
+    v, n = _decode_permission_definition_page_at(data, 0, _DEPTH_LIMIT)
+    r = _Reader(bytes(data))
+    r.pos = n
+    r.ws()
+    if r.pos != len(r.buf):
+        raise r.refuse("trailing_bytes")
+    return v
+
+
+def _decode_permission_bundle_definition_at(data, depth, limit):
+    r = _Reader(bytes(data))
+    if depth < 0 or limit < 1:
+        raise r.refuse("depth_exceeded")
+    r.depth = depth
+    r.limit = min(limit, _DEPTH_LIMIT)
+    r.ws()
+    v = _read_permission_bundle_definition(r)
+    return v, r.pos
+
+
+def _encode_permission_bundle_definition_at(v, depth):
+    if depth < 0 or depth >= _DEPTH_LIMIT:
+        raise _Reader(b"").refuse("depth_exceeded")
+    _check_permission_bundle_definition(v, depth, _DEPTH_LIMIT)
+    out = bytearray()
+    _write_permission_bundle_definition(out, v, depth)
+    _decode_permission_bundle_definition_at(out, depth, _DEPTH_LIMIT)
+    return bytes(out)
+
+
+def encode_permission_bundle_definition(v):
+    return _encode_permission_bundle_definition_at(v, 0) + "\n".encode()
+
+
+def decode_permission_bundle_definition(data):
+    v, n = _decode_permission_bundle_definition_at(data, 0, _DEPTH_LIMIT)
+    r = _Reader(bytes(data))
+    r.pos = n
+    r.ws()
+    if r.pos != len(r.buf):
+        raise r.refuse("trailing_bytes")
+    return v
+
+
+def _decode_permission_bundle_page_at(data, depth, limit):
+    r = _Reader(bytes(data))
+    if depth < 0 or limit < 1:
+        raise r.refuse("depth_exceeded")
+    r.depth = depth
+    r.limit = min(limit, _DEPTH_LIMIT)
+    r.ws()
+    v = _read_permission_bundle_page(r)
+    return v, r.pos
+
+
+def _encode_permission_bundle_page_at(v, depth):
+    if depth < 0 or depth >= _DEPTH_LIMIT:
+        raise _Reader(b"").refuse("depth_exceeded")
+    _check_permission_bundle_page(v, depth, _DEPTH_LIMIT)
+    out = bytearray()
+    _write_permission_bundle_page(out, v, depth)
+    _decode_permission_bundle_page_at(out, depth, _DEPTH_LIMIT)
+    return bytes(out)
+
+
+def encode_permission_bundle_page(v):
+    return _encode_permission_bundle_page_at(v, 0) + "\n".encode()
+
+
+def decode_permission_bundle_page(data):
+    v, n = _decode_permission_bundle_page_at(data, 0, _DEPTH_LIMIT)
+    r = _Reader(bytes(data))
+    r.pos = n
+    r.ws()
+    if r.pos != len(r.buf):
+        raise r.refuse("trailing_bytes")
+    return v
+
+
+def _decode_bundle_expansion_at(data, depth, limit):
+    r = _Reader(bytes(data))
+    if depth < 0 or limit < 1:
+        raise r.refuse("depth_exceeded")
+    r.depth = depth
+    r.limit = min(limit, _DEPTH_LIMIT)
+    r.ws()
+    v = _read_bundle_expansion(r)
+    return v, r.pos
+
+
+def _encode_bundle_expansion_at(v, depth):
+    if depth < 0 or depth >= _DEPTH_LIMIT:
+        raise _Reader(b"").refuse("depth_exceeded")
+    _check_bundle_expansion(v, depth, _DEPTH_LIMIT)
+    out = bytearray()
+    _write_bundle_expansion(out, v, depth)
+    _decode_bundle_expansion_at(out, depth, _DEPTH_LIMIT)
+    return bytes(out)
+
+
+def encode_bundle_expansion(v):
+    return _encode_bundle_expansion_at(v, 0) + "\n".encode()
+
+
+def decode_bundle_expansion(data):
+    v, n = _decode_bundle_expansion_at(data, 0, _DEPTH_LIMIT)
+    r = _Reader(bytes(data))
+    r.pos = n
+    r.ws()
+    if r.pos != len(r.buf):
+        raise r.refuse("trailing_bytes")
+    return v
+
+
+def _decode_permission_effect_at(data, depth, limit):
+    r = _Reader(bytes(data))
+    if depth < 0 or limit < 1:
+        raise r.refuse("depth_exceeded")
+    r.depth = depth
+    r.limit = min(limit, _DEPTH_LIMIT)
+    r.ws()
+    v = _read_permission_effect(r)
+    return v, r.pos
+
+
+def _encode_permission_effect_at(v, depth):
+    if depth < 0 or depth >= _DEPTH_LIMIT:
+        raise _Reader(b"").refuse("depth_exceeded")
+    _check_permission_effect(v, depth, _DEPTH_LIMIT)
+    out = bytearray()
+    _write_permission_effect(out, v, depth)
+    _decode_permission_effect_at(out, depth, _DEPTH_LIMIT)
+    return bytes(out)
+
+
+def encode_permission_effect(v):
+    return _encode_permission_effect_at(v, 0) + "\n".encode()
+
+
+def decode_permission_effect(data):
+    v, n = _decode_permission_effect_at(data, 0, _DEPTH_LIMIT)
+    r = _Reader(bytes(data))
+    r.pos = n
+    r.ws()
+    if r.pos != len(r.buf):
+        raise r.refuse("trailing_bytes")
+    return v
+
+
+def _decode_selector_rule_at(data, depth, limit):
+    r = _Reader(bytes(data))
+    if depth < 0 or limit < 1:
+        raise r.refuse("depth_exceeded")
+    r.depth = depth
+    r.limit = min(limit, _DEPTH_LIMIT)
+    r.ws()
+    v = _read_selector_rule(r)
+    return v, r.pos
+
+
+def _encode_selector_rule_at(v, depth):
+    if depth < 0 or depth >= _DEPTH_LIMIT:
+        raise _Reader(b"").refuse("depth_exceeded")
+    _check_selector_rule(v, depth, _DEPTH_LIMIT)
+    out = bytearray()
+    _write_selector_rule(out, v, depth)
+    _decode_selector_rule_at(out, depth, _DEPTH_LIMIT)
+    return bytes(out)
+
+
+def encode_selector_rule(v):
+    return _encode_selector_rule_at(v, 0) + "\n".encode()
+
+
+def decode_selector_rule(data):
+    v, n = _decode_selector_rule_at(data, 0, _DEPTH_LIMIT)
+    r = _Reader(bytes(data))
+    r.pos = n
+    r.ws()
+    if r.pos != len(r.buf):
+        raise r.refuse("trailing_bytes")
+    return v
+
+
+def _decode_bundle_origin_at(data, depth, limit):
+    r = _Reader(bytes(data))
+    if depth < 0 or limit < 1:
+        raise r.refuse("depth_exceeded")
+    r.depth = depth
+    r.limit = min(limit, _DEPTH_LIMIT)
+    r.ws()
+    v = _read_bundle_origin(r)
+    return v, r.pos
+
+
+def _encode_bundle_origin_at(v, depth):
+    if depth < 0 or depth >= _DEPTH_LIMIT:
+        raise _Reader(b"").refuse("depth_exceeded")
+    _check_bundle_origin(v, depth, _DEPTH_LIMIT)
+    out = bytearray()
+    _write_bundle_origin(out, v, depth)
+    _decode_bundle_origin_at(out, depth, _DEPTH_LIMIT)
+    return bytes(out)
+
+
+def encode_bundle_origin(v):
+    return _encode_bundle_origin_at(v, 0) + "\n".encode()
+
+
+def decode_bundle_origin(data):
+    v, n = _decode_bundle_origin_at(data, 0, _DEPTH_LIMIT)
+    r = _Reader(bytes(data))
+    r.pos = n
+    r.ws()
+    if r.pos != len(r.buf):
+        raise r.refuse("trailing_bytes")
+    return v
+
+
+def _decode_selector_rule_record_at(data, depth, limit):
+    r = _Reader(bytes(data))
+    if depth < 0 or limit < 1:
+        raise r.refuse("depth_exceeded")
+    r.depth = depth
+    r.limit = min(limit, _DEPTH_LIMIT)
+    r.ws()
+    v = _read_selector_rule_record(r)
+    return v, r.pos
+
+
+def _encode_selector_rule_record_at(v, depth):
+    if depth < 0 or depth >= _DEPTH_LIMIT:
+        raise _Reader(b"").refuse("depth_exceeded")
+    _check_selector_rule_record(v, depth, _DEPTH_LIMIT)
+    out = bytearray()
+    _write_selector_rule_record(out, v, depth)
+    _decode_selector_rule_record_at(out, depth, _DEPTH_LIMIT)
+    return bytes(out)
+
+
+def encode_selector_rule_record(v):
+    return _encode_selector_rule_record_at(v, 0) + "\n".encode()
+
+
+def decode_selector_rule_record(data):
+    v, n = _decode_selector_rule_record_at(data, 0, _DEPTH_LIMIT)
+    r = _Reader(bytes(data))
+    r.pos = n
+    r.ws()
+    if r.pos != len(r.buf):
+        raise r.refuse("trailing_bytes")
+    return v
+
+
+def _decode_selector_rule_page_at(data, depth, limit):
+    r = _Reader(bytes(data))
+    if depth < 0 or limit < 1:
+        raise r.refuse("depth_exceeded")
+    r.depth = depth
+    r.limit = min(limit, _DEPTH_LIMIT)
+    r.ws()
+    v = _read_selector_rule_page(r)
+    return v, r.pos
+
+
+def _encode_selector_rule_page_at(v, depth):
+    if depth < 0 or depth >= _DEPTH_LIMIT:
+        raise _Reader(b"").refuse("depth_exceeded")
+    _check_selector_rule_page(v, depth, _DEPTH_LIMIT)
+    out = bytearray()
+    _write_selector_rule_page(out, v, depth)
+    _decode_selector_rule_page_at(out, depth, _DEPTH_LIMIT)
+    return bytes(out)
+
+
+def encode_selector_rule_page(v):
+    return _encode_selector_rule_page_at(v, 0) + "\n".encode()
+
+
+def decode_selector_rule_page(data):
+    v, n = _decode_selector_rule_page_at(data, 0, _DEPTH_LIMIT)
+    r = _Reader(bytes(data))
+    r.pos = n
+    r.ws()
+    if r.pos != len(r.buf):
+        raise r.refuse("trailing_bytes")
+    return v
+
+
+def _decode_selector_rule_read_at(data, depth, limit):
+    r = _Reader(bytes(data))
+    if depth < 0 or limit < 1:
+        raise r.refuse("depth_exceeded")
+    r.depth = depth
+    r.limit = min(limit, _DEPTH_LIMIT)
+    r.ws()
+    v = _read_selector_rule_read(r)
+    return v, r.pos
+
+
+def _encode_selector_rule_read_at(v, depth):
+    if depth < 0 or depth >= _DEPTH_LIMIT:
+        raise _Reader(b"").refuse("depth_exceeded")
+    _check_selector_rule_read(v, depth, _DEPTH_LIMIT)
+    out = bytearray()
+    _write_selector_rule_read(out, v, depth)
+    _decode_selector_rule_read_at(out, depth, _DEPTH_LIMIT)
+    return bytes(out)
+
+
+def encode_selector_rule_read(v):
+    return _encode_selector_rule_read_at(v, 0) + "\n".encode()
+
+
+def decode_selector_rule_read(data):
+    v, n = _decode_selector_rule_read_at(data, 0, _DEPTH_LIMIT)
+    r = _Reader(bytes(data))
+    r.pos = n
+    r.ws()
+    if r.pos != len(r.buf):
+        raise r.refuse("trailing_bytes")
+    return v
+
+
+def _decode_selector_edit_at(data, depth, limit):
+    r = _Reader(bytes(data))
+    if depth < 0 or limit < 1:
+        raise r.refuse("depth_exceeded")
+    r.depth = depth
+    r.limit = min(limit, _DEPTH_LIMIT)
+    r.ws()
+    v = _read_selector_edit(r)
+    return v, r.pos
+
+
+def _encode_selector_edit_at(v, depth):
+    if depth < 0 or depth >= _DEPTH_LIMIT:
+        raise _Reader(b"").refuse("depth_exceeded")
+    _check_selector_edit(v, depth, _DEPTH_LIMIT)
+    out = bytearray()
+    _write_selector_edit(out, v, depth)
+    _decode_selector_edit_at(out, depth, _DEPTH_LIMIT)
+    return bytes(out)
+
+
+def encode_selector_edit(v):
+    return _encode_selector_edit_at(v, 0) + "\n".encode()
+
+
+def decode_selector_edit(data):
+    v, n = _decode_selector_edit_at(data, 0, _DEPTH_LIMIT)
+    r = _Reader(bytes(data))
+    r.pos = n
+    r.ws()
+    if r.pos != len(r.buf):
+        raise r.refuse("trailing_bytes")
+    return v
+
+
+def _decode_legacy_operation_request_at(data, depth, limit):
+    r = _Reader(bytes(data))
+    if depth < 0 or limit < 1:
+        raise r.refuse("depth_exceeded")
+    r.depth = depth
+    r.limit = min(limit, _DEPTH_LIMIT)
+    r.ws()
+    v = _read_legacy_operation_request(r)
+    return v, r.pos
+
+
+def _encode_legacy_operation_request_at(v, depth):
+    if depth < 0 or depth >= _DEPTH_LIMIT:
+        raise _Reader(b"").refuse("depth_exceeded")
+    _check_legacy_operation_request(v, depth, _DEPTH_LIMIT)
+    out = bytearray()
+    _write_legacy_operation_request(out, v, depth)
+    _decode_legacy_operation_request_at(out, depth, _DEPTH_LIMIT)
+    return bytes(out)
+
+
+def encode_legacy_operation_request(v):
+    return _encode_legacy_operation_request_at(v, 0) + "\n".encode()
+
+
+def decode_legacy_operation_request(data):
+    v, n = _decode_legacy_operation_request_at(data, 0, _DEPTH_LIMIT)
+    r = _Reader(bytes(data))
+    r.pos = n
+    r.ws()
+    if r.pos != len(r.buf):
+        raise r.refuse("trailing_bytes")
+    return v

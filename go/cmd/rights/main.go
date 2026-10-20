@@ -43,7 +43,7 @@ func main() {
 
 	admin, err := os.ReadFile(filepath.Join(*state, "admin.secret"))
 	if err != nil {
-		fail("no admin.secret in %s: is rightsd running with -state there?", *state)
+		fail("no admin.secret in %s: is the rights service (openabstractions serve rights) running with -state there?", *state)
 	}
 	c := &rights.Client{Endpoint: *endpoint, Admin: string(admin)}
 

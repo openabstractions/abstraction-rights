@@ -54,6 +54,19 @@ fn strs(out: &mut Vec<u8>, v: &[String], depth: i32) {
     out.push(b']');
 }
 
+fn enum_strs<E, F: Fn(&E) -> &str>(out: &mut Vec<u8>, v: &[E], depth: i32, word: F) {
+    if v.is_empty() { out.extend_from_slice(b"[]"); return; }
+    out.extend_from_slice(b"[\n");
+    for (i, item) in v.iter().enumerate() {
+        pad(out, depth + 1);
+        esc(out, word(item));
+        if i + 1 < v.len() { out.push(b','); }
+        out.push(b'\n');
+    }
+    pad(out, depth);
+    out.push(b']');
+}
+
 fn ws(c: u8) -> bool {
     c == b' ' || c == b'\t' || c == b'\n' || c == b'\r'
 }
@@ -64,6 +77,24 @@ fn esc(out: &mut Vec<u8>, s: &str) {
         esc_byte(out, *c);
     }
     out.push(b'"');
+}
+
+fn enc_list<T>(out: &mut Vec<u8>, v: &[T], depth: i32, enc: fn(&mut Vec<u8>, &T, i32)) {
+    if v.is_empty() {
+        out.extend_from_slice(b"[]");
+        return;
+    }
+    out.extend_from_slice(b"[\n");
+    for (i, x) in v.iter().enumerate() {
+        pad(out, depth + 1);
+        enc(out, x, depth + 1);
+        if i + 1 < v.len() {
+            out.push(b',');
+        }
+        out.push(b'\n');
+    }
+    pad(out, depth);
+    out.push(b']');
 }
 
 /// The closed vocabulary DecisionOutcome. A reader refuses a name it does not list.
@@ -299,6 +330,56 @@ impl PartialEq<&str> for RuleReadOutcome {
     }
 }
 
+/// The closed vocabulary PermissionFirstUse. A reader refuses a name it does not list.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub enum PermissionFirstUse {
+    None,
+    Exact,
+    ConsumingPaired,
+}
+
+impl PermissionFirstUse {
+    /// Every member, in declaration order.
+    pub const ALL: [Self; 3] = [Self::None, Self::Exact, Self::ConsumingPaired];
+
+    /// The member's name on the wire.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::None => "none",
+            Self::Exact => "exact",
+            Self::ConsumingPaired => "consuming_paired",
+        }
+    }
+
+    /// The member a wire name spells, or `None` for a name this vocabulary refuses.
+    pub fn from_wire(name: &str) -> Option<Self> {
+        match name {
+            "none" => Some(Self::None),
+            "exact" => Some(Self::Exact),
+            "consuming_paired" => Some(Self::ConsumingPaired),
+            _ => None,
+        }
+    }
+}
+
+impl std::fmt::Display for PermissionFirstUse {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+impl PartialEq<str> for PermissionFirstUse {
+    fn eq(&self, other: &str) -> bool {
+        self.as_str() == other
+    }
+}
+
+impl PartialEq<&str> for PermissionFirstUse {
+    fn eq(&self, other: &&str) -> bool {
+        self.as_str() == *other
+    }
+}
+
 /// The closed vocabulary ActionEditOutcome. A reader refuses a name it does not list.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum ActionEditOutcome {
@@ -356,6 +437,165 @@ impl PartialEq<str> for ActionEditOutcome {
 }
 
 impl PartialEq<&str> for ActionEditOutcome {
+    fn eq(&self, other: &&str) -> bool {
+        self.as_str() == *other
+    }
+}
+
+/// The closed vocabulary DecisionSource. A reader refuses a name it does not list.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub enum DecisionSource {
+    None,
+    OwnRule,
+    TypedBlock,
+    AccountDefault,
+    DefaultExcluded,
+}
+
+impl DecisionSource {
+    /// Every member, in declaration order.
+    pub const ALL: [Self; 5] = [Self::None, Self::OwnRule, Self::TypedBlock, Self::AccountDefault, Self::DefaultExcluded];
+
+    /// The member's name on the wire.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::None => "none",
+            Self::OwnRule => "own_rule",
+            Self::TypedBlock => "typed_block",
+            Self::AccountDefault => "account_default",
+            Self::DefaultExcluded => "default_excluded",
+        }
+    }
+
+    /// The member a wire name spells, or `None` for a name this vocabulary refuses.
+    pub fn from_wire(name: &str) -> Option<Self> {
+        match name {
+            "none" => Some(Self::None),
+            "own_rule" => Some(Self::OwnRule),
+            "typed_block" => Some(Self::TypedBlock),
+            "account_default" => Some(Self::AccountDefault),
+            "default_excluded" => Some(Self::DefaultExcluded),
+            _ => None,
+        }
+    }
+}
+
+impl std::fmt::Display for DecisionSource {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+impl PartialEq<str> for DecisionSource {
+    fn eq(&self, other: &str) -> bool {
+        self.as_str() == other
+    }
+}
+
+impl PartialEq<&str> for DecisionSource {
+    fn eq(&self, other: &&str) -> bool {
+        self.as_str() == *other
+    }
+}
+
+/// The closed vocabulary ResourceSelectorKind. A reader refuses a name it does not list.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub enum ResourceSelectorKind {
+    One,
+    All,
+}
+
+impl ResourceSelectorKind {
+    /// Every member, in declaration order.
+    pub const ALL: [Self; 2] = [Self::One, Self::All];
+
+    /// The member's name on the wire.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::One => "one",
+            Self::All => "all",
+        }
+    }
+
+    /// The member a wire name spells, or `None` for a name this vocabulary refuses.
+    pub fn from_wire(name: &str) -> Option<Self> {
+        match name {
+            "one" => Some(Self::One),
+            "all" => Some(Self::All),
+            _ => None,
+        }
+    }
+}
+
+impl std::fmt::Display for ResourceSelectorKind {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+impl PartialEq<str> for ResourceSelectorKind {
+    fn eq(&self, other: &str) -> bool {
+        self.as_str() == other
+    }
+}
+
+impl PartialEq<&str> for ResourceSelectorKind {
+    fn eq(&self, other: &&str) -> bool {
+        self.as_str() == *other
+    }
+}
+
+/// The closed vocabulary BatchCheckOutcome. A reader refuses a name it does not list.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub enum BatchCheckOutcome {
+    Checked,
+    Conflict,
+    Invalid,
+    Forbidden,
+    Unavailable,
+}
+
+impl BatchCheckOutcome {
+    /// Every member, in declaration order.
+    pub const ALL: [Self; 5] = [Self::Checked, Self::Conflict, Self::Invalid, Self::Forbidden, Self::Unavailable];
+
+    /// The member's name on the wire.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Checked => "checked",
+            Self::Conflict => "conflict",
+            Self::Invalid => "invalid",
+            Self::Forbidden => "forbidden",
+            Self::Unavailable => "unavailable",
+        }
+    }
+
+    /// The member a wire name spells, or `None` for a name this vocabulary refuses.
+    pub fn from_wire(name: &str) -> Option<Self> {
+        match name {
+            "checked" => Some(Self::Checked),
+            "conflict" => Some(Self::Conflict),
+            "invalid" => Some(Self::Invalid),
+            "forbidden" => Some(Self::Forbidden),
+            "unavailable" => Some(Self::Unavailable),
+            _ => None,
+        }
+    }
+}
+
+impl std::fmt::Display for BatchCheckOutcome {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+impl PartialEq<str> for BatchCheckOutcome {
+    fn eq(&self, other: &str) -> bool {
+        self.as_str() == other
+    }
+}
+
+impl PartialEq<&str> for BatchCheckOutcome {
     fn eq(&self, other: &&str) -> bool {
         self.as_str() == *other
     }
@@ -551,6 +791,68 @@ pub struct CatalogEntry {
     pub registered_at: String,
 }
 
+/// Operator-declared description of a stable app feature. feature_app names the
+/// described app, never the grant/decision subject. app_label and description
+/// are trimmed control-free UTF-8 text of 1..128 and 1..512 bytes.
+/// declared_risk is trimmed 1..32 bytes of display metadata: routine,
+/// sensitive, administrative and unknown align existing words; unfamiliar words
+/// have unknown interpretation. Risk text changes no authorization, question
+/// tier or answerer authority. Metadata establishes no code behavior or vendor
+/// trust.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct ActionDescription {
+    pub action: String,
+    pub feature_app: Subject,
+    pub app_label: String,
+    pub description: String,
+    pub declared_risk: String,
+}
+
+/// Service-owned definition metadata for one stable exact action. Operations
+/// identify owning IDL methods and existing domain effects. resource_profile is
+/// an immutable namespaced profile@version bound to a compiled owning validator
+/// by trusted composition; unknown profiles/versions are refused. Legacy
+/// exact-string profiles retain bounded exact bytes, including literal '*', and
+/// describe their resource owner's existing validation. served distinguishes
+/// implemented receiving enforcement from defined/unserved operations; unserved
+/// definitions admit no first-use request. first_use names only existing exact
+/// or consuming paired admission; dynamic tier/answerer facts remain separately
+/// service-owned. Disclosure and lifecycle explain data/effects and account,
+/// deletion and name-reuse boundaries. Metadata conveys no proof, grant,
+/// callback or scope selector. Changed authority requires a new action
+/// identity/version. This additive record is available to generated consumers;
+/// no service method publishes or registers definitions in this slice.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct PermissionDefinition {
+    pub action: String,
+    pub owner_contract: String,
+    pub operations: Vec<String>,
+    pub resource_profile: String,
+    pub resource_type: String,
+    pub enforced_by: Vec<String>,
+    pub disclosure: String,
+    pub lifecycle: String,
+    pub first_use: PermissionFirstUse,
+    pub served: bool,
+}
+
+/// One current catalogue action. choices is exactly allow, block, remove_rule,
+/// naming existing SetRule permit/deny and RevokeRule choices without authority
+/// to invoke them. Description and publication fields occur together or are all
+/// absent. description.action equals action. published_by is the operator
+/// subject established for publication; feature_app is its administrative
+/// declaration, and the imported descriptor's author/vendor remain unverified.
+/// published_at is service UTC RFC 3339 with milliseconds. Undescribed names
+/// carry no invented app information.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct DescribedAction {
+    pub action: String,
+    pub choices: Vec<String>,
+    pub description: Option<ActionDescription>,
+    pub published_by: Option<Subject>,
+    pub published_at: String,
+}
+
 /// applied, conflict and unknown carry the revision observed inside the
 /// conditional edit. applied and conflict carry the action's registration entry
 /// when one exists; a seeded or retired action has none. unknown means
@@ -565,6 +867,292 @@ pub struct ActionEdit {
     pub current: Option<CatalogEntry>,
 }
 
+/// applied/conflict carry the revision and current described catalogue action
+/// when present; all other outcomes carry neither. A stale expected revision
+/// always conflicts. Identical metadata at the current revision is a no-op. A
+/// valid correction changes descriptor publication provenance/time and
+/// revision, preserving all grants, denies, targets, expiry and private answer
+/// receipts. Registration alone grants nothing.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct DescriptionEdit {
+    pub outcome: ActionEditOutcome,
+    pub revision: String,
+    pub current: Option<DescribedAction>,
+}
+
+/// Sorted current catalogue descriptions, including undescribed names, under
+/// one durable revision. 1..64 requested entries and at most 256 KiB encoded
+/// reply. Noncomplete pages have a nonempty next cursor and at least one entry;
+/// cursors are at most 256 UTF-8 bytes. Refusals have empty
+/// revision/actions/next and complete=false. No retained enumeration snapshot
+/// or historical replay.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct DescriptionPage {
+    pub outcome: PolicyPageOutcome,
+    pub revision: String,
+    pub actions: Vec<DescribedAction>,
+    pub next: String,
+    pub complete: bool,
+}
+
+/// One account-wide default the receiving runtime configures: a permit on
+/// action for every program of the runtime's own account that has no live rule
+/// of its own on the queried target. name is 1..64 bytes of lowercase ASCII
+/// letters, digits, '.', '_' and '-'. resource is the one exact resource the
+/// default covers; with every_resource it is empty and the default covers every
+/// resource of the action. on is the switch: true after a fresh install, until
+/// an operator turns it off. set_by and set_at occur together, name the
+/// operator subject the rights service established for the last switch edit and
+/// its service UTC time, and are absent while the switch was never turned. A
+/// per-program rule, a Block included, decides before any default; a configured
+/// excluded program, such as a script host, and every other account receive no
+/// default. A default writes no rule.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct AccountDefault {
+    pub name: String,
+    pub action: String,
+    pub resource: String,
+    pub every_resource: bool,
+    pub on: bool,
+    pub set_by: Option<Subject>,
+    pub set_at: String,
+}
+
+/// Every configured account-wide default, sorted by name, under one durable
+/// revision; at most 32 entries. Refusals have an empty revision and no
+/// defaults.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct DefaultPage {
+    pub outcome: PolicyPageOutcome,
+    pub revision: String,
+    pub defaults: Vec<AccountDefault>,
+}
+
+/// applied and conflict carry the revision and the named default's current
+/// state observed inside the conditional edit. Other outcomes carry neither. A
+/// stale expected revision always conflicts. Setting a switch to its current
+/// state at the matching revision is a no-op that keeps the revision.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct DefaultEdit {
+    pub outcome: PolicyEditOutcome,
+    pub revision: String,
+    pub current: Option<AccountDefault>,
+}
+
+/// One exact decision for a subject with the step that decided it, from the
+/// same evaluation a decision makes. own_rule is the subject's own live exact
+/// rule, matched by program identity; typed_block a live typed Block that
+/// covers the target; account_default the named account-wide default that
+/// permits; default_excluded a named default switched on for the target that
+/// the configured exclusion, such as the script-host rule, keeps from this
+/// program; none no rule and no default. outcome and policy_revision are those
+/// the decision carries. Refusals (invalid, forbidden, unavailable) carry no
+/// revision, source or name.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct DecisionExplanation {
+    pub outcome: DecisionOutcome,
+    pub policy_revision: String,
+    pub source: Option<DecisionSource>,
+    pub default_name: String,
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct PermissionKey {
+    pub action: String,
+    pub resource_profile: String,
+}
+
+/// One has one bounded canonical owning-IDL document. All omits target and
+/// selects the fixed profile collection within the rule subject's
+/// account/runtime. Operator inputs are prepared by the trusted owning profile;
+/// arbitrary captured identity evidence is refused.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ResourceSelector {
+    pub kind: ResourceSelectorKind,
+    pub target: Option<Vec<u8>>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct PermissionSelection {
+    pub permission: PermissionKey,
+    pub selector: ResourceSelector,
+}
+
+/// A concrete resource, never a grant selector. Historical captured evidence is
+/// accepted only from an explicitly authorized receiving enforcer; no direct
+/// caller obtains effect authority from this assertion.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct ConcreteResource {
+    pub permission: PermissionKey,
+    pub target: Vec<u8>,
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct CheckBatchRequest {
+    pub expected_revision: String,
+    pub collection_admission: Option<PermissionKey>,
+    pub resources: Vec<ConcreteResource>,
+}
+
+/// checked has one revision and ordered evaluated outcomes from one immutable
+/// policy snapshot and one clock sample. conflict has the observed revision and
+/// no outcomes. Other refusals have empty revision and no outcomes. A batch
+/// never mixes revisions or partially succeeds. No authority lease is issued.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct BatchDecision {
+    pub outcome: BatchCheckOutcome,
+    pub revision: String,
+    pub collection_outcome: Option<DecisionOutcome>,
+    pub outcomes: Vec<DecisionOutcome>,
+}
+
+/// Full key is definition.action plus definition.resource_profile.
+/// Service-owned collection/all_effect state membership and present/future
+/// meaning. Only actually served receiving selectors are advertised. Existing
+/// PermissionDefinition.first_use remains the legacy projection; new selector
+/// first use uses first_use_selectors.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct SelectorPermissionDefinition {
+    pub definition: PermissionDefinition,
+    pub label: String,
+    pub supported_selectors: Vec<ResourceSelectorKind>,
+    pub first_use_selectors: Vec<ResourceSelectorKind>,
+    pub collection: String,
+    pub all_effect: String,
+    pub request_type: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct PermissionDefinitionPage {
+    pub outcome: PolicyPageOutcome,
+    pub revision: String,
+    pub definitions: Vec<SelectorPermissionDefinition>,
+    pub next: String,
+    pub complete: bool,
+}
+
+/// Immutable finite expansion identified by namespaced bundle@version and
+/// deterministic content digest. This slice permits only member profiles with
+/// the same owning target document and collection. Each member validates
+/// independently. No mapping language, live role reference, future operation or
+/// permission-administration effect is implied.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct PermissionBundleDefinition {
+    pub bundle_ref: String,
+    pub owner_contract: String,
+    pub label: String,
+    pub target_type: String,
+    pub supported_selectors: Vec<ResourceSelectorKind>,
+    pub members: Vec<PermissionKey>,
+    pub disclosure: String,
+    pub definition_digest: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct PermissionBundlePage {
+    pub outcome: PolicyPageOutcome,
+    pub revision: String,
+    pub bundles: Vec<PermissionBundleDefinition>,
+    pub next: String,
+    pub complete: bool,
+}
+
+/// The exact original finite expansion, retained independently of later
+/// catalogue changes. All selected member profiles must accept the same
+/// canonical target/collection. A new version requires new consent.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct BundleExpansion {
+    pub bundle_ref: String,
+    pub definition_digest: String,
+    pub selector: ResourceSelector,
+    pub selections: Vec<PermissionSelection>,
+}
+
+/// Complete typed permit proposal retained by a trusted Asks admission owner.
+/// When bundle is present its selections equal this complete list. Native
+/// preparation establishes subject and target evidence. Text, a serialized
+/// subject or an app-supplied effect grants no authority.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct PermissionEffect {
+    pub subject: Subject,
+    pub selections: Vec<PermissionSelection>,
+    pub bundle: Option<BundleExpansion>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct SelectorRule {
+    pub subject: Subject,
+    pub selection: PermissionSelection,
+    pub permit: bool,
+}
+
+/// Rights-established historical application identity and immutable expansion.
+/// An origin explains how rules arose; it does not assert that all original
+/// members remain current.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct BundleOrigin {
+    pub id: String,
+    pub expansion: BundleExpansion,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct SelectorRuleRecord {
+    pub rule: SelectorRule,
+    pub set_by: Subject,
+    pub set_at: String,
+    pub why: String,
+    pub expires: String,
+    pub bundle_origin: Option<BundleOrigin>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct SelectorRulePage {
+    pub outcome: PolicyPageOutcome,
+    pub revision: String,
+    pub records: Vec<SelectorRuleRecord>,
+    pub next: String,
+    pub complete: bool,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct SelectorRuleRead {
+    pub outcome: RuleReadOutcome,
+    pub revision: String,
+    pub record: Option<SelectorRuleRecord>,
+}
+
+/// Applied/conflict carry the locked observed revision and complete bounded
+/// affected state. Stale expected revision always conflicts, including matching
+/// desired state. Other refusals carry empty revision/current. Atomic edits
+/// have no per-member success. Individual replacement removes that row's active
+/// bundle origin; remaining rows keep historical origin.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct SelectorEdit {
+    pub outcome: PolicyEditOutcome,
+    pub revision: String,
+    pub current: Vec<SelectorRuleRecord>,
+    pub bundle_origin: Option<BundleOrigin>,
+}
+
+/// Old exact authority plus an optional receiver-known concrete effect. Trusted
+/// compiled capability equivalence validates the supplied effect against this
+/// old operation and its fixed collection. Original legacy authority and live
+/// equivalent typed restrictions are evaluated at one snapshot. Missing
+/// concrete detail on a coarse view uses conservative collection intersection.
+/// This method imports explicit blocks only; it grants no typed permit.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct LegacyOperationRequest {
+    pub legacy_action: String,
+    pub legacy_resource: String,
+    pub concrete_operation: Option<ConcreteResource>,
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+struct OAAuthorizationListActionDescriptionsArguments {
+    cursor: String,
+    limit: i64,
+}
+
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 struct OAAuthorizationDecideArguments {
     action: String,
@@ -576,6 +1164,18 @@ struct OAAuthorizationDecideForArguments {
     subject: Subject,
     action: String,
     resource: String,
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+struct OAAuthorizationOperatorRegisterDescribedActionArguments {
+    expected_revision: String,
+    description: ActionDescription,
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+struct OAAuthorizationOperatorApplyFirstUseAllowArguments {
+    expected_revision: String,
+    question_id: String,
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
@@ -599,9 +1199,34 @@ struct OAAuthorizationOperatorRevokeRuleArguments {
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
+struct OAAuthorizationOperatorStopAnswererArguments {
+    expected_revision: String,
+    answerer: Subject,
+    also_revoke_grants: bool,
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+struct OAAuthorizationOperatorRevokeAnswerPermitsArguments {
+    expected_revision: String,
+    answerer: Subject,
+    target: Subject,
+    actions: Vec<String>,
+    resource: String,
+    question_id: String,
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
 struct OAAuthorizationOperatorSetRuleForArguments {
     expected_revision: String,
     rule: PolicyRule,
+    ttl_ms: i64,
+    why: String,
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+struct OAAuthorizationOperatorSetRulesForArguments {
+    expected_revision: String,
+    rules: Vec<PolicyRule>,
     ttl_ms: i64,
     why: String,
 }
@@ -623,6 +1248,109 @@ struct OAAuthorizationOperatorRegisterActionArguments {
 struct OAAuthorizationOperatorRetireActionArguments {
     expected_revision: String,
     action: String,
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+struct OAAuthorizationOperatorExplainForArguments {
+    subject: Subject,
+    action: String,
+    resource: String,
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+struct OAAuthorizationOperatorListDefaultsArguments {
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+struct OAAuthorizationOperatorSetDefaultArguments {
+    expected_revision: String,
+    name: String,
+    on: bool,
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+struct OASelectorAuthorizationListPermissionDefinitionsArguments {
+    cursor: String,
+    limit: i64,
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+struct OASelectorAuthorizationListPermissionBundlesArguments {
+    cursor: String,
+    limit: i64,
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+struct OASelectorAuthorizationCheckBatchArguments {
+    request: CheckBatchRequest,
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+struct OASelectorAuthorizationCheckBatchForArguments {
+    subject: Subject,
+    request: CheckBatchRequest,
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+struct OASelectorAuthorizationCheckLegacyOperationForArguments {
+    subject: Subject,
+    request: LegacyOperationRequest,
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+struct OASelectorAuthorizationOperatorListSelectorRulesArguments {
+    cursor: String,
+    limit: i64,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct OASelectorAuthorizationOperatorReadSelectorRuleArguments {
+    subject: Subject,
+    selection: PermissionSelection,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct OASelectorAuthorizationOperatorSetSelectorRuleArguments {
+    expected_revision: String,
+    rule: SelectorRule,
+    ttl_ms: i64,
+    why: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct OASelectorAuthorizationOperatorRemoveSelectorRuleArguments {
+    expected_revision: String,
+    subject: Subject,
+    selection: PermissionSelection,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct OASelectorAuthorizationOperatorApplyBundleArguments {
+    expected_revision: String,
+    subject: Subject,
+    bundle_ref: String,
+    selector: ResourceSelector,
+    ttl_ms: i64,
+    why: String,
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+struct OASelectorAuthorizationOperatorRemoveBundleArguments {
+    expected_revision: String,
+    subject: Subject,
+    origin_id: String,
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+struct OASelectorAuthorizationOperatorApplyPermissionAllowArguments {
+    expected_revision: String,
+    question_id: String,
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+struct OASelectorAuthorizationOperatorUndoPermissionEffectArguments {
+    expected_revision: String,
+    question_id: String,
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
@@ -649,6 +1377,11 @@ struct OAServiceError {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
+struct OAAuthorizationListActionDescriptionsResult {
+    value: DescriptionPage,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
 struct OAAuthorizationDecideResult {
     value: Decision,
 }
@@ -656,6 +1389,16 @@ struct OAAuthorizationDecideResult {
 #[derive(Clone, Debug, PartialEq, Eq)]
 struct OAAuthorizationDecideForResult {
     value: Decision,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct OAAuthorizationOperatorRegisterDescribedActionResult {
+    value: DescriptionEdit,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct OAAuthorizationOperatorApplyFirstUseAllowResult {
+    value: PolicyEdit,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -674,7 +1417,22 @@ struct OAAuthorizationOperatorRevokeRuleResult {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
+struct OAAuthorizationOperatorStopAnswererResult {
+    value: PolicyEdit,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct OAAuthorizationOperatorRevokeAnswerPermitsResult {
+    value: PolicyEdit,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
 struct OAAuthorizationOperatorSetRuleForResult {
+    value: PolicyEdit,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct OAAuthorizationOperatorSetRulesForResult {
     value: PolicyEdit,
 }
 
@@ -691,6 +1449,86 @@ struct OAAuthorizationOperatorRegisterActionResult {
 #[derive(Clone, Debug, PartialEq, Eq)]
 struct OAAuthorizationOperatorRetireActionResult {
     value: ActionEdit,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct OAAuthorizationOperatorExplainForResult {
+    value: DecisionExplanation,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct OAAuthorizationOperatorListDefaultsResult {
+    value: DefaultPage,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct OAAuthorizationOperatorSetDefaultResult {
+    value: DefaultEdit,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct OASelectorAuthorizationListPermissionDefinitionsResult {
+    value: PermissionDefinitionPage,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct OASelectorAuthorizationListPermissionBundlesResult {
+    value: PermissionBundlePage,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct OASelectorAuthorizationCheckBatchResult {
+    value: BatchDecision,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct OASelectorAuthorizationCheckBatchForResult {
+    value: BatchDecision,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct OASelectorAuthorizationCheckLegacyOperationForResult {
+    value: Decision,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct OASelectorAuthorizationOperatorListSelectorRulesResult {
+    value: SelectorRulePage,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct OASelectorAuthorizationOperatorReadSelectorRuleResult {
+    value: SelectorRuleRead,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct OASelectorAuthorizationOperatorSetSelectorRuleResult {
+    value: SelectorEdit,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct OASelectorAuthorizationOperatorRemoveSelectorRuleResult {
+    value: SelectorEdit,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct OASelectorAuthorizationOperatorApplyBundleResult {
+    value: SelectorEdit,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct OASelectorAuthorizationOperatorRemoveBundleResult {
+    value: SelectorEdit,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct OASelectorAuthorizationOperatorApplyPermissionAllowResult {
+    value: SelectorEdit,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct OASelectorAuthorizationOperatorUndoPermissionEffectResult {
+    value: SelectorEdit,
 }
 
 fn enc_request(out: &mut Vec<u8>, v: &Request, depth: i32) {
@@ -769,6 +1607,178 @@ fn enc_request(out: &mut Vec<u8>, v: &Request, depth: i32) {
     out.push(b'}');
 }
 
+fn enc_app_metadata(out: &mut Vec<u8>, v: &AppMetadata, depth: i32) {
+    out.push(b'{');
+    out.push(b'\n');
+    pad(out, depth + 1);
+    esc(out, "id");
+    out.extend_from_slice(b": ");
+    esc(out, &v.id);
+    out.push(b',');
+    out.push(b'\n');
+    pad(out, depth + 1);
+    esc(out, "name");
+    out.extend_from_slice(b": ");
+    esc(out, &v.name);
+    out.push(b',');
+    out.push(b'\n');
+    pad(out, depth + 1);
+    esc(out, "rights");
+    out.extend_from_slice(b": ");
+    strs(out, &v.rights, depth + 1);
+    out.push(b',');
+    out.push(b'\n');
+    pad(out, depth + 1);
+    esc(out, "registered");
+    out.extend_from_slice(b": ");
+    esc(out, &v.registered);
+    out.push(b'\n');
+    pad(out, depth);
+    out.push(b'}');
+}
+
+fn enc_hold_metadata(out: &mut Vec<u8>, v: &HoldMetadata, depth: i32) {
+    out.push(b'{');
+    out.push(b'\n');
+    pad(out, depth + 1);
+    esc(out, "app");
+    out.extend_from_slice(b": ");
+    esc(out, &v.app);
+    out.push(b',');
+    out.push(b'\n');
+    pad(out, depth + 1);
+    esc(out, "name");
+    out.extend_from_slice(b": ");
+    esc(out, &v.name);
+    out.push(b',');
+    out.push(b'\n');
+    pad(out, depth + 1);
+    esc(out, "right");
+    out.extend_from_slice(b": ");
+    esc(out, &v.right);
+    out.push(b',');
+    out.push(b'\n');
+    pad(out, depth + 1);
+    esc(out, "why");
+    out.extend_from_slice(b": ");
+    esc(out, &v.why);
+    out.push(b',');
+    out.push(b'\n');
+    pad(out, depth + 1);
+    esc(out, "since");
+    out.extend_from_slice(b": ");
+    esc(out, &v.since);
+    out.push(b'\n');
+    pad(out, depth);
+    out.push(b'}');
+}
+
+fn enc_response_metadata(out: &mut Vec<u8>, v: &ResponseMetadata, depth: i32) {
+    out.push(b'{');
+    let mut first = true;
+    if !v.code.is_empty() {
+        first = false;
+        out.push(b'\n');
+        pad(out, depth + 1);
+        esc(out, "code");
+        out.extend_from_slice(b": ");
+        esc(out, &v.code);
+    }
+    if !v.error.is_empty() {
+        if !first {
+            out.push(b',');
+        }
+        first = false;
+        out.push(b'\n');
+        pad(out, depth + 1);
+        esc(out, "error");
+        out.extend_from_slice(b": ");
+        esc(out, &v.error);
+    }
+    if !v.secret.is_empty() {
+        if !first {
+            out.push(b',');
+        }
+        first = false;
+        out.push(b'\n');
+        pad(out, depth + 1);
+        esc(out, "secret");
+        out.extend_from_slice(b": ");
+        esc(out, &v.secret);
+    }
+    if !v.token.is_empty() {
+        if !first {
+            out.push(b',');
+        }
+        first = false;
+        out.push(b'\n');
+        pad(out, depth + 1);
+        esc(out, "token");
+        out.extend_from_slice(b": ");
+        esc(out, &v.token);
+    }
+    if !v.expires.is_empty() {
+        if !first {
+            out.push(b',');
+        }
+        first = false;
+        out.push(b'\n');
+        pad(out, depth + 1);
+        esc(out, "expires");
+        out.extend_from_slice(b": ");
+        esc(out, &v.expires);
+    }
+    if let Some(value) = &v.app {
+        if !first {
+            out.push(b',');
+        }
+        first = false;
+        out.push(b'\n');
+        pad(out, depth + 1);
+        esc(out, "app");
+        out.extend_from_slice(b": ");
+        enc_app_metadata(out, value, depth + 1);
+    }
+    if !v.right.is_empty() {
+        if !first {
+            out.push(b',');
+        }
+        first = false;
+        out.push(b'\n');
+        pad(out, depth + 1);
+        esc(out, "right");
+        out.extend_from_slice(b": ");
+        esc(out, &v.right);
+    }
+    if !v.apps.is_empty() {
+        if !first {
+            out.push(b',');
+        }
+        first = false;
+        out.push(b'\n');
+        pad(out, depth + 1);
+        esc(out, "apps");
+        out.extend_from_slice(b": ");
+        enc_list(out, &v.apps, depth + 1, enc_app_metadata);
+    }
+    if !v.holds.is_empty() {
+        if !first {
+            out.push(b',');
+        }
+        first = false;
+        out.push(b'\n');
+        pad(out, depth + 1);
+        esc(out, "holds");
+        out.extend_from_slice(b": ");
+        enc_list(out, &v.holds, depth + 1, enc_hold_metadata);
+    }
+    if !first {
+        out.push(b'\n');
+        pad(out, depth);
+    }
+    out.push(b'}');
+}
+
 fn enc_subject(out: &mut Vec<u8>, v: &Subject, depth: i32) {
     out.push(b'{');
     out.push(b'\n');
@@ -782,6 +1792,26 @@ fn enc_subject(out: &mut Vec<u8>, v: &Subject, depth: i32) {
     esc(out, "program");
     out.extend_from_slice(b": ");
     esc(out, &v.program);
+    out.push(b'\n');
+    pad(out, depth);
+    out.push(b'}');
+}
+
+fn enc_decision(out: &mut Vec<u8>, v: &Decision, depth: i32) {
+    out.push(b'{');
+    out.push(b'\n');
+    pad(out, depth + 1);
+    esc(out, "outcome");
+    out.extend_from_slice(b": ");
+    esc(out, v.outcome.as_str());
+    if !v.policy_revision.is_empty() {
+        out.push(b',');
+        out.push(b'\n');
+        pad(out, depth + 1);
+        esc(out, "policy_revision");
+        out.extend_from_slice(b": ");
+        esc(out, &v.policy_revision);
+    }
     out.push(b'\n');
     pad(out, depth);
     out.push(b'}');
@@ -812,6 +1842,1125 @@ fn enc_policy_rule(out: &mut Vec<u8>, v: &PolicyRule, depth: i32) {
     esc(out, "permit");
     out.extend_from_slice(b": ");
     out.extend_from_slice(if v.permit { b"true" } else { b"false" });
+    out.push(b'\n');
+    pad(out, depth);
+    out.push(b'}');
+}
+
+fn enc_policy_page(out: &mut Vec<u8>, v: &PolicyPage, depth: i32) {
+    out.push(b'{');
+    out.push(b'\n');
+    pad(out, depth + 1);
+    esc(out, "outcome");
+    out.extend_from_slice(b": ");
+    esc(out, v.outcome.as_str());
+    out.push(b',');
+    out.push(b'\n');
+    pad(out, depth + 1);
+    esc(out, "revision");
+    out.extend_from_slice(b": ");
+    esc(out, &v.revision);
+    out.push(b',');
+    out.push(b'\n');
+    pad(out, depth + 1);
+    esc(out, "catalog");
+    out.extend_from_slice(b": ");
+    strs(out, &v.catalog, depth + 1);
+    out.push(b',');
+    out.push(b'\n');
+    pad(out, depth + 1);
+    esc(out, "rules");
+    out.extend_from_slice(b": ");
+    enc_list(out, &v.rules, depth + 1, enc_policy_rule);
+    out.push(b',');
+    out.push(b'\n');
+    pad(out, depth + 1);
+    esc(out, "next");
+    out.extend_from_slice(b": ");
+    esc(out, &v.next);
+    out.push(b',');
+    out.push(b'\n');
+    pad(out, depth + 1);
+    esc(out, "complete");
+    out.extend_from_slice(b": ");
+    out.extend_from_slice(if v.complete { b"true" } else { b"false" });
+    out.push(b'\n');
+    pad(out, depth);
+    out.push(b'}');
+}
+
+fn enc_policy_edit(out: &mut Vec<u8>, v: &PolicyEdit, depth: i32) {
+    out.push(b'{');
+    out.push(b'\n');
+    pad(out, depth + 1);
+    esc(out, "outcome");
+    out.extend_from_slice(b": ");
+    esc(out, v.outcome.as_str());
+    out.push(b',');
+    out.push(b'\n');
+    pad(out, depth + 1);
+    esc(out, "revision");
+    out.extend_from_slice(b": ");
+    esc(out, &v.revision);
+    if let Some(value) = &v.current {
+        out.push(b',');
+        out.push(b'\n');
+        pad(out, depth + 1);
+        esc(out, "current");
+        out.extend_from_slice(b": ");
+        enc_policy_rule(out, value, depth + 1);
+    }
+    out.push(b'\n');
+    pad(out, depth);
+    out.push(b'}');
+}
+
+fn enc_rule_record(out: &mut Vec<u8>, v: &RuleRecord, depth: i32) {
+    out.push(b'{');
+    out.push(b'\n');
+    pad(out, depth + 1);
+    esc(out, "rule");
+    out.extend_from_slice(b": ");
+    enc_policy_rule(out, &v.rule, depth + 1);
+    out.push(b',');
+    out.push(b'\n');
+    pad(out, depth + 1);
+    esc(out, "set_by");
+    out.extend_from_slice(b": ");
+    enc_subject(out, &v.set_by, depth + 1);
+    out.push(b',');
+    out.push(b'\n');
+    pad(out, depth + 1);
+    esc(out, "set_at");
+    out.extend_from_slice(b": ");
+    esc(out, &v.set_at);
+    out.push(b',');
+    out.push(b'\n');
+    pad(out, depth + 1);
+    esc(out, "why");
+    out.extend_from_slice(b": ");
+    esc(out, &v.why);
+    out.push(b',');
+    out.push(b'\n');
+    pad(out, depth + 1);
+    esc(out, "expires");
+    out.extend_from_slice(b": ");
+    esc(out, &v.expires);
+    out.push(b'\n');
+    pad(out, depth);
+    out.push(b'}');
+}
+
+fn enc_rule_read(out: &mut Vec<u8>, v: &RuleRead, depth: i32) {
+    out.push(b'{');
+    out.push(b'\n');
+    pad(out, depth + 1);
+    esc(out, "outcome");
+    out.extend_from_slice(b": ");
+    esc(out, v.outcome.as_str());
+    out.push(b',');
+    out.push(b'\n');
+    pad(out, depth + 1);
+    esc(out, "revision");
+    out.extend_from_slice(b": ");
+    esc(out, &v.revision);
+    if let Some(value) = &v.record {
+        out.push(b',');
+        out.push(b'\n');
+        pad(out, depth + 1);
+        esc(out, "record");
+        out.extend_from_slice(b": ");
+        enc_rule_record(out, value, depth + 1);
+    }
+    out.push(b'\n');
+    pad(out, depth);
+    out.push(b'}');
+}
+
+fn enc_catalog_entry(out: &mut Vec<u8>, v: &CatalogEntry, depth: i32) {
+    out.push(b'{');
+    out.push(b'\n');
+    pad(out, depth + 1);
+    esc(out, "action");
+    out.extend_from_slice(b": ");
+    esc(out, &v.action);
+    out.push(b',');
+    out.push(b'\n');
+    pad(out, depth + 1);
+    esc(out, "registered_by");
+    out.extend_from_slice(b": ");
+    enc_subject(out, &v.registered_by, depth + 1);
+    out.push(b',');
+    out.push(b'\n');
+    pad(out, depth + 1);
+    esc(out, "registered_at");
+    out.extend_from_slice(b": ");
+    esc(out, &v.registered_at);
+    out.push(b'\n');
+    pad(out, depth);
+    out.push(b'}');
+}
+
+fn enc_action_description(out: &mut Vec<u8>, v: &ActionDescription, depth: i32) {
+    out.push(b'{');
+    out.push(b'\n');
+    pad(out, depth + 1);
+    esc(out, "action");
+    out.extend_from_slice(b": ");
+    esc(out, &v.action);
+    out.push(b',');
+    out.push(b'\n');
+    pad(out, depth + 1);
+    esc(out, "feature_app");
+    out.extend_from_slice(b": ");
+    enc_subject(out, &v.feature_app, depth + 1);
+    out.push(b',');
+    out.push(b'\n');
+    pad(out, depth + 1);
+    esc(out, "app_label");
+    out.extend_from_slice(b": ");
+    esc(out, &v.app_label);
+    out.push(b',');
+    out.push(b'\n');
+    pad(out, depth + 1);
+    esc(out, "description");
+    out.extend_from_slice(b": ");
+    esc(out, &v.description);
+    out.push(b',');
+    out.push(b'\n');
+    pad(out, depth + 1);
+    esc(out, "declared_risk");
+    out.extend_from_slice(b": ");
+    esc(out, &v.declared_risk);
+    out.push(b'\n');
+    pad(out, depth);
+    out.push(b'}');
+}
+
+fn enc_permission_definition(out: &mut Vec<u8>, v: &PermissionDefinition, depth: i32) {
+    out.push(b'{');
+    out.push(b'\n');
+    pad(out, depth + 1);
+    esc(out, "action");
+    out.extend_from_slice(b": ");
+    esc(out, &v.action);
+    out.push(b',');
+    out.push(b'\n');
+    pad(out, depth + 1);
+    esc(out, "owner_contract");
+    out.extend_from_slice(b": ");
+    esc(out, &v.owner_contract);
+    out.push(b',');
+    out.push(b'\n');
+    pad(out, depth + 1);
+    esc(out, "operations");
+    out.extend_from_slice(b": ");
+    strs(out, &v.operations, depth + 1);
+    out.push(b',');
+    out.push(b'\n');
+    pad(out, depth + 1);
+    esc(out, "resource_profile");
+    out.extend_from_slice(b": ");
+    esc(out, &v.resource_profile);
+    out.push(b',');
+    out.push(b'\n');
+    pad(out, depth + 1);
+    esc(out, "resource_type");
+    out.extend_from_slice(b": ");
+    esc(out, &v.resource_type);
+    out.push(b',');
+    out.push(b'\n');
+    pad(out, depth + 1);
+    esc(out, "enforced_by");
+    out.extend_from_slice(b": ");
+    strs(out, &v.enforced_by, depth + 1);
+    out.push(b',');
+    out.push(b'\n');
+    pad(out, depth + 1);
+    esc(out, "disclosure");
+    out.extend_from_slice(b": ");
+    esc(out, &v.disclosure);
+    out.push(b',');
+    out.push(b'\n');
+    pad(out, depth + 1);
+    esc(out, "lifecycle");
+    out.extend_from_slice(b": ");
+    esc(out, &v.lifecycle);
+    out.push(b',');
+    out.push(b'\n');
+    pad(out, depth + 1);
+    esc(out, "first_use");
+    out.extend_from_slice(b": ");
+    esc(out, v.first_use.as_str());
+    out.push(b',');
+    out.push(b'\n');
+    pad(out, depth + 1);
+    esc(out, "served");
+    out.extend_from_slice(b": ");
+    out.extend_from_slice(if v.served { b"true" } else { b"false" });
+    out.push(b'\n');
+    pad(out, depth);
+    out.push(b'}');
+}
+
+fn enc_described_action(out: &mut Vec<u8>, v: &DescribedAction, depth: i32) {
+    out.push(b'{');
+    out.push(b'\n');
+    pad(out, depth + 1);
+    esc(out, "action");
+    out.extend_from_slice(b": ");
+    esc(out, &v.action);
+    out.push(b',');
+    out.push(b'\n');
+    pad(out, depth + 1);
+    esc(out, "choices");
+    out.extend_from_slice(b": ");
+    strs(out, &v.choices, depth + 1);
+    if let Some(value) = &v.description {
+        out.push(b',');
+        out.push(b'\n');
+        pad(out, depth + 1);
+        esc(out, "description");
+        out.extend_from_slice(b": ");
+        enc_action_description(out, value, depth + 1);
+    }
+    if let Some(value) = &v.published_by {
+        out.push(b',');
+        out.push(b'\n');
+        pad(out, depth + 1);
+        esc(out, "published_by");
+        out.extend_from_slice(b": ");
+        enc_subject(out, value, depth + 1);
+    }
+    if !v.published_at.is_empty() {
+        out.push(b',');
+        out.push(b'\n');
+        pad(out, depth + 1);
+        esc(out, "published_at");
+        out.extend_from_slice(b": ");
+        esc(out, &v.published_at);
+    }
+    out.push(b'\n');
+    pad(out, depth);
+    out.push(b'}');
+}
+
+fn enc_action_edit(out: &mut Vec<u8>, v: &ActionEdit, depth: i32) {
+    out.push(b'{');
+    out.push(b'\n');
+    pad(out, depth + 1);
+    esc(out, "outcome");
+    out.extend_from_slice(b": ");
+    esc(out, v.outcome.as_str());
+    out.push(b',');
+    out.push(b'\n');
+    pad(out, depth + 1);
+    esc(out, "revision");
+    out.extend_from_slice(b": ");
+    esc(out, &v.revision);
+    if let Some(value) = &v.current {
+        out.push(b',');
+        out.push(b'\n');
+        pad(out, depth + 1);
+        esc(out, "current");
+        out.extend_from_slice(b": ");
+        enc_catalog_entry(out, value, depth + 1);
+    }
+    out.push(b'\n');
+    pad(out, depth);
+    out.push(b'}');
+}
+
+fn enc_description_edit(out: &mut Vec<u8>, v: &DescriptionEdit, depth: i32) {
+    out.push(b'{');
+    out.push(b'\n');
+    pad(out, depth + 1);
+    esc(out, "outcome");
+    out.extend_from_slice(b": ");
+    esc(out, v.outcome.as_str());
+    out.push(b',');
+    out.push(b'\n');
+    pad(out, depth + 1);
+    esc(out, "revision");
+    out.extend_from_slice(b": ");
+    esc(out, &v.revision);
+    if let Some(value) = &v.current {
+        out.push(b',');
+        out.push(b'\n');
+        pad(out, depth + 1);
+        esc(out, "current");
+        out.extend_from_slice(b": ");
+        enc_described_action(out, value, depth + 1);
+    }
+    out.push(b'\n');
+    pad(out, depth);
+    out.push(b'}');
+}
+
+fn enc_description_page(out: &mut Vec<u8>, v: &DescriptionPage, depth: i32) {
+    out.push(b'{');
+    out.push(b'\n');
+    pad(out, depth + 1);
+    esc(out, "outcome");
+    out.extend_from_slice(b": ");
+    esc(out, v.outcome.as_str());
+    out.push(b',');
+    out.push(b'\n');
+    pad(out, depth + 1);
+    esc(out, "revision");
+    out.extend_from_slice(b": ");
+    esc(out, &v.revision);
+    out.push(b',');
+    out.push(b'\n');
+    pad(out, depth + 1);
+    esc(out, "actions");
+    out.extend_from_slice(b": ");
+    enc_list(out, &v.actions, depth + 1, enc_described_action);
+    out.push(b',');
+    out.push(b'\n');
+    pad(out, depth + 1);
+    esc(out, "next");
+    out.extend_from_slice(b": ");
+    esc(out, &v.next);
+    out.push(b',');
+    out.push(b'\n');
+    pad(out, depth + 1);
+    esc(out, "complete");
+    out.extend_from_slice(b": ");
+    out.extend_from_slice(if v.complete { b"true" } else { b"false" });
+    out.push(b'\n');
+    pad(out, depth);
+    out.push(b'}');
+}
+
+fn enc_account_default(out: &mut Vec<u8>, v: &AccountDefault, depth: i32) {
+    out.push(b'{');
+    out.push(b'\n');
+    pad(out, depth + 1);
+    esc(out, "name");
+    out.extend_from_slice(b": ");
+    esc(out, &v.name);
+    out.push(b',');
+    out.push(b'\n');
+    pad(out, depth + 1);
+    esc(out, "action");
+    out.extend_from_slice(b": ");
+    esc(out, &v.action);
+    out.push(b',');
+    out.push(b'\n');
+    pad(out, depth + 1);
+    esc(out, "resource");
+    out.extend_from_slice(b": ");
+    esc(out, &v.resource);
+    out.push(b',');
+    out.push(b'\n');
+    pad(out, depth + 1);
+    esc(out, "every_resource");
+    out.extend_from_slice(b": ");
+    out.extend_from_slice(if v.every_resource { b"true" } else { b"false" });
+    out.push(b',');
+    out.push(b'\n');
+    pad(out, depth + 1);
+    esc(out, "on");
+    out.extend_from_slice(b": ");
+    out.extend_from_slice(if v.on { b"true" } else { b"false" });
+    if let Some(value) = &v.set_by {
+        out.push(b',');
+        out.push(b'\n');
+        pad(out, depth + 1);
+        esc(out, "set_by");
+        out.extend_from_slice(b": ");
+        enc_subject(out, value, depth + 1);
+    }
+    if !v.set_at.is_empty() {
+        out.push(b',');
+        out.push(b'\n');
+        pad(out, depth + 1);
+        esc(out, "set_at");
+        out.extend_from_slice(b": ");
+        esc(out, &v.set_at);
+    }
+    out.push(b'\n');
+    pad(out, depth);
+    out.push(b'}');
+}
+
+fn enc_default_page(out: &mut Vec<u8>, v: &DefaultPage, depth: i32) {
+    out.push(b'{');
+    out.push(b'\n');
+    pad(out, depth + 1);
+    esc(out, "outcome");
+    out.extend_from_slice(b": ");
+    esc(out, v.outcome.as_str());
+    out.push(b',');
+    out.push(b'\n');
+    pad(out, depth + 1);
+    esc(out, "revision");
+    out.extend_from_slice(b": ");
+    esc(out, &v.revision);
+    out.push(b',');
+    out.push(b'\n');
+    pad(out, depth + 1);
+    esc(out, "defaults");
+    out.extend_from_slice(b": ");
+    enc_list(out, &v.defaults, depth + 1, enc_account_default);
+    out.push(b'\n');
+    pad(out, depth);
+    out.push(b'}');
+}
+
+fn enc_default_edit(out: &mut Vec<u8>, v: &DefaultEdit, depth: i32) {
+    out.push(b'{');
+    out.push(b'\n');
+    pad(out, depth + 1);
+    esc(out, "outcome");
+    out.extend_from_slice(b": ");
+    esc(out, v.outcome.as_str());
+    out.push(b',');
+    out.push(b'\n');
+    pad(out, depth + 1);
+    esc(out, "revision");
+    out.extend_from_slice(b": ");
+    esc(out, &v.revision);
+    if let Some(value) = &v.current {
+        out.push(b',');
+        out.push(b'\n');
+        pad(out, depth + 1);
+        esc(out, "current");
+        out.extend_from_slice(b": ");
+        enc_account_default(out, value, depth + 1);
+    }
+    out.push(b'\n');
+    pad(out, depth);
+    out.push(b'}');
+}
+
+fn enc_decision_explanation(out: &mut Vec<u8>, v: &DecisionExplanation, depth: i32) {
+    out.push(b'{');
+    out.push(b'\n');
+    pad(out, depth + 1);
+    esc(out, "outcome");
+    out.extend_from_slice(b": ");
+    esc(out, v.outcome.as_str());
+    if !v.policy_revision.is_empty() {
+        out.push(b',');
+        out.push(b'\n');
+        pad(out, depth + 1);
+        esc(out, "policy_revision");
+        out.extend_from_slice(b": ");
+        esc(out, &v.policy_revision);
+    }
+    if let Some(value) = &v.source {
+        out.push(b',');
+        out.push(b'\n');
+        pad(out, depth + 1);
+        esc(out, "source");
+        out.extend_from_slice(b": ");
+        esc(out, value.as_str());
+    }
+    if !v.default_name.is_empty() {
+        out.push(b',');
+        out.push(b'\n');
+        pad(out, depth + 1);
+        esc(out, "default_name");
+        out.extend_from_slice(b": ");
+        esc(out, &v.default_name);
+    }
+    out.push(b'\n');
+    pad(out, depth);
+    out.push(b'}');
+}
+
+fn enc_permission_key(out: &mut Vec<u8>, v: &PermissionKey, depth: i32) {
+    out.push(b'{');
+    out.push(b'\n');
+    pad(out, depth + 1);
+    esc(out, "action");
+    out.extend_from_slice(b": ");
+    esc(out, &v.action);
+    out.push(b',');
+    out.push(b'\n');
+    pad(out, depth + 1);
+    esc(out, "resource_profile");
+    out.extend_from_slice(b": ");
+    esc(out, &v.resource_profile);
+    out.push(b'\n');
+    pad(out, depth);
+    out.push(b'}');
+}
+
+fn enc_resource_selector(out: &mut Vec<u8>, v: &ResourceSelector, depth: i32) {
+    out.push(b'{');
+    out.push(b'\n');
+    pad(out, depth + 1);
+    esc(out, "kind");
+    out.extend_from_slice(b": ");
+    esc(out, v.kind.as_str());
+    if let Some(value) = &v.target {
+        out.push(b',');
+        out.push(b'\n');
+        pad(out, depth + 1);
+        esc(out, "target");
+        out.extend_from_slice(b": ");
+        esc(out, &encode_binary(value));
+    }
+    out.push(b'\n');
+    pad(out, depth);
+    out.push(b'}');
+}
+
+fn enc_permission_selection(out: &mut Vec<u8>, v: &PermissionSelection, depth: i32) {
+    out.push(b'{');
+    out.push(b'\n');
+    pad(out, depth + 1);
+    esc(out, "permission");
+    out.extend_from_slice(b": ");
+    enc_permission_key(out, &v.permission, depth + 1);
+    out.push(b',');
+    out.push(b'\n');
+    pad(out, depth + 1);
+    esc(out, "selector");
+    out.extend_from_slice(b": ");
+    enc_resource_selector(out, &v.selector, depth + 1);
+    out.push(b'\n');
+    pad(out, depth);
+    out.push(b'}');
+}
+
+fn enc_concrete_resource(out: &mut Vec<u8>, v: &ConcreteResource, depth: i32) {
+    out.push(b'{');
+    out.push(b'\n');
+    pad(out, depth + 1);
+    esc(out, "permission");
+    out.extend_from_slice(b": ");
+    enc_permission_key(out, &v.permission, depth + 1);
+    out.push(b',');
+    out.push(b'\n');
+    pad(out, depth + 1);
+    esc(out, "target");
+    out.extend_from_slice(b": ");
+    esc(out, &encode_binary(&v.target));
+    out.push(b'\n');
+    pad(out, depth);
+    out.push(b'}');
+}
+
+fn enc_check_batch_request(out: &mut Vec<u8>, v: &CheckBatchRequest, depth: i32) {
+    out.push(b'{');
+    let mut first = true;
+    if !v.expected_revision.is_empty() {
+        first = false;
+        out.push(b'\n');
+        pad(out, depth + 1);
+        esc(out, "expected_revision");
+        out.extend_from_slice(b": ");
+        esc(out, &v.expected_revision);
+    }
+    if let Some(value) = &v.collection_admission {
+        if !first {
+            out.push(b',');
+        }
+        first = false;
+        out.push(b'\n');
+        pad(out, depth + 1);
+        esc(out, "collection_admission");
+        out.extend_from_slice(b": ");
+        enc_permission_key(out, value, depth + 1);
+    }
+    if !first {
+        out.push(b',');
+    }
+    out.push(b'\n');
+    pad(out, depth + 1);
+    esc(out, "resources");
+    out.extend_from_slice(b": ");
+    enc_list(out, &v.resources, depth + 1, enc_concrete_resource);
+    out.push(b'\n');
+    pad(out, depth);
+    out.push(b'}');
+}
+
+fn enc_batch_decision(out: &mut Vec<u8>, v: &BatchDecision, depth: i32) {
+    out.push(b'{');
+    out.push(b'\n');
+    pad(out, depth + 1);
+    esc(out, "outcome");
+    out.extend_from_slice(b": ");
+    esc(out, v.outcome.as_str());
+    out.push(b',');
+    out.push(b'\n');
+    pad(out, depth + 1);
+    esc(out, "revision");
+    out.extend_from_slice(b": ");
+    esc(out, &v.revision);
+    if let Some(value) = &v.collection_outcome {
+        out.push(b',');
+        out.push(b'\n');
+        pad(out, depth + 1);
+        esc(out, "collection_outcome");
+        out.extend_from_slice(b": ");
+        esc(out, value.as_str());
+    }
+    out.push(b',');
+    out.push(b'\n');
+    pad(out, depth + 1);
+    esc(out, "outcomes");
+    out.extend_from_slice(b": ");
+    enum_strs(out, &v.outcomes, depth + 1, |v| v.as_str());
+    out.push(b'\n');
+    pad(out, depth);
+    out.push(b'}');
+}
+
+fn enc_selector_permission_definition(out: &mut Vec<u8>, v: &SelectorPermissionDefinition, depth: i32) {
+    out.push(b'{');
+    out.push(b'\n');
+    pad(out, depth + 1);
+    esc(out, "definition");
+    out.extend_from_slice(b": ");
+    enc_permission_definition(out, &v.definition, depth + 1);
+    out.push(b',');
+    out.push(b'\n');
+    pad(out, depth + 1);
+    esc(out, "label");
+    out.extend_from_slice(b": ");
+    esc(out, &v.label);
+    out.push(b',');
+    out.push(b'\n');
+    pad(out, depth + 1);
+    esc(out, "supported_selectors");
+    out.extend_from_slice(b": ");
+    enum_strs(out, &v.supported_selectors, depth + 1, |v| v.as_str());
+    out.push(b',');
+    out.push(b'\n');
+    pad(out, depth + 1);
+    esc(out, "first_use_selectors");
+    out.extend_from_slice(b": ");
+    enum_strs(out, &v.first_use_selectors, depth + 1, |v| v.as_str());
+    out.push(b',');
+    out.push(b'\n');
+    pad(out, depth + 1);
+    esc(out, "collection");
+    out.extend_from_slice(b": ");
+    esc(out, &v.collection);
+    out.push(b',');
+    out.push(b'\n');
+    pad(out, depth + 1);
+    esc(out, "all_effect");
+    out.extend_from_slice(b": ");
+    esc(out, &v.all_effect);
+    out.push(b',');
+    out.push(b'\n');
+    pad(out, depth + 1);
+    esc(out, "request_type");
+    out.extend_from_slice(b": ");
+    esc(out, &v.request_type);
+    out.push(b'\n');
+    pad(out, depth);
+    out.push(b'}');
+}
+
+fn enc_permission_definition_page(out: &mut Vec<u8>, v: &PermissionDefinitionPage, depth: i32) {
+    out.push(b'{');
+    out.push(b'\n');
+    pad(out, depth + 1);
+    esc(out, "outcome");
+    out.extend_from_slice(b": ");
+    esc(out, v.outcome.as_str());
+    out.push(b',');
+    out.push(b'\n');
+    pad(out, depth + 1);
+    esc(out, "revision");
+    out.extend_from_slice(b": ");
+    esc(out, &v.revision);
+    out.push(b',');
+    out.push(b'\n');
+    pad(out, depth + 1);
+    esc(out, "definitions");
+    out.extend_from_slice(b": ");
+    enc_list(out, &v.definitions, depth + 1, enc_selector_permission_definition);
+    out.push(b',');
+    out.push(b'\n');
+    pad(out, depth + 1);
+    esc(out, "next");
+    out.extend_from_slice(b": ");
+    esc(out, &v.next);
+    out.push(b',');
+    out.push(b'\n');
+    pad(out, depth + 1);
+    esc(out, "complete");
+    out.extend_from_slice(b": ");
+    out.extend_from_slice(if v.complete { b"true" } else { b"false" });
+    out.push(b'\n');
+    pad(out, depth);
+    out.push(b'}');
+}
+
+fn enc_permission_bundle_definition(out: &mut Vec<u8>, v: &PermissionBundleDefinition, depth: i32) {
+    out.push(b'{');
+    out.push(b'\n');
+    pad(out, depth + 1);
+    esc(out, "bundle_ref");
+    out.extend_from_slice(b": ");
+    esc(out, &v.bundle_ref);
+    out.push(b',');
+    out.push(b'\n');
+    pad(out, depth + 1);
+    esc(out, "owner_contract");
+    out.extend_from_slice(b": ");
+    esc(out, &v.owner_contract);
+    out.push(b',');
+    out.push(b'\n');
+    pad(out, depth + 1);
+    esc(out, "label");
+    out.extend_from_slice(b": ");
+    esc(out, &v.label);
+    out.push(b',');
+    out.push(b'\n');
+    pad(out, depth + 1);
+    esc(out, "target_type");
+    out.extend_from_slice(b": ");
+    esc(out, &v.target_type);
+    out.push(b',');
+    out.push(b'\n');
+    pad(out, depth + 1);
+    esc(out, "supported_selectors");
+    out.extend_from_slice(b": ");
+    enum_strs(out, &v.supported_selectors, depth + 1, |v| v.as_str());
+    out.push(b',');
+    out.push(b'\n');
+    pad(out, depth + 1);
+    esc(out, "members");
+    out.extend_from_slice(b": ");
+    enc_list(out, &v.members, depth + 1, enc_permission_key);
+    out.push(b',');
+    out.push(b'\n');
+    pad(out, depth + 1);
+    esc(out, "disclosure");
+    out.extend_from_slice(b": ");
+    esc(out, &v.disclosure);
+    out.push(b',');
+    out.push(b'\n');
+    pad(out, depth + 1);
+    esc(out, "definition_digest");
+    out.extend_from_slice(b": ");
+    esc(out, &v.definition_digest);
+    out.push(b'\n');
+    pad(out, depth);
+    out.push(b'}');
+}
+
+fn enc_permission_bundle_page(out: &mut Vec<u8>, v: &PermissionBundlePage, depth: i32) {
+    out.push(b'{');
+    out.push(b'\n');
+    pad(out, depth + 1);
+    esc(out, "outcome");
+    out.extend_from_slice(b": ");
+    esc(out, v.outcome.as_str());
+    out.push(b',');
+    out.push(b'\n');
+    pad(out, depth + 1);
+    esc(out, "revision");
+    out.extend_from_slice(b": ");
+    esc(out, &v.revision);
+    out.push(b',');
+    out.push(b'\n');
+    pad(out, depth + 1);
+    esc(out, "bundles");
+    out.extend_from_slice(b": ");
+    enc_list(out, &v.bundles, depth + 1, enc_permission_bundle_definition);
+    out.push(b',');
+    out.push(b'\n');
+    pad(out, depth + 1);
+    esc(out, "next");
+    out.extend_from_slice(b": ");
+    esc(out, &v.next);
+    out.push(b',');
+    out.push(b'\n');
+    pad(out, depth + 1);
+    esc(out, "complete");
+    out.extend_from_slice(b": ");
+    out.extend_from_slice(if v.complete { b"true" } else { b"false" });
+    out.push(b'\n');
+    pad(out, depth);
+    out.push(b'}');
+}
+
+fn enc_bundle_expansion(out: &mut Vec<u8>, v: &BundleExpansion, depth: i32) {
+    out.push(b'{');
+    out.push(b'\n');
+    pad(out, depth + 1);
+    esc(out, "bundle_ref");
+    out.extend_from_slice(b": ");
+    esc(out, &v.bundle_ref);
+    out.push(b',');
+    out.push(b'\n');
+    pad(out, depth + 1);
+    esc(out, "definition_digest");
+    out.extend_from_slice(b": ");
+    esc(out, &v.definition_digest);
+    out.push(b',');
+    out.push(b'\n');
+    pad(out, depth + 1);
+    esc(out, "selector");
+    out.extend_from_slice(b": ");
+    enc_resource_selector(out, &v.selector, depth + 1);
+    out.push(b',');
+    out.push(b'\n');
+    pad(out, depth + 1);
+    esc(out, "selections");
+    out.extend_from_slice(b": ");
+    enc_list(out, &v.selections, depth + 1, enc_permission_selection);
+    out.push(b'\n');
+    pad(out, depth);
+    out.push(b'}');
+}
+
+fn enc_permission_effect(out: &mut Vec<u8>, v: &PermissionEffect, depth: i32) {
+    out.push(b'{');
+    out.push(b'\n');
+    pad(out, depth + 1);
+    esc(out, "subject");
+    out.extend_from_slice(b": ");
+    enc_subject(out, &v.subject, depth + 1);
+    out.push(b',');
+    out.push(b'\n');
+    pad(out, depth + 1);
+    esc(out, "selections");
+    out.extend_from_slice(b": ");
+    enc_list(out, &v.selections, depth + 1, enc_permission_selection);
+    if let Some(value) = &v.bundle {
+        out.push(b',');
+        out.push(b'\n');
+        pad(out, depth + 1);
+        esc(out, "bundle");
+        out.extend_from_slice(b": ");
+        enc_bundle_expansion(out, value, depth + 1);
+    }
+    out.push(b'\n');
+    pad(out, depth);
+    out.push(b'}');
+}
+
+fn enc_selector_rule(out: &mut Vec<u8>, v: &SelectorRule, depth: i32) {
+    out.push(b'{');
+    out.push(b'\n');
+    pad(out, depth + 1);
+    esc(out, "subject");
+    out.extend_from_slice(b": ");
+    enc_subject(out, &v.subject, depth + 1);
+    out.push(b',');
+    out.push(b'\n');
+    pad(out, depth + 1);
+    esc(out, "selection");
+    out.extend_from_slice(b": ");
+    enc_permission_selection(out, &v.selection, depth + 1);
+    out.push(b',');
+    out.push(b'\n');
+    pad(out, depth + 1);
+    esc(out, "permit");
+    out.extend_from_slice(b": ");
+    out.extend_from_slice(if v.permit { b"true" } else { b"false" });
+    out.push(b'\n');
+    pad(out, depth);
+    out.push(b'}');
+}
+
+fn enc_bundle_origin(out: &mut Vec<u8>, v: &BundleOrigin, depth: i32) {
+    out.push(b'{');
+    out.push(b'\n');
+    pad(out, depth + 1);
+    esc(out, "id");
+    out.extend_from_slice(b": ");
+    esc(out, &v.id);
+    out.push(b',');
+    out.push(b'\n');
+    pad(out, depth + 1);
+    esc(out, "expansion");
+    out.extend_from_slice(b": ");
+    enc_bundle_expansion(out, &v.expansion, depth + 1);
+    out.push(b'\n');
+    pad(out, depth);
+    out.push(b'}');
+}
+
+fn enc_selector_rule_record(out: &mut Vec<u8>, v: &SelectorRuleRecord, depth: i32) {
+    out.push(b'{');
+    out.push(b'\n');
+    pad(out, depth + 1);
+    esc(out, "rule");
+    out.extend_from_slice(b": ");
+    enc_selector_rule(out, &v.rule, depth + 1);
+    out.push(b',');
+    out.push(b'\n');
+    pad(out, depth + 1);
+    esc(out, "set_by");
+    out.extend_from_slice(b": ");
+    enc_subject(out, &v.set_by, depth + 1);
+    out.push(b',');
+    out.push(b'\n');
+    pad(out, depth + 1);
+    esc(out, "set_at");
+    out.extend_from_slice(b": ");
+    esc(out, &v.set_at);
+    out.push(b',');
+    out.push(b'\n');
+    pad(out, depth + 1);
+    esc(out, "why");
+    out.extend_from_slice(b": ");
+    esc(out, &v.why);
+    out.push(b',');
+    out.push(b'\n');
+    pad(out, depth + 1);
+    esc(out, "expires");
+    out.extend_from_slice(b": ");
+    esc(out, &v.expires);
+    if let Some(value) = &v.bundle_origin {
+        out.push(b',');
+        out.push(b'\n');
+        pad(out, depth + 1);
+        esc(out, "bundle_origin");
+        out.extend_from_slice(b": ");
+        enc_bundle_origin(out, value, depth + 1);
+    }
+    out.push(b'\n');
+    pad(out, depth);
+    out.push(b'}');
+}
+
+fn enc_selector_rule_page(out: &mut Vec<u8>, v: &SelectorRulePage, depth: i32) {
+    out.push(b'{');
+    out.push(b'\n');
+    pad(out, depth + 1);
+    esc(out, "outcome");
+    out.extend_from_slice(b": ");
+    esc(out, v.outcome.as_str());
+    out.push(b',');
+    out.push(b'\n');
+    pad(out, depth + 1);
+    esc(out, "revision");
+    out.extend_from_slice(b": ");
+    esc(out, &v.revision);
+    out.push(b',');
+    out.push(b'\n');
+    pad(out, depth + 1);
+    esc(out, "records");
+    out.extend_from_slice(b": ");
+    enc_list(out, &v.records, depth + 1, enc_selector_rule_record);
+    out.push(b',');
+    out.push(b'\n');
+    pad(out, depth + 1);
+    esc(out, "next");
+    out.extend_from_slice(b": ");
+    esc(out, &v.next);
+    out.push(b',');
+    out.push(b'\n');
+    pad(out, depth + 1);
+    esc(out, "complete");
+    out.extend_from_slice(b": ");
+    out.extend_from_slice(if v.complete { b"true" } else { b"false" });
+    out.push(b'\n');
+    pad(out, depth);
+    out.push(b'}');
+}
+
+fn enc_selector_rule_read(out: &mut Vec<u8>, v: &SelectorRuleRead, depth: i32) {
+    out.push(b'{');
+    out.push(b'\n');
+    pad(out, depth + 1);
+    esc(out, "outcome");
+    out.extend_from_slice(b": ");
+    esc(out, v.outcome.as_str());
+    out.push(b',');
+    out.push(b'\n');
+    pad(out, depth + 1);
+    esc(out, "revision");
+    out.extend_from_slice(b": ");
+    esc(out, &v.revision);
+    if let Some(value) = &v.record {
+        out.push(b',');
+        out.push(b'\n');
+        pad(out, depth + 1);
+        esc(out, "record");
+        out.extend_from_slice(b": ");
+        enc_selector_rule_record(out, value, depth + 1);
+    }
+    out.push(b'\n');
+    pad(out, depth);
+    out.push(b'}');
+}
+
+fn enc_selector_edit(out: &mut Vec<u8>, v: &SelectorEdit, depth: i32) {
+    out.push(b'{');
+    out.push(b'\n');
+    pad(out, depth + 1);
+    esc(out, "outcome");
+    out.extend_from_slice(b": ");
+    esc(out, v.outcome.as_str());
+    out.push(b',');
+    out.push(b'\n');
+    pad(out, depth + 1);
+    esc(out, "revision");
+    out.extend_from_slice(b": ");
+    esc(out, &v.revision);
+    out.push(b',');
+    out.push(b'\n');
+    pad(out, depth + 1);
+    esc(out, "current");
+    out.extend_from_slice(b": ");
+    enc_list(out, &v.current, depth + 1, enc_selector_rule_record);
+    if let Some(value) = &v.bundle_origin {
+        out.push(b',');
+        out.push(b'\n');
+        pad(out, depth + 1);
+        esc(out, "bundle_origin");
+        out.extend_from_slice(b": ");
+        enc_bundle_origin(out, value, depth + 1);
+    }
+    out.push(b'\n');
+    pad(out, depth);
+    out.push(b'}');
+}
+
+fn enc_legacy_operation_request(out: &mut Vec<u8>, v: &LegacyOperationRequest, depth: i32) {
+    out.push(b'{');
+    out.push(b'\n');
+    pad(out, depth + 1);
+    esc(out, "legacy_action");
+    out.extend_from_slice(b": ");
+    esc(out, &v.legacy_action);
+    out.push(b',');
+    out.push(b'\n');
+    pad(out, depth + 1);
+    esc(out, "legacy_resource");
+    out.extend_from_slice(b": ");
+    esc(out, &v.legacy_resource);
+    if let Some(value) = &v.concrete_operation {
+        out.push(b',');
+        out.push(b'\n');
+        pad(out, depth + 1);
+        esc(out, "concrete_operation");
+        out.extend_from_slice(b": ");
+        enc_concrete_resource(out, value, depth + 1);
+    }
+    out.push(b'\n');
+    pad(out, depth);
+    out.push(b'}');
+}
+
+fn enc_oa_authorization_list_action_descriptions_arguments(out: &mut Vec<u8>, v: &OAAuthorizationListActionDescriptionsArguments, depth: i32) {
+    out.push(b'{');
+    out.push(b'\n');
+    pad(out, depth + 1);
+    esc(out, "cursor");
+    out.extend_from_slice(b": ");
+    esc(out, &v.cursor);
+    out.push(b',');
+    out.push(b'\n');
+    pad(out, depth + 1);
+    esc(out, "limit");
+    out.extend_from_slice(b": ");
+    num(out, v.limit);
     out.push(b'\n');
     pad(out, depth);
     out.push(b'}');
@@ -854,6 +3003,42 @@ fn enc_oa_authorization_decide_for_arguments(out: &mut Vec<u8>, v: &OAAuthorizat
     esc(out, "resource");
     out.extend_from_slice(b": ");
     esc(out, &v.resource);
+    out.push(b'\n');
+    pad(out, depth);
+    out.push(b'}');
+}
+
+fn enc_oa_authorization_operator_register_described_action_arguments(out: &mut Vec<u8>, v: &OAAuthorizationOperatorRegisterDescribedActionArguments, depth: i32) {
+    out.push(b'{');
+    out.push(b'\n');
+    pad(out, depth + 1);
+    esc(out, "expected_revision");
+    out.extend_from_slice(b": ");
+    esc(out, &v.expected_revision);
+    out.push(b',');
+    out.push(b'\n');
+    pad(out, depth + 1);
+    esc(out, "description");
+    out.extend_from_slice(b": ");
+    enc_action_description(out, &v.description, depth + 1);
+    out.push(b'\n');
+    pad(out, depth);
+    out.push(b'}');
+}
+
+fn enc_oa_authorization_operator_apply_first_use_allow_arguments(out: &mut Vec<u8>, v: &OAAuthorizationOperatorApplyFirstUseAllowArguments, depth: i32) {
+    out.push(b'{');
+    out.push(b'\n');
+    pad(out, depth + 1);
+    esc(out, "expected_revision");
+    out.extend_from_slice(b": ");
+    esc(out, &v.expected_revision);
+    out.push(b',');
+    out.push(b'\n');
+    pad(out, depth + 1);
+    esc(out, "question_id");
+    out.extend_from_slice(b": ");
+    esc(out, &v.question_id);
     out.push(b'\n');
     pad(out, depth);
     out.push(b'}');
@@ -925,6 +3110,72 @@ fn enc_oa_authorization_operator_revoke_rule_arguments(out: &mut Vec<u8>, v: &OA
     out.push(b'}');
 }
 
+fn enc_oa_authorization_operator_stop_answerer_arguments(out: &mut Vec<u8>, v: &OAAuthorizationOperatorStopAnswererArguments, depth: i32) {
+    out.push(b'{');
+    out.push(b'\n');
+    pad(out, depth + 1);
+    esc(out, "expected_revision");
+    out.extend_from_slice(b": ");
+    esc(out, &v.expected_revision);
+    out.push(b',');
+    out.push(b'\n');
+    pad(out, depth + 1);
+    esc(out, "answerer");
+    out.extend_from_slice(b": ");
+    enc_subject(out, &v.answerer, depth + 1);
+    out.push(b',');
+    out.push(b'\n');
+    pad(out, depth + 1);
+    esc(out, "also_revoke_grants");
+    out.extend_from_slice(b": ");
+    out.extend_from_slice(if v.also_revoke_grants { b"true" } else { b"false" });
+    out.push(b'\n');
+    pad(out, depth);
+    out.push(b'}');
+}
+
+fn enc_oa_authorization_operator_revoke_answer_permits_arguments(out: &mut Vec<u8>, v: &OAAuthorizationOperatorRevokeAnswerPermitsArguments, depth: i32) {
+    out.push(b'{');
+    out.push(b'\n');
+    pad(out, depth + 1);
+    esc(out, "expected_revision");
+    out.extend_from_slice(b": ");
+    esc(out, &v.expected_revision);
+    out.push(b',');
+    out.push(b'\n');
+    pad(out, depth + 1);
+    esc(out, "answerer");
+    out.extend_from_slice(b": ");
+    enc_subject(out, &v.answerer, depth + 1);
+    out.push(b',');
+    out.push(b'\n');
+    pad(out, depth + 1);
+    esc(out, "target");
+    out.extend_from_slice(b": ");
+    enc_subject(out, &v.target, depth + 1);
+    out.push(b',');
+    out.push(b'\n');
+    pad(out, depth + 1);
+    esc(out, "actions");
+    out.extend_from_slice(b": ");
+    strs(out, &v.actions, depth + 1);
+    out.push(b',');
+    out.push(b'\n');
+    pad(out, depth + 1);
+    esc(out, "resource");
+    out.extend_from_slice(b": ");
+    esc(out, &v.resource);
+    out.push(b',');
+    out.push(b'\n');
+    pad(out, depth + 1);
+    esc(out, "question_id");
+    out.extend_from_slice(b": ");
+    esc(out, &v.question_id);
+    out.push(b'\n');
+    pad(out, depth);
+    out.push(b'}');
+}
+
 fn enc_oa_authorization_operator_set_rule_for_arguments(out: &mut Vec<u8>, v: &OAAuthorizationOperatorSetRuleForArguments, depth: i32) {
     out.push(b'{');
     out.push(b'\n');
@@ -938,6 +3189,36 @@ fn enc_oa_authorization_operator_set_rule_for_arguments(out: &mut Vec<u8>, v: &O
     esc(out, "rule");
     out.extend_from_slice(b": ");
     enc_policy_rule(out, &v.rule, depth + 1);
+    out.push(b',');
+    out.push(b'\n');
+    pad(out, depth + 1);
+    esc(out, "ttl_ms");
+    out.extend_from_slice(b": ");
+    num(out, v.ttl_ms);
+    out.push(b',');
+    out.push(b'\n');
+    pad(out, depth + 1);
+    esc(out, "why");
+    out.extend_from_slice(b": ");
+    esc(out, &v.why);
+    out.push(b'\n');
+    pad(out, depth);
+    out.push(b'}');
+}
+
+fn enc_oa_authorization_operator_set_rules_for_arguments(out: &mut Vec<u8>, v: &OAAuthorizationOperatorSetRulesForArguments, depth: i32) {
+    out.push(b'{');
+    out.push(b'\n');
+    pad(out, depth + 1);
+    esc(out, "expected_revision");
+    out.extend_from_slice(b": ");
+    esc(out, &v.expected_revision);
+    out.push(b',');
+    out.push(b'\n');
+    pad(out, depth + 1);
+    esc(out, "rules");
+    out.extend_from_slice(b": ");
+    enc_list(out, &v.rules, depth + 1, enc_policy_rule);
     out.push(b',');
     out.push(b'\n');
     pad(out, depth + 1);
@@ -1010,6 +3291,335 @@ fn enc_oa_authorization_operator_retire_action_arguments(out: &mut Vec<u8>, v: &
     esc(out, "action");
     out.extend_from_slice(b": ");
     esc(out, &v.action);
+    out.push(b'\n');
+    pad(out, depth);
+    out.push(b'}');
+}
+
+fn enc_oa_authorization_operator_explain_for_arguments(out: &mut Vec<u8>, v: &OAAuthorizationOperatorExplainForArguments, depth: i32) {
+    out.push(b'{');
+    out.push(b'\n');
+    pad(out, depth + 1);
+    esc(out, "subject");
+    out.extend_from_slice(b": ");
+    enc_subject(out, &v.subject, depth + 1);
+    out.push(b',');
+    out.push(b'\n');
+    pad(out, depth + 1);
+    esc(out, "action");
+    out.extend_from_slice(b": ");
+    esc(out, &v.action);
+    out.push(b',');
+    out.push(b'\n');
+    pad(out, depth + 1);
+    esc(out, "resource");
+    out.extend_from_slice(b": ");
+    esc(out, &v.resource);
+    out.push(b'\n');
+    pad(out, depth);
+    out.push(b'}');
+}
+
+fn enc_oa_authorization_operator_list_defaults_arguments(out: &mut Vec<u8>, _v: &OAAuthorizationOperatorListDefaultsArguments, _depth: i32) {
+    out.push(b'{');
+    out.push(b'}');
+}
+
+fn enc_oa_authorization_operator_set_default_arguments(out: &mut Vec<u8>, v: &OAAuthorizationOperatorSetDefaultArguments, depth: i32) {
+    out.push(b'{');
+    out.push(b'\n');
+    pad(out, depth + 1);
+    esc(out, "expected_revision");
+    out.extend_from_slice(b": ");
+    esc(out, &v.expected_revision);
+    out.push(b',');
+    out.push(b'\n');
+    pad(out, depth + 1);
+    esc(out, "name");
+    out.extend_from_slice(b": ");
+    esc(out, &v.name);
+    out.push(b',');
+    out.push(b'\n');
+    pad(out, depth + 1);
+    esc(out, "on");
+    out.extend_from_slice(b": ");
+    out.extend_from_slice(if v.on { b"true" } else { b"false" });
+    out.push(b'\n');
+    pad(out, depth);
+    out.push(b'}');
+}
+
+fn enc_oa_selector_authorization_list_permission_definitions_arguments(out: &mut Vec<u8>, v: &OASelectorAuthorizationListPermissionDefinitionsArguments, depth: i32) {
+    out.push(b'{');
+    out.push(b'\n');
+    pad(out, depth + 1);
+    esc(out, "cursor");
+    out.extend_from_slice(b": ");
+    esc(out, &v.cursor);
+    out.push(b',');
+    out.push(b'\n');
+    pad(out, depth + 1);
+    esc(out, "limit");
+    out.extend_from_slice(b": ");
+    num(out, v.limit);
+    out.push(b'\n');
+    pad(out, depth);
+    out.push(b'}');
+}
+
+fn enc_oa_selector_authorization_list_permission_bundles_arguments(out: &mut Vec<u8>, v: &OASelectorAuthorizationListPermissionBundlesArguments, depth: i32) {
+    out.push(b'{');
+    out.push(b'\n');
+    pad(out, depth + 1);
+    esc(out, "cursor");
+    out.extend_from_slice(b": ");
+    esc(out, &v.cursor);
+    out.push(b',');
+    out.push(b'\n');
+    pad(out, depth + 1);
+    esc(out, "limit");
+    out.extend_from_slice(b": ");
+    num(out, v.limit);
+    out.push(b'\n');
+    pad(out, depth);
+    out.push(b'}');
+}
+
+fn enc_oa_selector_authorization_check_batch_arguments(out: &mut Vec<u8>, v: &OASelectorAuthorizationCheckBatchArguments, depth: i32) {
+    out.push(b'{');
+    out.push(b'\n');
+    pad(out, depth + 1);
+    esc(out, "request");
+    out.extend_from_slice(b": ");
+    enc_check_batch_request(out, &v.request, depth + 1);
+    out.push(b'\n');
+    pad(out, depth);
+    out.push(b'}');
+}
+
+fn enc_oa_selector_authorization_check_batch_for_arguments(out: &mut Vec<u8>, v: &OASelectorAuthorizationCheckBatchForArguments, depth: i32) {
+    out.push(b'{');
+    out.push(b'\n');
+    pad(out, depth + 1);
+    esc(out, "subject");
+    out.extend_from_slice(b": ");
+    enc_subject(out, &v.subject, depth + 1);
+    out.push(b',');
+    out.push(b'\n');
+    pad(out, depth + 1);
+    esc(out, "request");
+    out.extend_from_slice(b": ");
+    enc_check_batch_request(out, &v.request, depth + 1);
+    out.push(b'\n');
+    pad(out, depth);
+    out.push(b'}');
+}
+
+fn enc_oa_selector_authorization_check_legacy_operation_for_arguments(out: &mut Vec<u8>, v: &OASelectorAuthorizationCheckLegacyOperationForArguments, depth: i32) {
+    out.push(b'{');
+    out.push(b'\n');
+    pad(out, depth + 1);
+    esc(out, "subject");
+    out.extend_from_slice(b": ");
+    enc_subject(out, &v.subject, depth + 1);
+    out.push(b',');
+    out.push(b'\n');
+    pad(out, depth + 1);
+    esc(out, "request");
+    out.extend_from_slice(b": ");
+    enc_legacy_operation_request(out, &v.request, depth + 1);
+    out.push(b'\n');
+    pad(out, depth);
+    out.push(b'}');
+}
+
+fn enc_oa_selector_authorization_operator_list_selector_rules_arguments(out: &mut Vec<u8>, v: &OASelectorAuthorizationOperatorListSelectorRulesArguments, depth: i32) {
+    out.push(b'{');
+    out.push(b'\n');
+    pad(out, depth + 1);
+    esc(out, "cursor");
+    out.extend_from_slice(b": ");
+    esc(out, &v.cursor);
+    out.push(b',');
+    out.push(b'\n');
+    pad(out, depth + 1);
+    esc(out, "limit");
+    out.extend_from_slice(b": ");
+    num(out, v.limit);
+    out.push(b'\n');
+    pad(out, depth);
+    out.push(b'}');
+}
+
+fn enc_oa_selector_authorization_operator_read_selector_rule_arguments(out: &mut Vec<u8>, v: &OASelectorAuthorizationOperatorReadSelectorRuleArguments, depth: i32) {
+    out.push(b'{');
+    out.push(b'\n');
+    pad(out, depth + 1);
+    esc(out, "subject");
+    out.extend_from_slice(b": ");
+    enc_subject(out, &v.subject, depth + 1);
+    out.push(b',');
+    out.push(b'\n');
+    pad(out, depth + 1);
+    esc(out, "selection");
+    out.extend_from_slice(b": ");
+    enc_permission_selection(out, &v.selection, depth + 1);
+    out.push(b'\n');
+    pad(out, depth);
+    out.push(b'}');
+}
+
+fn enc_oa_selector_authorization_operator_set_selector_rule_arguments(out: &mut Vec<u8>, v: &OASelectorAuthorizationOperatorSetSelectorRuleArguments, depth: i32) {
+    out.push(b'{');
+    out.push(b'\n');
+    pad(out, depth + 1);
+    esc(out, "expected_revision");
+    out.extend_from_slice(b": ");
+    esc(out, &v.expected_revision);
+    out.push(b',');
+    out.push(b'\n');
+    pad(out, depth + 1);
+    esc(out, "rule");
+    out.extend_from_slice(b": ");
+    enc_selector_rule(out, &v.rule, depth + 1);
+    out.push(b',');
+    out.push(b'\n');
+    pad(out, depth + 1);
+    esc(out, "ttl_ms");
+    out.extend_from_slice(b": ");
+    num(out, v.ttl_ms);
+    out.push(b',');
+    out.push(b'\n');
+    pad(out, depth + 1);
+    esc(out, "why");
+    out.extend_from_slice(b": ");
+    esc(out, &v.why);
+    out.push(b'\n');
+    pad(out, depth);
+    out.push(b'}');
+}
+
+fn enc_oa_selector_authorization_operator_remove_selector_rule_arguments(out: &mut Vec<u8>, v: &OASelectorAuthorizationOperatorRemoveSelectorRuleArguments, depth: i32) {
+    out.push(b'{');
+    out.push(b'\n');
+    pad(out, depth + 1);
+    esc(out, "expected_revision");
+    out.extend_from_slice(b": ");
+    esc(out, &v.expected_revision);
+    out.push(b',');
+    out.push(b'\n');
+    pad(out, depth + 1);
+    esc(out, "subject");
+    out.extend_from_slice(b": ");
+    enc_subject(out, &v.subject, depth + 1);
+    out.push(b',');
+    out.push(b'\n');
+    pad(out, depth + 1);
+    esc(out, "selection");
+    out.extend_from_slice(b": ");
+    enc_permission_selection(out, &v.selection, depth + 1);
+    out.push(b'\n');
+    pad(out, depth);
+    out.push(b'}');
+}
+
+fn enc_oa_selector_authorization_operator_apply_bundle_arguments(out: &mut Vec<u8>, v: &OASelectorAuthorizationOperatorApplyBundleArguments, depth: i32) {
+    out.push(b'{');
+    out.push(b'\n');
+    pad(out, depth + 1);
+    esc(out, "expected_revision");
+    out.extend_from_slice(b": ");
+    esc(out, &v.expected_revision);
+    out.push(b',');
+    out.push(b'\n');
+    pad(out, depth + 1);
+    esc(out, "subject");
+    out.extend_from_slice(b": ");
+    enc_subject(out, &v.subject, depth + 1);
+    out.push(b',');
+    out.push(b'\n');
+    pad(out, depth + 1);
+    esc(out, "bundle_ref");
+    out.extend_from_slice(b": ");
+    esc(out, &v.bundle_ref);
+    out.push(b',');
+    out.push(b'\n');
+    pad(out, depth + 1);
+    esc(out, "selector");
+    out.extend_from_slice(b": ");
+    enc_resource_selector(out, &v.selector, depth + 1);
+    out.push(b',');
+    out.push(b'\n');
+    pad(out, depth + 1);
+    esc(out, "ttl_ms");
+    out.extend_from_slice(b": ");
+    num(out, v.ttl_ms);
+    out.push(b',');
+    out.push(b'\n');
+    pad(out, depth + 1);
+    esc(out, "why");
+    out.extend_from_slice(b": ");
+    esc(out, &v.why);
+    out.push(b'\n');
+    pad(out, depth);
+    out.push(b'}');
+}
+
+fn enc_oa_selector_authorization_operator_remove_bundle_arguments(out: &mut Vec<u8>, v: &OASelectorAuthorizationOperatorRemoveBundleArguments, depth: i32) {
+    out.push(b'{');
+    out.push(b'\n');
+    pad(out, depth + 1);
+    esc(out, "expected_revision");
+    out.extend_from_slice(b": ");
+    esc(out, &v.expected_revision);
+    out.push(b',');
+    out.push(b'\n');
+    pad(out, depth + 1);
+    esc(out, "subject");
+    out.extend_from_slice(b": ");
+    enc_subject(out, &v.subject, depth + 1);
+    out.push(b',');
+    out.push(b'\n');
+    pad(out, depth + 1);
+    esc(out, "origin_id");
+    out.extend_from_slice(b": ");
+    esc(out, &v.origin_id);
+    out.push(b'\n');
+    pad(out, depth);
+    out.push(b'}');
+}
+
+fn enc_oa_selector_authorization_operator_apply_permission_allow_arguments(out: &mut Vec<u8>, v: &OASelectorAuthorizationOperatorApplyPermissionAllowArguments, depth: i32) {
+    out.push(b'{');
+    out.push(b'\n');
+    pad(out, depth + 1);
+    esc(out, "expected_revision");
+    out.extend_from_slice(b": ");
+    esc(out, &v.expected_revision);
+    out.push(b',');
+    out.push(b'\n');
+    pad(out, depth + 1);
+    esc(out, "question_id");
+    out.extend_from_slice(b": ");
+    esc(out, &v.question_id);
+    out.push(b'\n');
+    pad(out, depth);
+    out.push(b'}');
+}
+
+fn enc_oa_selector_authorization_operator_undo_permission_effect_arguments(out: &mut Vec<u8>, v: &OASelectorAuthorizationOperatorUndoPermissionEffectArguments, depth: i32) {
+    out.push(b'{');
+    out.push(b'\n');
+    pad(out, depth + 1);
+    esc(out, "expected_revision");
+    out.extend_from_slice(b": ");
+    esc(out, &v.expected_revision);
+    out.push(b',');
+    out.push(b'\n');
+    pad(out, depth + 1);
+    esc(out, "question_id");
+    out.extend_from_slice(b": ");
+    esc(out, &v.question_id);
     out.push(b'\n');
     pad(out, depth);
     out.push(b'}');
@@ -1090,6 +3700,7 @@ struct Reader<'a> {
     buf: &'a [u8],
     pos: usize,
     depth: i32,
+    limit: i32,
 }
 
 impl<'a> Reader<'a> {
@@ -1109,7 +3720,7 @@ impl<'a> Reader<'a> {
 
     fn enter(&mut self) -> Result<(), Refusal> {
         self.depth += 1;
-        if self.depth > DEPTH_LIMIT {
+        if self.depth > self.limit {
             return self.refuse("depth_exceeded");
         }
         Ok(())
@@ -1443,6 +4054,54 @@ fn decode_list<T>(
     Ok(out)
 }
 
+fn encode_binary(value: &[u8]) -> String {
+    const ALPHABET: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    let mut out = String::new();
+    for chunk in value.chunks(3) {
+        let mut v = (chunk[0] as u32) << 16;
+        if chunk.len() > 1 { v |= (chunk[1] as u32) << 8; }
+        if chunk.len() > 2 { v |= chunk[2] as u32; }
+        out.push(ALPHABET[(v >> 18) as usize] as char);
+        out.push(ALPHABET[((v >> 12) & 63) as usize] as char);
+        out.push(if chunk.len() > 1 { ALPHABET[((v >> 6) & 63) as usize] as char } else { '=' });
+        out.push(if chunk.len() > 2 { ALPHABET[(v & 63) as usize] as char } else { '=' });
+    }
+    out
+}
+fn read_binary(r: &mut Reader) -> Result<Vec<u8>, Refusal> {
+    let text = r.string()?;
+    let bytes = text.as_bytes();
+    if bytes.len() % 4 != 0 { return r.refuse("bad_binary"); }
+    let mut out = Vec::new();
+    for (i, chunk) in bytes.chunks(4).enumerate() {
+        let mut v = 0u32;
+        let mut pad = 0;
+        for (j, &c) in chunk.iter().enumerate() {
+            let digit = if c == b'=' {
+                if j < 2 || (i + 1) * 4 != bytes.len() { return r.refuse("bad_binary"); }
+                pad += 1;
+                0
+            } else {
+                if pad != 0 { return r.refuse("bad_binary"); }
+                match c {
+                    b'A'..=b'Z' => c - b'A',
+                    b'a'..=b'z' => c - b'a' + 26,
+                    b'0'..=b'9' => c - b'0' + 52,
+                    b'+' => 62,
+                    b'/' => 63,
+                    _ => return r.refuse("bad_binary"),
+                }
+            };
+            v = (v << 6) | digit as u32;
+        }
+        out.push((v >> 16) as u8);
+        if pad < 2 { out.push((v >> 8) as u8); }
+        if pad == 0 { out.push(v as u8); }
+    }
+    if encode_binary(&out) != text { return r.refuse("bad_binary"); }
+    Ok(out)
+}
+
 fn decode_request(r: &mut Reader) -> Result<Request, Refusal> {
     if r.at() != b'{' {
         return r.refuse("wrong_type");
@@ -1566,6 +4225,300 @@ fn decode_request(r: &mut Reader) -> Result<Request, Refusal> {
         why: field_why,
         app: field_app,
         admin: field_admin,
+    })
+}
+
+fn decode_app_metadata(r: &mut Reader) -> Result<AppMetadata, Refusal> {
+    if r.at() != b'{' {
+        return r.refuse("wrong_type");
+    }
+    r.enter()?;
+    r.pos += 1;
+    let mut field_id: String = Default::default();
+    let mut field_name: String = Default::default();
+    let mut field_rights: Vec<String> = Default::default();
+    let mut field_registered: String = Default::default();
+    let mut seen: u32 = 0;
+    r.skip_ws();
+    if r.at() != b'}' {
+        loop {
+            r.skip_ws();
+            if r.at() != b'"' {
+                return r.refuse("malformed");
+            }
+            let key = r.string()?;
+            r.skip_ws();
+            if r.at() != b':' {
+                return r.refuse("malformed");
+            }
+            r.pos += 1;
+            r.skip_ws();
+            match key.as_str() {
+                "id" => {
+                    if seen & 1 != 0 {
+                        return r.refuse("duplicate_field");
+                    }
+                    seen |= 1;
+                    field_id = r.string()?;
+                }
+                "name" => {
+                    if seen & 2 != 0 {
+                        return r.refuse("duplicate_field");
+                    }
+                    seen |= 2;
+                    field_name = r.string()?;
+                }
+                "rights" => {
+                    if seen & 4 != 0 {
+                        return r.refuse("duplicate_field");
+                    }
+                    seen |= 4;
+                    field_rights = r.str_list()?;
+                }
+                "registered" => {
+                    if seen & 8 != 0 {
+                        return r.refuse("duplicate_field");
+                    }
+                    seen |= 8;
+                    field_registered = r.string()?;
+                }
+                _ => {
+                    return r.refuse("unknown_field");
+                }
+            }
+            r.skip_ws();
+            if r.at() != b',' {
+                break;
+            }
+            r.pos += 1;
+        }
+    }
+    if r.at() != b'}' {
+        return r.refuse("malformed");
+    }
+    r.pos += 1;
+    r.depth -= 1;
+    if seen & 15 != 15 {
+        return r.refuse("missing_field");
+    }
+    Ok(AppMetadata {
+        id: field_id,
+        name: field_name,
+        rights: field_rights,
+        registered: field_registered,
+    })
+}
+
+fn decode_hold_metadata(r: &mut Reader) -> Result<HoldMetadata, Refusal> {
+    if r.at() != b'{' {
+        return r.refuse("wrong_type");
+    }
+    r.enter()?;
+    r.pos += 1;
+    let mut field_app: String = Default::default();
+    let mut field_name: String = Default::default();
+    let mut field_right: String = Default::default();
+    let mut field_why: String = Default::default();
+    let mut field_since: String = Default::default();
+    let mut seen: u32 = 0;
+    r.skip_ws();
+    if r.at() != b'}' {
+        loop {
+            r.skip_ws();
+            if r.at() != b'"' {
+                return r.refuse("malformed");
+            }
+            let key = r.string()?;
+            r.skip_ws();
+            if r.at() != b':' {
+                return r.refuse("malformed");
+            }
+            r.pos += 1;
+            r.skip_ws();
+            match key.as_str() {
+                "app" => {
+                    if seen & 1 != 0 {
+                        return r.refuse("duplicate_field");
+                    }
+                    seen |= 1;
+                    field_app = r.string()?;
+                }
+                "name" => {
+                    if seen & 2 != 0 {
+                        return r.refuse("duplicate_field");
+                    }
+                    seen |= 2;
+                    field_name = r.string()?;
+                }
+                "right" => {
+                    if seen & 4 != 0 {
+                        return r.refuse("duplicate_field");
+                    }
+                    seen |= 4;
+                    field_right = r.string()?;
+                }
+                "why" => {
+                    if seen & 8 != 0 {
+                        return r.refuse("duplicate_field");
+                    }
+                    seen |= 8;
+                    field_why = r.string()?;
+                }
+                "since" => {
+                    if seen & 16 != 0 {
+                        return r.refuse("duplicate_field");
+                    }
+                    seen |= 16;
+                    field_since = r.string()?;
+                }
+                _ => {
+                    return r.refuse("unknown_field");
+                }
+            }
+            r.skip_ws();
+            if r.at() != b',' {
+                break;
+            }
+            r.pos += 1;
+        }
+    }
+    if r.at() != b'}' {
+        return r.refuse("malformed");
+    }
+    r.pos += 1;
+    r.depth -= 1;
+    if seen & 31 != 31 {
+        return r.refuse("missing_field");
+    }
+    Ok(HoldMetadata {
+        app: field_app,
+        name: field_name,
+        right: field_right,
+        why: field_why,
+        since: field_since,
+    })
+}
+
+fn decode_response_metadata(r: &mut Reader) -> Result<ResponseMetadata, Refusal> {
+    if r.at() != b'{' {
+        return r.refuse("wrong_type");
+    }
+    r.enter()?;
+    r.pos += 1;
+    let mut field_code: String = Default::default();
+    let mut field_error: String = Default::default();
+    let mut field_secret: String = Default::default();
+    let mut field_token: String = Default::default();
+    let mut field_expires: String = Default::default();
+    let mut field_app: Option<AppMetadata> = None;
+    let mut field_right: String = Default::default();
+    let mut field_apps: Vec<AppMetadata> = Default::default();
+    let mut field_holds: Vec<HoldMetadata> = Default::default();
+    let mut seen: u32 = 0;
+    r.skip_ws();
+    if r.at() != b'}' {
+        loop {
+            r.skip_ws();
+            if r.at() != b'"' {
+                return r.refuse("malformed");
+            }
+            let key = r.string()?;
+            r.skip_ws();
+            if r.at() != b':' {
+                return r.refuse("malformed");
+            }
+            r.pos += 1;
+            r.skip_ws();
+            match key.as_str() {
+                "code" => {
+                    if seen & 1 != 0 {
+                        return r.refuse("duplicate_field");
+                    }
+                    seen |= 1;
+                    field_code = r.string()?;
+                }
+                "error" => {
+                    if seen & 2 != 0 {
+                        return r.refuse("duplicate_field");
+                    }
+                    seen |= 2;
+                    field_error = r.string()?;
+                }
+                "secret" => {
+                    if seen & 4 != 0 {
+                        return r.refuse("duplicate_field");
+                    }
+                    seen |= 4;
+                    field_secret = r.string()?;
+                }
+                "token" => {
+                    if seen & 8 != 0 {
+                        return r.refuse("duplicate_field");
+                    }
+                    seen |= 8;
+                    field_token = r.string()?;
+                }
+                "expires" => {
+                    if seen & 16 != 0 {
+                        return r.refuse("duplicate_field");
+                    }
+                    seen |= 16;
+                    field_expires = r.string()?;
+                }
+                "app" => {
+                    if seen & 32 != 0 {
+                        return r.refuse("duplicate_field");
+                    }
+                    seen |= 32;
+                    field_app = Some(decode_app_metadata(r)?);
+                }
+                "right" => {
+                    if seen & 64 != 0 {
+                        return r.refuse("duplicate_field");
+                    }
+                    seen |= 64;
+                    field_right = r.string()?;
+                }
+                "apps" => {
+                    if seen & 128 != 0 {
+                        return r.refuse("duplicate_field");
+                    }
+                    seen |= 128;
+                    field_apps = decode_list(r, decode_app_metadata)?;
+                }
+                "holds" => {
+                    if seen & 256 != 0 {
+                        return r.refuse("duplicate_field");
+                    }
+                    seen |= 256;
+                    field_holds = decode_list(r, decode_hold_metadata)?;
+                }
+                _ => {
+                    return r.refuse("unknown_field");
+                }
+            }
+            r.skip_ws();
+            if r.at() != b',' {
+                break;
+            }
+            r.pos += 1;
+        }
+    }
+    if r.at() != b'}' {
+        return r.refuse("malformed");
+    }
+    r.pos += 1;
+    r.depth -= 1;
+    Ok(ResponseMetadata {
+        code: field_code,
+        error: field_error,
+        secret: field_secret,
+        token: field_token,
+        expires: field_expires,
+        app: field_app,
+        right: field_right,
+        apps: field_apps,
+        holds: field_holds,
     })
 }
 
@@ -2193,6 +5146,324 @@ fn decode_catalog_entry(r: &mut Reader) -> Result<CatalogEntry, Refusal> {
     })
 }
 
+fn decode_action_description(r: &mut Reader) -> Result<ActionDescription, Refusal> {
+    if r.at() != b'{' {
+        return r.refuse("wrong_type");
+    }
+    r.enter()?;
+    r.pos += 1;
+    let mut field_action: String = Default::default();
+    let mut field_feature_app: Subject = Default::default();
+    let mut field_app_label: String = Default::default();
+    let mut field_description: String = Default::default();
+    let mut field_declared_risk: String = Default::default();
+    let mut seen: u32 = 0;
+    r.skip_ws();
+    if r.at() != b'}' {
+        loop {
+            r.skip_ws();
+            if r.at() != b'"' {
+                return r.refuse("malformed");
+            }
+            let key = r.string()?;
+            r.skip_ws();
+            if r.at() != b':' {
+                return r.refuse("malformed");
+            }
+            r.pos += 1;
+            r.skip_ws();
+            match key.as_str() {
+                "action" => {
+                    if seen & 1 != 0 {
+                        return r.refuse("duplicate_field");
+                    }
+                    seen |= 1;
+                    field_action = r.string()?;
+                }
+                "feature_app" => {
+                    if seen & 2 != 0 {
+                        return r.refuse("duplicate_field");
+                    }
+                    seen |= 2;
+                    field_feature_app = decode_subject(r)?;
+                }
+                "app_label" => {
+                    if seen & 4 != 0 {
+                        return r.refuse("duplicate_field");
+                    }
+                    seen |= 4;
+                    field_app_label = r.string()?;
+                }
+                "description" => {
+                    if seen & 8 != 0 {
+                        return r.refuse("duplicate_field");
+                    }
+                    seen |= 8;
+                    field_description = r.string()?;
+                }
+                "declared_risk" => {
+                    if seen & 16 != 0 {
+                        return r.refuse("duplicate_field");
+                    }
+                    seen |= 16;
+                    field_declared_risk = r.string()?;
+                }
+                _ => {
+                    return r.refuse("unknown_field");
+                }
+            }
+            r.skip_ws();
+            if r.at() != b',' {
+                break;
+            }
+            r.pos += 1;
+        }
+    }
+    if r.at() != b'}' {
+        return r.refuse("malformed");
+    }
+    r.pos += 1;
+    r.depth -= 1;
+    if seen & 31 != 31 {
+        return r.refuse("missing_field");
+    }
+    Ok(ActionDescription {
+        action: field_action,
+        feature_app: field_feature_app,
+        app_label: field_app_label,
+        description: field_description,
+        declared_risk: field_declared_risk,
+    })
+}
+
+fn decode_permission_definition(r: &mut Reader) -> Result<PermissionDefinition, Refusal> {
+    if r.at() != b'{' {
+        return r.refuse("wrong_type");
+    }
+    r.enter()?;
+    r.pos += 1;
+    let mut field_action: String = Default::default();
+    let mut field_owner_contract: String = Default::default();
+    let mut field_operations: Vec<String> = Default::default();
+    let mut field_resource_profile: String = Default::default();
+    let mut field_resource_type: String = Default::default();
+    let mut field_enforced_by: Vec<String> = Default::default();
+    let mut field_disclosure: String = Default::default();
+    let mut field_lifecycle: String = Default::default();
+    let mut field_first_use: Option<String> = None;
+    let mut field_served: bool = Default::default();
+    let mut seen: u32 = 0;
+    r.skip_ws();
+    if r.at() != b'}' {
+        loop {
+            r.skip_ws();
+            if r.at() != b'"' {
+                return r.refuse("malformed");
+            }
+            let key = r.string()?;
+            r.skip_ws();
+            if r.at() != b':' {
+                return r.refuse("malformed");
+            }
+            r.pos += 1;
+            r.skip_ws();
+            match key.as_str() {
+                "action" => {
+                    if seen & 1 != 0 {
+                        return r.refuse("duplicate_field");
+                    }
+                    seen |= 1;
+                    field_action = r.string()?;
+                }
+                "owner_contract" => {
+                    if seen & 2 != 0 {
+                        return r.refuse("duplicate_field");
+                    }
+                    seen |= 2;
+                    field_owner_contract = r.string()?;
+                }
+                "operations" => {
+                    if seen & 4 != 0 {
+                        return r.refuse("duplicate_field");
+                    }
+                    seen |= 4;
+                    field_operations = r.str_list()?;
+                }
+                "resource_profile" => {
+                    if seen & 8 != 0 {
+                        return r.refuse("duplicate_field");
+                    }
+                    seen |= 8;
+                    field_resource_profile = r.string()?;
+                }
+                "resource_type" => {
+                    if seen & 16 != 0 {
+                        return r.refuse("duplicate_field");
+                    }
+                    seen |= 16;
+                    field_resource_type = r.string()?;
+                }
+                "enforced_by" => {
+                    if seen & 32 != 0 {
+                        return r.refuse("duplicate_field");
+                    }
+                    seen |= 32;
+                    field_enforced_by = r.str_list()?;
+                }
+                "disclosure" => {
+                    if seen & 64 != 0 {
+                        return r.refuse("duplicate_field");
+                    }
+                    seen |= 64;
+                    field_disclosure = r.string()?;
+                }
+                "lifecycle" => {
+                    if seen & 128 != 0 {
+                        return r.refuse("duplicate_field");
+                    }
+                    seen |= 128;
+                    field_lifecycle = r.string()?;
+                }
+                "first_use" => {
+                    if seen & 256 != 0 {
+                        return r.refuse("duplicate_field");
+                    }
+                    seen |= 256;
+                    field_first_use = Some(r.string()?);
+                }
+                "served" => {
+                    if seen & 512 != 0 {
+                        return r.refuse("duplicate_field");
+                    }
+                    seen |= 512;
+                    field_served = r.boolean()?;
+                }
+                _ => {
+                    return r.refuse("unknown_field");
+                }
+            }
+            r.skip_ws();
+            if r.at() != b',' {
+                break;
+            }
+            r.pos += 1;
+        }
+    }
+    if r.at() != b'}' {
+        return r.refuse("malformed");
+    }
+    r.pos += 1;
+    r.depth -= 1;
+    if seen & 1023 != 1023 {
+        return r.refuse("missing_field");
+    }
+    let Some(field_first_use) = field_first_use.as_deref().and_then(PermissionFirstUse::from_wire) else {
+        return r.refuse("bad_enum");
+    };
+    Ok(PermissionDefinition {
+        action: field_action,
+        owner_contract: field_owner_contract,
+        operations: field_operations,
+        resource_profile: field_resource_profile,
+        resource_type: field_resource_type,
+        enforced_by: field_enforced_by,
+        disclosure: field_disclosure,
+        lifecycle: field_lifecycle,
+        first_use: field_first_use,
+        served: field_served,
+    })
+}
+
+fn decode_described_action(r: &mut Reader) -> Result<DescribedAction, Refusal> {
+    if r.at() != b'{' {
+        return r.refuse("wrong_type");
+    }
+    r.enter()?;
+    r.pos += 1;
+    let mut field_action: String = Default::default();
+    let mut field_choices: Vec<String> = Default::default();
+    let mut field_description: Option<ActionDescription> = None;
+    let mut field_published_by: Option<Subject> = None;
+    let mut field_published_at: String = Default::default();
+    let mut seen: u32 = 0;
+    r.skip_ws();
+    if r.at() != b'}' {
+        loop {
+            r.skip_ws();
+            if r.at() != b'"' {
+                return r.refuse("malformed");
+            }
+            let key = r.string()?;
+            r.skip_ws();
+            if r.at() != b':' {
+                return r.refuse("malformed");
+            }
+            r.pos += 1;
+            r.skip_ws();
+            match key.as_str() {
+                "action" => {
+                    if seen & 1 != 0 {
+                        return r.refuse("duplicate_field");
+                    }
+                    seen |= 1;
+                    field_action = r.string()?;
+                }
+                "choices" => {
+                    if seen & 2 != 0 {
+                        return r.refuse("duplicate_field");
+                    }
+                    seen |= 2;
+                    field_choices = r.str_list()?;
+                }
+                "description" => {
+                    if seen & 4 != 0 {
+                        return r.refuse("duplicate_field");
+                    }
+                    seen |= 4;
+                    field_description = Some(decode_action_description(r)?);
+                }
+                "published_by" => {
+                    if seen & 8 != 0 {
+                        return r.refuse("duplicate_field");
+                    }
+                    seen |= 8;
+                    field_published_by = Some(decode_subject(r)?);
+                }
+                "published_at" => {
+                    if seen & 16 != 0 {
+                        return r.refuse("duplicate_field");
+                    }
+                    seen |= 16;
+                    field_published_at = r.string()?;
+                }
+                _ => {
+                    return r.refuse("unknown_field");
+                }
+            }
+            r.skip_ws();
+            if r.at() != b',' {
+                break;
+            }
+            r.pos += 1;
+        }
+    }
+    if r.at() != b'}' {
+        return r.refuse("malformed");
+    }
+    r.pos += 1;
+    r.depth -= 1;
+    if seen & 3 != 3 {
+        return r.refuse("missing_field");
+    }
+    Ok(DescribedAction {
+        action: field_action,
+        choices: field_choices,
+        description: field_description,
+        published_by: field_published_by,
+        published_at: field_published_at,
+    })
+}
+
 fn decode_action_edit(r: &mut Reader) -> Result<ActionEdit, Refusal> {
     if r.at() != b'{' {
         return r.refuse("wrong_type");
@@ -2265,6 +5536,2168 @@ fn decode_action_edit(r: &mut Reader) -> Result<ActionEdit, Refusal> {
         outcome: field_outcome,
         revision: field_revision,
         current: field_current,
+    })
+}
+
+fn decode_description_edit(r: &mut Reader) -> Result<DescriptionEdit, Refusal> {
+    if r.at() != b'{' {
+        return r.refuse("wrong_type");
+    }
+    r.enter()?;
+    r.pos += 1;
+    let mut field_outcome: Option<String> = None;
+    let mut field_revision: String = Default::default();
+    let mut field_current: Option<DescribedAction> = None;
+    let mut seen: u32 = 0;
+    r.skip_ws();
+    if r.at() != b'}' {
+        loop {
+            r.skip_ws();
+            if r.at() != b'"' {
+                return r.refuse("malformed");
+            }
+            let key = r.string()?;
+            r.skip_ws();
+            if r.at() != b':' {
+                return r.refuse("malformed");
+            }
+            r.pos += 1;
+            r.skip_ws();
+            match key.as_str() {
+                "outcome" => {
+                    if seen & 1 != 0 {
+                        return r.refuse("duplicate_field");
+                    }
+                    seen |= 1;
+                    field_outcome = Some(r.string()?);
+                }
+                "revision" => {
+                    if seen & 2 != 0 {
+                        return r.refuse("duplicate_field");
+                    }
+                    seen |= 2;
+                    field_revision = r.string()?;
+                }
+                "current" => {
+                    if seen & 4 != 0 {
+                        return r.refuse("duplicate_field");
+                    }
+                    seen |= 4;
+                    field_current = Some(decode_described_action(r)?);
+                }
+                _ => {
+                    return r.refuse("unknown_field");
+                }
+            }
+            r.skip_ws();
+            if r.at() != b',' {
+                break;
+            }
+            r.pos += 1;
+        }
+    }
+    if r.at() != b'}' {
+        return r.refuse("malformed");
+    }
+    r.pos += 1;
+    r.depth -= 1;
+    if seen & 3 != 3 {
+        return r.refuse("missing_field");
+    }
+    let Some(field_outcome) = field_outcome.as_deref().and_then(ActionEditOutcome::from_wire) else {
+        return r.refuse("bad_enum");
+    };
+    Ok(DescriptionEdit {
+        outcome: field_outcome,
+        revision: field_revision,
+        current: field_current,
+    })
+}
+
+fn decode_description_page(r: &mut Reader) -> Result<DescriptionPage, Refusal> {
+    if r.at() != b'{' {
+        return r.refuse("wrong_type");
+    }
+    r.enter()?;
+    r.pos += 1;
+    let mut field_outcome: Option<String> = None;
+    let mut field_revision: String = Default::default();
+    let mut field_actions: Vec<DescribedAction> = Default::default();
+    let mut field_next: String = Default::default();
+    let mut field_complete: bool = Default::default();
+    let mut seen: u32 = 0;
+    r.skip_ws();
+    if r.at() != b'}' {
+        loop {
+            r.skip_ws();
+            if r.at() != b'"' {
+                return r.refuse("malformed");
+            }
+            let key = r.string()?;
+            r.skip_ws();
+            if r.at() != b':' {
+                return r.refuse("malformed");
+            }
+            r.pos += 1;
+            r.skip_ws();
+            match key.as_str() {
+                "outcome" => {
+                    if seen & 1 != 0 {
+                        return r.refuse("duplicate_field");
+                    }
+                    seen |= 1;
+                    field_outcome = Some(r.string()?);
+                }
+                "revision" => {
+                    if seen & 2 != 0 {
+                        return r.refuse("duplicate_field");
+                    }
+                    seen |= 2;
+                    field_revision = r.string()?;
+                }
+                "actions" => {
+                    if seen & 4 != 0 {
+                        return r.refuse("duplicate_field");
+                    }
+                    seen |= 4;
+                    field_actions = decode_list(r, decode_described_action)?;
+                }
+                "next" => {
+                    if seen & 8 != 0 {
+                        return r.refuse("duplicate_field");
+                    }
+                    seen |= 8;
+                    field_next = r.string()?;
+                }
+                "complete" => {
+                    if seen & 16 != 0 {
+                        return r.refuse("duplicate_field");
+                    }
+                    seen |= 16;
+                    field_complete = r.boolean()?;
+                }
+                _ => {
+                    return r.refuse("unknown_field");
+                }
+            }
+            r.skip_ws();
+            if r.at() != b',' {
+                break;
+            }
+            r.pos += 1;
+        }
+    }
+    if r.at() != b'}' {
+        return r.refuse("malformed");
+    }
+    r.pos += 1;
+    r.depth -= 1;
+    if seen & 31 != 31 {
+        return r.refuse("missing_field");
+    }
+    let Some(field_outcome) = field_outcome.as_deref().and_then(PolicyPageOutcome::from_wire) else {
+        return r.refuse("bad_enum");
+    };
+    Ok(DescriptionPage {
+        outcome: field_outcome,
+        revision: field_revision,
+        actions: field_actions,
+        next: field_next,
+        complete: field_complete,
+    })
+}
+
+fn decode_account_default(r: &mut Reader) -> Result<AccountDefault, Refusal> {
+    if r.at() != b'{' {
+        return r.refuse("wrong_type");
+    }
+    r.enter()?;
+    r.pos += 1;
+    let mut field_name: String = Default::default();
+    let mut field_action: String = Default::default();
+    let mut field_resource: String = Default::default();
+    let mut field_every_resource: bool = Default::default();
+    let mut field_on: bool = Default::default();
+    let mut field_set_by: Option<Subject> = None;
+    let mut field_set_at: String = Default::default();
+    let mut seen: u32 = 0;
+    r.skip_ws();
+    if r.at() != b'}' {
+        loop {
+            r.skip_ws();
+            if r.at() != b'"' {
+                return r.refuse("malformed");
+            }
+            let key = r.string()?;
+            r.skip_ws();
+            if r.at() != b':' {
+                return r.refuse("malformed");
+            }
+            r.pos += 1;
+            r.skip_ws();
+            match key.as_str() {
+                "name" => {
+                    if seen & 1 != 0 {
+                        return r.refuse("duplicate_field");
+                    }
+                    seen |= 1;
+                    field_name = r.string()?;
+                }
+                "action" => {
+                    if seen & 2 != 0 {
+                        return r.refuse("duplicate_field");
+                    }
+                    seen |= 2;
+                    field_action = r.string()?;
+                }
+                "resource" => {
+                    if seen & 4 != 0 {
+                        return r.refuse("duplicate_field");
+                    }
+                    seen |= 4;
+                    field_resource = r.string()?;
+                }
+                "every_resource" => {
+                    if seen & 8 != 0 {
+                        return r.refuse("duplicate_field");
+                    }
+                    seen |= 8;
+                    field_every_resource = r.boolean()?;
+                }
+                "on" => {
+                    if seen & 16 != 0 {
+                        return r.refuse("duplicate_field");
+                    }
+                    seen |= 16;
+                    field_on = r.boolean()?;
+                }
+                "set_by" => {
+                    if seen & 32 != 0 {
+                        return r.refuse("duplicate_field");
+                    }
+                    seen |= 32;
+                    field_set_by = Some(decode_subject(r)?);
+                }
+                "set_at" => {
+                    if seen & 64 != 0 {
+                        return r.refuse("duplicate_field");
+                    }
+                    seen |= 64;
+                    field_set_at = r.string()?;
+                }
+                _ => {
+                    return r.refuse("unknown_field");
+                }
+            }
+            r.skip_ws();
+            if r.at() != b',' {
+                break;
+            }
+            r.pos += 1;
+        }
+    }
+    if r.at() != b'}' {
+        return r.refuse("malformed");
+    }
+    r.pos += 1;
+    r.depth -= 1;
+    if seen & 31 != 31 {
+        return r.refuse("missing_field");
+    }
+    Ok(AccountDefault {
+        name: field_name,
+        action: field_action,
+        resource: field_resource,
+        every_resource: field_every_resource,
+        on: field_on,
+        set_by: field_set_by,
+        set_at: field_set_at,
+    })
+}
+
+fn decode_default_page(r: &mut Reader) -> Result<DefaultPage, Refusal> {
+    if r.at() != b'{' {
+        return r.refuse("wrong_type");
+    }
+    r.enter()?;
+    r.pos += 1;
+    let mut field_outcome: Option<String> = None;
+    let mut field_revision: String = Default::default();
+    let mut field_defaults: Vec<AccountDefault> = Default::default();
+    let mut seen: u32 = 0;
+    r.skip_ws();
+    if r.at() != b'}' {
+        loop {
+            r.skip_ws();
+            if r.at() != b'"' {
+                return r.refuse("malformed");
+            }
+            let key = r.string()?;
+            r.skip_ws();
+            if r.at() != b':' {
+                return r.refuse("malformed");
+            }
+            r.pos += 1;
+            r.skip_ws();
+            match key.as_str() {
+                "outcome" => {
+                    if seen & 1 != 0 {
+                        return r.refuse("duplicate_field");
+                    }
+                    seen |= 1;
+                    field_outcome = Some(r.string()?);
+                }
+                "revision" => {
+                    if seen & 2 != 0 {
+                        return r.refuse("duplicate_field");
+                    }
+                    seen |= 2;
+                    field_revision = r.string()?;
+                }
+                "defaults" => {
+                    if seen & 4 != 0 {
+                        return r.refuse("duplicate_field");
+                    }
+                    seen |= 4;
+                    field_defaults = decode_list(r, decode_account_default)?;
+                }
+                _ => {
+                    return r.refuse("unknown_field");
+                }
+            }
+            r.skip_ws();
+            if r.at() != b',' {
+                break;
+            }
+            r.pos += 1;
+        }
+    }
+    if r.at() != b'}' {
+        return r.refuse("malformed");
+    }
+    r.pos += 1;
+    r.depth -= 1;
+    if seen & 7 != 7 {
+        return r.refuse("missing_field");
+    }
+    let Some(field_outcome) = field_outcome.as_deref().and_then(PolicyPageOutcome::from_wire) else {
+        return r.refuse("bad_enum");
+    };
+    Ok(DefaultPage {
+        outcome: field_outcome,
+        revision: field_revision,
+        defaults: field_defaults,
+    })
+}
+
+fn decode_default_edit(r: &mut Reader) -> Result<DefaultEdit, Refusal> {
+    if r.at() != b'{' {
+        return r.refuse("wrong_type");
+    }
+    r.enter()?;
+    r.pos += 1;
+    let mut field_outcome: Option<String> = None;
+    let mut field_revision: String = Default::default();
+    let mut field_current: Option<AccountDefault> = None;
+    let mut seen: u32 = 0;
+    r.skip_ws();
+    if r.at() != b'}' {
+        loop {
+            r.skip_ws();
+            if r.at() != b'"' {
+                return r.refuse("malformed");
+            }
+            let key = r.string()?;
+            r.skip_ws();
+            if r.at() != b':' {
+                return r.refuse("malformed");
+            }
+            r.pos += 1;
+            r.skip_ws();
+            match key.as_str() {
+                "outcome" => {
+                    if seen & 1 != 0 {
+                        return r.refuse("duplicate_field");
+                    }
+                    seen |= 1;
+                    field_outcome = Some(r.string()?);
+                }
+                "revision" => {
+                    if seen & 2 != 0 {
+                        return r.refuse("duplicate_field");
+                    }
+                    seen |= 2;
+                    field_revision = r.string()?;
+                }
+                "current" => {
+                    if seen & 4 != 0 {
+                        return r.refuse("duplicate_field");
+                    }
+                    seen |= 4;
+                    field_current = Some(decode_account_default(r)?);
+                }
+                _ => {
+                    return r.refuse("unknown_field");
+                }
+            }
+            r.skip_ws();
+            if r.at() != b',' {
+                break;
+            }
+            r.pos += 1;
+        }
+    }
+    if r.at() != b'}' {
+        return r.refuse("malformed");
+    }
+    r.pos += 1;
+    r.depth -= 1;
+    if seen & 3 != 3 {
+        return r.refuse("missing_field");
+    }
+    let Some(field_outcome) = field_outcome.as_deref().and_then(PolicyEditOutcome::from_wire) else {
+        return r.refuse("bad_enum");
+    };
+    Ok(DefaultEdit {
+        outcome: field_outcome,
+        revision: field_revision,
+        current: field_current,
+    })
+}
+
+fn decode_decision_explanation(r: &mut Reader) -> Result<DecisionExplanation, Refusal> {
+    if r.at() != b'{' {
+        return r.refuse("wrong_type");
+    }
+    r.enter()?;
+    r.pos += 1;
+    let mut field_outcome: Option<String> = None;
+    let mut field_policy_revision: String = Default::default();
+    let mut field_source: Option<String> = None;
+    let mut field_default_name: String = Default::default();
+    let mut seen: u32 = 0;
+    r.skip_ws();
+    if r.at() != b'}' {
+        loop {
+            r.skip_ws();
+            if r.at() != b'"' {
+                return r.refuse("malformed");
+            }
+            let key = r.string()?;
+            r.skip_ws();
+            if r.at() != b':' {
+                return r.refuse("malformed");
+            }
+            r.pos += 1;
+            r.skip_ws();
+            match key.as_str() {
+                "outcome" => {
+                    if seen & 1 != 0 {
+                        return r.refuse("duplicate_field");
+                    }
+                    seen |= 1;
+                    field_outcome = Some(r.string()?);
+                }
+                "policy_revision" => {
+                    if seen & 2 != 0 {
+                        return r.refuse("duplicate_field");
+                    }
+                    seen |= 2;
+                    field_policy_revision = r.string()?;
+                }
+                "source" => {
+                    if seen & 4 != 0 {
+                        return r.refuse("duplicate_field");
+                    }
+                    seen |= 4;
+                    field_source = Some(r.string()?);
+                }
+                "default_name" => {
+                    if seen & 8 != 0 {
+                        return r.refuse("duplicate_field");
+                    }
+                    seen |= 8;
+                    field_default_name = r.string()?;
+                }
+                _ => {
+                    return r.refuse("unknown_field");
+                }
+            }
+            r.skip_ws();
+            if r.at() != b',' {
+                break;
+            }
+            r.pos += 1;
+        }
+    }
+    if r.at() != b'}' {
+        return r.refuse("malformed");
+    }
+    r.pos += 1;
+    r.depth -= 1;
+    if seen & 1 != 1 {
+        return r.refuse("missing_field");
+    }
+    let Some(field_outcome) = field_outcome.as_deref().and_then(DecisionOutcome::from_wire) else {
+        return r.refuse("bad_enum");
+    };
+    let field_source = match field_source {
+        Some(name) => match DecisionSource::from_wire(&name) {
+            Some(value) => Some(value),
+            None => return r.refuse("bad_enum"),
+        },
+        None => None,
+    };
+    Ok(DecisionExplanation {
+        outcome: field_outcome,
+        policy_revision: field_policy_revision,
+        source: field_source,
+        default_name: field_default_name,
+    })
+}
+
+fn decode_permission_key(r: &mut Reader) -> Result<PermissionKey, Refusal> {
+    if r.at() != b'{' {
+        return r.refuse("wrong_type");
+    }
+    r.enter()?;
+    r.pos += 1;
+    let mut field_action: String = Default::default();
+    let mut field_resource_profile: String = Default::default();
+    let mut seen: u32 = 0;
+    r.skip_ws();
+    if r.at() != b'}' {
+        loop {
+            r.skip_ws();
+            if r.at() != b'"' {
+                return r.refuse("malformed");
+            }
+            let key = r.string()?;
+            r.skip_ws();
+            if r.at() != b':' {
+                return r.refuse("malformed");
+            }
+            r.pos += 1;
+            r.skip_ws();
+            match key.as_str() {
+                "action" => {
+                    if seen & 1 != 0 {
+                        return r.refuse("duplicate_field");
+                    }
+                    seen |= 1;
+                    field_action = r.string()?;
+                }
+                "resource_profile" => {
+                    if seen & 2 != 0 {
+                        return r.refuse("duplicate_field");
+                    }
+                    seen |= 2;
+                    field_resource_profile = r.string()?;
+                }
+                _ => {
+                    return r.refuse("unknown_field");
+                }
+            }
+            r.skip_ws();
+            if r.at() != b',' {
+                break;
+            }
+            r.pos += 1;
+        }
+    }
+    if r.at() != b'}' {
+        return r.refuse("malformed");
+    }
+    r.pos += 1;
+    r.depth -= 1;
+    if seen & 3 != 3 {
+        return r.refuse("missing_field");
+    }
+    Ok(PermissionKey {
+        action: field_action,
+        resource_profile: field_resource_profile,
+    })
+}
+
+fn decode_resource_selector(r: &mut Reader) -> Result<ResourceSelector, Refusal> {
+    if r.at() != b'{' {
+        return r.refuse("wrong_type");
+    }
+    r.enter()?;
+    r.pos += 1;
+    let mut field_kind: Option<String> = None;
+    let mut field_target: Option<Vec<u8>> = None;
+    let mut seen: u32 = 0;
+    r.skip_ws();
+    if r.at() != b'}' {
+        loop {
+            r.skip_ws();
+            if r.at() != b'"' {
+                return r.refuse("malformed");
+            }
+            let key = r.string()?;
+            r.skip_ws();
+            if r.at() != b':' {
+                return r.refuse("malformed");
+            }
+            r.pos += 1;
+            r.skip_ws();
+            match key.as_str() {
+                "kind" => {
+                    if seen & 1 != 0 {
+                        return r.refuse("duplicate_field");
+                    }
+                    seen |= 1;
+                    field_kind = Some(r.string()?);
+                }
+                "target" => {
+                    if seen & 2 != 0 {
+                        return r.refuse("duplicate_field");
+                    }
+                    seen |= 2;
+                    field_target = Some(read_binary(r)?);
+                }
+                _ => {
+                    return r.refuse("unknown_field");
+                }
+            }
+            r.skip_ws();
+            if r.at() != b',' {
+                break;
+            }
+            r.pos += 1;
+        }
+    }
+    if r.at() != b'}' {
+        return r.refuse("malformed");
+    }
+    r.pos += 1;
+    r.depth -= 1;
+    if seen & 1 != 1 {
+        return r.refuse("missing_field");
+    }
+    let Some(field_kind) = field_kind.as_deref().and_then(ResourceSelectorKind::from_wire) else {
+        return r.refuse("bad_enum");
+    };
+    Ok(ResourceSelector {
+        kind: field_kind,
+        target: field_target,
+    })
+}
+
+fn decode_permission_selection(r: &mut Reader) -> Result<PermissionSelection, Refusal> {
+    if r.at() != b'{' {
+        return r.refuse("wrong_type");
+    }
+    r.enter()?;
+    r.pos += 1;
+    let mut field_permission: PermissionKey = Default::default();
+    let mut field_selector: Option<ResourceSelector> = None;
+    let mut seen: u32 = 0;
+    r.skip_ws();
+    if r.at() != b'}' {
+        loop {
+            r.skip_ws();
+            if r.at() != b'"' {
+                return r.refuse("malformed");
+            }
+            let key = r.string()?;
+            r.skip_ws();
+            if r.at() != b':' {
+                return r.refuse("malformed");
+            }
+            r.pos += 1;
+            r.skip_ws();
+            match key.as_str() {
+                "permission" => {
+                    if seen & 1 != 0 {
+                        return r.refuse("duplicate_field");
+                    }
+                    seen |= 1;
+                    field_permission = decode_permission_key(r)?;
+                }
+                "selector" => {
+                    if seen & 2 != 0 {
+                        return r.refuse("duplicate_field");
+                    }
+                    seen |= 2;
+                    field_selector = Some(decode_resource_selector(r)?);
+                }
+                _ => {
+                    return r.refuse("unknown_field");
+                }
+            }
+            r.skip_ws();
+            if r.at() != b',' {
+                break;
+            }
+            r.pos += 1;
+        }
+    }
+    if r.at() != b'}' {
+        return r.refuse("malformed");
+    }
+    r.pos += 1;
+    r.depth -= 1;
+    if seen & 3 != 3 {
+        return r.refuse("missing_field");
+    }
+    let Some(field_selector) = field_selector else {
+        return r.refuse("missing_field");
+    };
+    Ok(PermissionSelection {
+        permission: field_permission,
+        selector: field_selector,
+    })
+}
+
+fn decode_concrete_resource(r: &mut Reader) -> Result<ConcreteResource, Refusal> {
+    if r.at() != b'{' {
+        return r.refuse("wrong_type");
+    }
+    r.enter()?;
+    r.pos += 1;
+    let mut field_permission: PermissionKey = Default::default();
+    let mut field_target: Vec<u8> = Default::default();
+    let mut seen: u32 = 0;
+    r.skip_ws();
+    if r.at() != b'}' {
+        loop {
+            r.skip_ws();
+            if r.at() != b'"' {
+                return r.refuse("malformed");
+            }
+            let key = r.string()?;
+            r.skip_ws();
+            if r.at() != b':' {
+                return r.refuse("malformed");
+            }
+            r.pos += 1;
+            r.skip_ws();
+            match key.as_str() {
+                "permission" => {
+                    if seen & 1 != 0 {
+                        return r.refuse("duplicate_field");
+                    }
+                    seen |= 1;
+                    field_permission = decode_permission_key(r)?;
+                }
+                "target" => {
+                    if seen & 2 != 0 {
+                        return r.refuse("duplicate_field");
+                    }
+                    seen |= 2;
+                    field_target = read_binary(r)?;
+                }
+                _ => {
+                    return r.refuse("unknown_field");
+                }
+            }
+            r.skip_ws();
+            if r.at() != b',' {
+                break;
+            }
+            r.pos += 1;
+        }
+    }
+    if r.at() != b'}' {
+        return r.refuse("malformed");
+    }
+    r.pos += 1;
+    r.depth -= 1;
+    if seen & 3 != 3 {
+        return r.refuse("missing_field");
+    }
+    Ok(ConcreteResource {
+        permission: field_permission,
+        target: field_target,
+    })
+}
+
+fn decode_check_batch_request(r: &mut Reader) -> Result<CheckBatchRequest, Refusal> {
+    if r.at() != b'{' {
+        return r.refuse("wrong_type");
+    }
+    r.enter()?;
+    r.pos += 1;
+    let mut field_expected_revision: String = Default::default();
+    let mut field_collection_admission: Option<PermissionKey> = None;
+    let mut field_resources: Vec<ConcreteResource> = Default::default();
+    let mut seen: u32 = 0;
+    r.skip_ws();
+    if r.at() != b'}' {
+        loop {
+            r.skip_ws();
+            if r.at() != b'"' {
+                return r.refuse("malformed");
+            }
+            let key = r.string()?;
+            r.skip_ws();
+            if r.at() != b':' {
+                return r.refuse("malformed");
+            }
+            r.pos += 1;
+            r.skip_ws();
+            match key.as_str() {
+                "expected_revision" => {
+                    if seen & 1 != 0 {
+                        return r.refuse("duplicate_field");
+                    }
+                    seen |= 1;
+                    field_expected_revision = r.string()?;
+                }
+                "collection_admission" => {
+                    if seen & 2 != 0 {
+                        return r.refuse("duplicate_field");
+                    }
+                    seen |= 2;
+                    field_collection_admission = Some(decode_permission_key(r)?);
+                }
+                "resources" => {
+                    if seen & 4 != 0 {
+                        return r.refuse("duplicate_field");
+                    }
+                    seen |= 4;
+                    field_resources = decode_list(r, decode_concrete_resource)?;
+                }
+                _ => {
+                    return r.refuse("unknown_field");
+                }
+            }
+            r.skip_ws();
+            if r.at() != b',' {
+                break;
+            }
+            r.pos += 1;
+        }
+    }
+    if r.at() != b'}' {
+        return r.refuse("malformed");
+    }
+    r.pos += 1;
+    r.depth -= 1;
+    if seen & 4 != 4 {
+        return r.refuse("missing_field");
+    }
+    Ok(CheckBatchRequest {
+        expected_revision: field_expected_revision,
+        collection_admission: field_collection_admission,
+        resources: field_resources,
+    })
+}
+
+fn decode_batch_decision(r: &mut Reader) -> Result<BatchDecision, Refusal> {
+    if r.at() != b'{' {
+        return r.refuse("wrong_type");
+    }
+    r.enter()?;
+    r.pos += 1;
+    let mut field_outcome: Option<String> = None;
+    let mut field_revision: String = Default::default();
+    let mut field_collection_outcome: Option<String> = None;
+    let mut field_outcomes: Vec<String> = Default::default();
+    let mut seen: u32 = 0;
+    r.skip_ws();
+    if r.at() != b'}' {
+        loop {
+            r.skip_ws();
+            if r.at() != b'"' {
+                return r.refuse("malformed");
+            }
+            let key = r.string()?;
+            r.skip_ws();
+            if r.at() != b':' {
+                return r.refuse("malformed");
+            }
+            r.pos += 1;
+            r.skip_ws();
+            match key.as_str() {
+                "outcome" => {
+                    if seen & 1 != 0 {
+                        return r.refuse("duplicate_field");
+                    }
+                    seen |= 1;
+                    field_outcome = Some(r.string()?);
+                }
+                "revision" => {
+                    if seen & 2 != 0 {
+                        return r.refuse("duplicate_field");
+                    }
+                    seen |= 2;
+                    field_revision = r.string()?;
+                }
+                "collection_outcome" => {
+                    if seen & 4 != 0 {
+                        return r.refuse("duplicate_field");
+                    }
+                    seen |= 4;
+                    field_collection_outcome = Some(r.string()?);
+                }
+                "outcomes" => {
+                    if seen & 8 != 0 {
+                        return r.refuse("duplicate_field");
+                    }
+                    seen |= 8;
+                    field_outcomes = r.str_list()?;
+                }
+                _ => {
+                    return r.refuse("unknown_field");
+                }
+            }
+            r.skip_ws();
+            if r.at() != b',' {
+                break;
+            }
+            r.pos += 1;
+        }
+    }
+    if r.at() != b'}' {
+        return r.refuse("malformed");
+    }
+    r.pos += 1;
+    r.depth -= 1;
+    if seen & 11 != 11 {
+        return r.refuse("missing_field");
+    }
+    let Some(field_outcome) = field_outcome.as_deref().and_then(BatchCheckOutcome::from_wire) else {
+        return r.refuse("bad_enum");
+    };
+    let field_collection_outcome = match field_collection_outcome {
+        Some(name) => match DecisionOutcome::from_wire(&name) {
+            Some(value) => Some(value),
+            None => return r.refuse("bad_enum"),
+        },
+        None => None,
+    };
+    let mut parsed_field_outcomes = Vec::with_capacity(field_outcomes.len());
+    for name in field_outcomes {
+        let Some(value) = DecisionOutcome::from_wire(&name) else { return r.refuse("bad_enum"); };
+        parsed_field_outcomes.push(value);
+    }
+    let field_outcomes = parsed_field_outcomes;
+    Ok(BatchDecision {
+        outcome: field_outcome,
+        revision: field_revision,
+        collection_outcome: field_collection_outcome,
+        outcomes: field_outcomes,
+    })
+}
+
+fn decode_selector_permission_definition(r: &mut Reader) -> Result<SelectorPermissionDefinition, Refusal> {
+    if r.at() != b'{' {
+        return r.refuse("wrong_type");
+    }
+    r.enter()?;
+    r.pos += 1;
+    let mut field_definition: Option<PermissionDefinition> = None;
+    let mut field_label: String = Default::default();
+    let mut field_supported_selectors: Vec<String> = Default::default();
+    let mut field_first_use_selectors: Vec<String> = Default::default();
+    let mut field_collection: String = Default::default();
+    let mut field_all_effect: String = Default::default();
+    let mut field_request_type: String = Default::default();
+    let mut seen: u32 = 0;
+    r.skip_ws();
+    if r.at() != b'}' {
+        loop {
+            r.skip_ws();
+            if r.at() != b'"' {
+                return r.refuse("malformed");
+            }
+            let key = r.string()?;
+            r.skip_ws();
+            if r.at() != b':' {
+                return r.refuse("malformed");
+            }
+            r.pos += 1;
+            r.skip_ws();
+            match key.as_str() {
+                "definition" => {
+                    if seen & 1 != 0 {
+                        return r.refuse("duplicate_field");
+                    }
+                    seen |= 1;
+                    field_definition = Some(decode_permission_definition(r)?);
+                }
+                "label" => {
+                    if seen & 2 != 0 {
+                        return r.refuse("duplicate_field");
+                    }
+                    seen |= 2;
+                    field_label = r.string()?;
+                }
+                "supported_selectors" => {
+                    if seen & 4 != 0 {
+                        return r.refuse("duplicate_field");
+                    }
+                    seen |= 4;
+                    field_supported_selectors = r.str_list()?;
+                }
+                "first_use_selectors" => {
+                    if seen & 8 != 0 {
+                        return r.refuse("duplicate_field");
+                    }
+                    seen |= 8;
+                    field_first_use_selectors = r.str_list()?;
+                }
+                "collection" => {
+                    if seen & 16 != 0 {
+                        return r.refuse("duplicate_field");
+                    }
+                    seen |= 16;
+                    field_collection = r.string()?;
+                }
+                "all_effect" => {
+                    if seen & 32 != 0 {
+                        return r.refuse("duplicate_field");
+                    }
+                    seen |= 32;
+                    field_all_effect = r.string()?;
+                }
+                "request_type" => {
+                    if seen & 64 != 0 {
+                        return r.refuse("duplicate_field");
+                    }
+                    seen |= 64;
+                    field_request_type = r.string()?;
+                }
+                _ => {
+                    return r.refuse("unknown_field");
+                }
+            }
+            r.skip_ws();
+            if r.at() != b',' {
+                break;
+            }
+            r.pos += 1;
+        }
+    }
+    if r.at() != b'}' {
+        return r.refuse("malformed");
+    }
+    r.pos += 1;
+    r.depth -= 1;
+    if seen & 127 != 127 {
+        return r.refuse("missing_field");
+    }
+    let Some(field_definition) = field_definition else {
+        return r.refuse("missing_field");
+    };
+    let mut parsed_field_supported_selectors = Vec::with_capacity(field_supported_selectors.len());
+    for name in field_supported_selectors {
+        let Some(value) = ResourceSelectorKind::from_wire(&name) else { return r.refuse("bad_enum"); };
+        parsed_field_supported_selectors.push(value);
+    }
+    let field_supported_selectors = parsed_field_supported_selectors;
+    let mut parsed_field_first_use_selectors = Vec::with_capacity(field_first_use_selectors.len());
+    for name in field_first_use_selectors {
+        let Some(value) = ResourceSelectorKind::from_wire(&name) else { return r.refuse("bad_enum"); };
+        parsed_field_first_use_selectors.push(value);
+    }
+    let field_first_use_selectors = parsed_field_first_use_selectors;
+    Ok(SelectorPermissionDefinition {
+        definition: field_definition,
+        label: field_label,
+        supported_selectors: field_supported_selectors,
+        first_use_selectors: field_first_use_selectors,
+        collection: field_collection,
+        all_effect: field_all_effect,
+        request_type: field_request_type,
+    })
+}
+
+fn decode_permission_definition_page(r: &mut Reader) -> Result<PermissionDefinitionPage, Refusal> {
+    if r.at() != b'{' {
+        return r.refuse("wrong_type");
+    }
+    r.enter()?;
+    r.pos += 1;
+    let mut field_outcome: Option<String> = None;
+    let mut field_revision: String = Default::default();
+    let mut field_definitions: Vec<SelectorPermissionDefinition> = Default::default();
+    let mut field_next: String = Default::default();
+    let mut field_complete: bool = Default::default();
+    let mut seen: u32 = 0;
+    r.skip_ws();
+    if r.at() != b'}' {
+        loop {
+            r.skip_ws();
+            if r.at() != b'"' {
+                return r.refuse("malformed");
+            }
+            let key = r.string()?;
+            r.skip_ws();
+            if r.at() != b':' {
+                return r.refuse("malformed");
+            }
+            r.pos += 1;
+            r.skip_ws();
+            match key.as_str() {
+                "outcome" => {
+                    if seen & 1 != 0 {
+                        return r.refuse("duplicate_field");
+                    }
+                    seen |= 1;
+                    field_outcome = Some(r.string()?);
+                }
+                "revision" => {
+                    if seen & 2 != 0 {
+                        return r.refuse("duplicate_field");
+                    }
+                    seen |= 2;
+                    field_revision = r.string()?;
+                }
+                "definitions" => {
+                    if seen & 4 != 0 {
+                        return r.refuse("duplicate_field");
+                    }
+                    seen |= 4;
+                    field_definitions = decode_list(r, decode_selector_permission_definition)?;
+                }
+                "next" => {
+                    if seen & 8 != 0 {
+                        return r.refuse("duplicate_field");
+                    }
+                    seen |= 8;
+                    field_next = r.string()?;
+                }
+                "complete" => {
+                    if seen & 16 != 0 {
+                        return r.refuse("duplicate_field");
+                    }
+                    seen |= 16;
+                    field_complete = r.boolean()?;
+                }
+                _ => {
+                    return r.refuse("unknown_field");
+                }
+            }
+            r.skip_ws();
+            if r.at() != b',' {
+                break;
+            }
+            r.pos += 1;
+        }
+    }
+    if r.at() != b'}' {
+        return r.refuse("malformed");
+    }
+    r.pos += 1;
+    r.depth -= 1;
+    if seen & 31 != 31 {
+        return r.refuse("missing_field");
+    }
+    let Some(field_outcome) = field_outcome.as_deref().and_then(PolicyPageOutcome::from_wire) else {
+        return r.refuse("bad_enum");
+    };
+    Ok(PermissionDefinitionPage {
+        outcome: field_outcome,
+        revision: field_revision,
+        definitions: field_definitions,
+        next: field_next,
+        complete: field_complete,
+    })
+}
+
+fn decode_permission_bundle_definition(r: &mut Reader) -> Result<PermissionBundleDefinition, Refusal> {
+    if r.at() != b'{' {
+        return r.refuse("wrong_type");
+    }
+    r.enter()?;
+    r.pos += 1;
+    let mut field_bundle_ref: String = Default::default();
+    let mut field_owner_contract: String = Default::default();
+    let mut field_label: String = Default::default();
+    let mut field_target_type: String = Default::default();
+    let mut field_supported_selectors: Vec<String> = Default::default();
+    let mut field_members: Vec<PermissionKey> = Default::default();
+    let mut field_disclosure: String = Default::default();
+    let mut field_definition_digest: String = Default::default();
+    let mut seen: u32 = 0;
+    r.skip_ws();
+    if r.at() != b'}' {
+        loop {
+            r.skip_ws();
+            if r.at() != b'"' {
+                return r.refuse("malformed");
+            }
+            let key = r.string()?;
+            r.skip_ws();
+            if r.at() != b':' {
+                return r.refuse("malformed");
+            }
+            r.pos += 1;
+            r.skip_ws();
+            match key.as_str() {
+                "bundle_ref" => {
+                    if seen & 1 != 0 {
+                        return r.refuse("duplicate_field");
+                    }
+                    seen |= 1;
+                    field_bundle_ref = r.string()?;
+                }
+                "owner_contract" => {
+                    if seen & 2 != 0 {
+                        return r.refuse("duplicate_field");
+                    }
+                    seen |= 2;
+                    field_owner_contract = r.string()?;
+                }
+                "label" => {
+                    if seen & 4 != 0 {
+                        return r.refuse("duplicate_field");
+                    }
+                    seen |= 4;
+                    field_label = r.string()?;
+                }
+                "target_type" => {
+                    if seen & 8 != 0 {
+                        return r.refuse("duplicate_field");
+                    }
+                    seen |= 8;
+                    field_target_type = r.string()?;
+                }
+                "supported_selectors" => {
+                    if seen & 16 != 0 {
+                        return r.refuse("duplicate_field");
+                    }
+                    seen |= 16;
+                    field_supported_selectors = r.str_list()?;
+                }
+                "members" => {
+                    if seen & 32 != 0 {
+                        return r.refuse("duplicate_field");
+                    }
+                    seen |= 32;
+                    field_members = decode_list(r, decode_permission_key)?;
+                }
+                "disclosure" => {
+                    if seen & 64 != 0 {
+                        return r.refuse("duplicate_field");
+                    }
+                    seen |= 64;
+                    field_disclosure = r.string()?;
+                }
+                "definition_digest" => {
+                    if seen & 128 != 0 {
+                        return r.refuse("duplicate_field");
+                    }
+                    seen |= 128;
+                    field_definition_digest = r.string()?;
+                }
+                _ => {
+                    return r.refuse("unknown_field");
+                }
+            }
+            r.skip_ws();
+            if r.at() != b',' {
+                break;
+            }
+            r.pos += 1;
+        }
+    }
+    if r.at() != b'}' {
+        return r.refuse("malformed");
+    }
+    r.pos += 1;
+    r.depth -= 1;
+    if seen & 255 != 255 {
+        return r.refuse("missing_field");
+    }
+    let mut parsed_field_supported_selectors = Vec::with_capacity(field_supported_selectors.len());
+    for name in field_supported_selectors {
+        let Some(value) = ResourceSelectorKind::from_wire(&name) else { return r.refuse("bad_enum"); };
+        parsed_field_supported_selectors.push(value);
+    }
+    let field_supported_selectors = parsed_field_supported_selectors;
+    Ok(PermissionBundleDefinition {
+        bundle_ref: field_bundle_ref,
+        owner_contract: field_owner_contract,
+        label: field_label,
+        target_type: field_target_type,
+        supported_selectors: field_supported_selectors,
+        members: field_members,
+        disclosure: field_disclosure,
+        definition_digest: field_definition_digest,
+    })
+}
+
+fn decode_permission_bundle_page(r: &mut Reader) -> Result<PermissionBundlePage, Refusal> {
+    if r.at() != b'{' {
+        return r.refuse("wrong_type");
+    }
+    r.enter()?;
+    r.pos += 1;
+    let mut field_outcome: Option<String> = None;
+    let mut field_revision: String = Default::default();
+    let mut field_bundles: Vec<PermissionBundleDefinition> = Default::default();
+    let mut field_next: String = Default::default();
+    let mut field_complete: bool = Default::default();
+    let mut seen: u32 = 0;
+    r.skip_ws();
+    if r.at() != b'}' {
+        loop {
+            r.skip_ws();
+            if r.at() != b'"' {
+                return r.refuse("malformed");
+            }
+            let key = r.string()?;
+            r.skip_ws();
+            if r.at() != b':' {
+                return r.refuse("malformed");
+            }
+            r.pos += 1;
+            r.skip_ws();
+            match key.as_str() {
+                "outcome" => {
+                    if seen & 1 != 0 {
+                        return r.refuse("duplicate_field");
+                    }
+                    seen |= 1;
+                    field_outcome = Some(r.string()?);
+                }
+                "revision" => {
+                    if seen & 2 != 0 {
+                        return r.refuse("duplicate_field");
+                    }
+                    seen |= 2;
+                    field_revision = r.string()?;
+                }
+                "bundles" => {
+                    if seen & 4 != 0 {
+                        return r.refuse("duplicate_field");
+                    }
+                    seen |= 4;
+                    field_bundles = decode_list(r, decode_permission_bundle_definition)?;
+                }
+                "next" => {
+                    if seen & 8 != 0 {
+                        return r.refuse("duplicate_field");
+                    }
+                    seen |= 8;
+                    field_next = r.string()?;
+                }
+                "complete" => {
+                    if seen & 16 != 0 {
+                        return r.refuse("duplicate_field");
+                    }
+                    seen |= 16;
+                    field_complete = r.boolean()?;
+                }
+                _ => {
+                    return r.refuse("unknown_field");
+                }
+            }
+            r.skip_ws();
+            if r.at() != b',' {
+                break;
+            }
+            r.pos += 1;
+        }
+    }
+    if r.at() != b'}' {
+        return r.refuse("malformed");
+    }
+    r.pos += 1;
+    r.depth -= 1;
+    if seen & 31 != 31 {
+        return r.refuse("missing_field");
+    }
+    let Some(field_outcome) = field_outcome.as_deref().and_then(PolicyPageOutcome::from_wire) else {
+        return r.refuse("bad_enum");
+    };
+    Ok(PermissionBundlePage {
+        outcome: field_outcome,
+        revision: field_revision,
+        bundles: field_bundles,
+        next: field_next,
+        complete: field_complete,
+    })
+}
+
+fn decode_bundle_expansion(r: &mut Reader) -> Result<BundleExpansion, Refusal> {
+    if r.at() != b'{' {
+        return r.refuse("wrong_type");
+    }
+    r.enter()?;
+    r.pos += 1;
+    let mut field_bundle_ref: String = Default::default();
+    let mut field_definition_digest: String = Default::default();
+    let mut field_selector: Option<ResourceSelector> = None;
+    let mut field_selections: Vec<PermissionSelection> = Default::default();
+    let mut seen: u32 = 0;
+    r.skip_ws();
+    if r.at() != b'}' {
+        loop {
+            r.skip_ws();
+            if r.at() != b'"' {
+                return r.refuse("malformed");
+            }
+            let key = r.string()?;
+            r.skip_ws();
+            if r.at() != b':' {
+                return r.refuse("malformed");
+            }
+            r.pos += 1;
+            r.skip_ws();
+            match key.as_str() {
+                "bundle_ref" => {
+                    if seen & 1 != 0 {
+                        return r.refuse("duplicate_field");
+                    }
+                    seen |= 1;
+                    field_bundle_ref = r.string()?;
+                }
+                "definition_digest" => {
+                    if seen & 2 != 0 {
+                        return r.refuse("duplicate_field");
+                    }
+                    seen |= 2;
+                    field_definition_digest = r.string()?;
+                }
+                "selector" => {
+                    if seen & 4 != 0 {
+                        return r.refuse("duplicate_field");
+                    }
+                    seen |= 4;
+                    field_selector = Some(decode_resource_selector(r)?);
+                }
+                "selections" => {
+                    if seen & 8 != 0 {
+                        return r.refuse("duplicate_field");
+                    }
+                    seen |= 8;
+                    field_selections = decode_list(r, decode_permission_selection)?;
+                }
+                _ => {
+                    return r.refuse("unknown_field");
+                }
+            }
+            r.skip_ws();
+            if r.at() != b',' {
+                break;
+            }
+            r.pos += 1;
+        }
+    }
+    if r.at() != b'}' {
+        return r.refuse("malformed");
+    }
+    r.pos += 1;
+    r.depth -= 1;
+    if seen & 15 != 15 {
+        return r.refuse("missing_field");
+    }
+    let Some(field_selector) = field_selector else {
+        return r.refuse("missing_field");
+    };
+    Ok(BundleExpansion {
+        bundle_ref: field_bundle_ref,
+        definition_digest: field_definition_digest,
+        selector: field_selector,
+        selections: field_selections,
+    })
+}
+
+fn decode_permission_effect(r: &mut Reader) -> Result<PermissionEffect, Refusal> {
+    if r.at() != b'{' {
+        return r.refuse("wrong_type");
+    }
+    r.enter()?;
+    r.pos += 1;
+    let mut field_subject: Subject = Default::default();
+    let mut field_selections: Vec<PermissionSelection> = Default::default();
+    let mut field_bundle: Option<BundleExpansion> = None;
+    let mut seen: u32 = 0;
+    r.skip_ws();
+    if r.at() != b'}' {
+        loop {
+            r.skip_ws();
+            if r.at() != b'"' {
+                return r.refuse("malformed");
+            }
+            let key = r.string()?;
+            r.skip_ws();
+            if r.at() != b':' {
+                return r.refuse("malformed");
+            }
+            r.pos += 1;
+            r.skip_ws();
+            match key.as_str() {
+                "subject" => {
+                    if seen & 1 != 0 {
+                        return r.refuse("duplicate_field");
+                    }
+                    seen |= 1;
+                    field_subject = decode_subject(r)?;
+                }
+                "selections" => {
+                    if seen & 2 != 0 {
+                        return r.refuse("duplicate_field");
+                    }
+                    seen |= 2;
+                    field_selections = decode_list(r, decode_permission_selection)?;
+                }
+                "bundle" => {
+                    if seen & 4 != 0 {
+                        return r.refuse("duplicate_field");
+                    }
+                    seen |= 4;
+                    field_bundle = Some(decode_bundle_expansion(r)?);
+                }
+                _ => {
+                    return r.refuse("unknown_field");
+                }
+            }
+            r.skip_ws();
+            if r.at() != b',' {
+                break;
+            }
+            r.pos += 1;
+        }
+    }
+    if r.at() != b'}' {
+        return r.refuse("malformed");
+    }
+    r.pos += 1;
+    r.depth -= 1;
+    if seen & 3 != 3 {
+        return r.refuse("missing_field");
+    }
+    Ok(PermissionEffect {
+        subject: field_subject,
+        selections: field_selections,
+        bundle: field_bundle,
+    })
+}
+
+fn decode_selector_rule(r: &mut Reader) -> Result<SelectorRule, Refusal> {
+    if r.at() != b'{' {
+        return r.refuse("wrong_type");
+    }
+    r.enter()?;
+    r.pos += 1;
+    let mut field_subject: Subject = Default::default();
+    let mut field_selection: Option<PermissionSelection> = None;
+    let mut field_permit: bool = Default::default();
+    let mut seen: u32 = 0;
+    r.skip_ws();
+    if r.at() != b'}' {
+        loop {
+            r.skip_ws();
+            if r.at() != b'"' {
+                return r.refuse("malformed");
+            }
+            let key = r.string()?;
+            r.skip_ws();
+            if r.at() != b':' {
+                return r.refuse("malformed");
+            }
+            r.pos += 1;
+            r.skip_ws();
+            match key.as_str() {
+                "subject" => {
+                    if seen & 1 != 0 {
+                        return r.refuse("duplicate_field");
+                    }
+                    seen |= 1;
+                    field_subject = decode_subject(r)?;
+                }
+                "selection" => {
+                    if seen & 2 != 0 {
+                        return r.refuse("duplicate_field");
+                    }
+                    seen |= 2;
+                    field_selection = Some(decode_permission_selection(r)?);
+                }
+                "permit" => {
+                    if seen & 4 != 0 {
+                        return r.refuse("duplicate_field");
+                    }
+                    seen |= 4;
+                    field_permit = r.boolean()?;
+                }
+                _ => {
+                    return r.refuse("unknown_field");
+                }
+            }
+            r.skip_ws();
+            if r.at() != b',' {
+                break;
+            }
+            r.pos += 1;
+        }
+    }
+    if r.at() != b'}' {
+        return r.refuse("malformed");
+    }
+    r.pos += 1;
+    r.depth -= 1;
+    if seen & 7 != 7 {
+        return r.refuse("missing_field");
+    }
+    let Some(field_selection) = field_selection else {
+        return r.refuse("missing_field");
+    };
+    Ok(SelectorRule {
+        subject: field_subject,
+        selection: field_selection,
+        permit: field_permit,
+    })
+}
+
+fn decode_bundle_origin(r: &mut Reader) -> Result<BundleOrigin, Refusal> {
+    if r.at() != b'{' {
+        return r.refuse("wrong_type");
+    }
+    r.enter()?;
+    r.pos += 1;
+    let mut field_id: String = Default::default();
+    let mut field_expansion: Option<BundleExpansion> = None;
+    let mut seen: u32 = 0;
+    r.skip_ws();
+    if r.at() != b'}' {
+        loop {
+            r.skip_ws();
+            if r.at() != b'"' {
+                return r.refuse("malformed");
+            }
+            let key = r.string()?;
+            r.skip_ws();
+            if r.at() != b':' {
+                return r.refuse("malformed");
+            }
+            r.pos += 1;
+            r.skip_ws();
+            match key.as_str() {
+                "id" => {
+                    if seen & 1 != 0 {
+                        return r.refuse("duplicate_field");
+                    }
+                    seen |= 1;
+                    field_id = r.string()?;
+                }
+                "expansion" => {
+                    if seen & 2 != 0 {
+                        return r.refuse("duplicate_field");
+                    }
+                    seen |= 2;
+                    field_expansion = Some(decode_bundle_expansion(r)?);
+                }
+                _ => {
+                    return r.refuse("unknown_field");
+                }
+            }
+            r.skip_ws();
+            if r.at() != b',' {
+                break;
+            }
+            r.pos += 1;
+        }
+    }
+    if r.at() != b'}' {
+        return r.refuse("malformed");
+    }
+    r.pos += 1;
+    r.depth -= 1;
+    if seen & 3 != 3 {
+        return r.refuse("missing_field");
+    }
+    let Some(field_expansion) = field_expansion else {
+        return r.refuse("missing_field");
+    };
+    Ok(BundleOrigin {
+        id: field_id,
+        expansion: field_expansion,
+    })
+}
+
+fn decode_selector_rule_record(r: &mut Reader) -> Result<SelectorRuleRecord, Refusal> {
+    if r.at() != b'{' {
+        return r.refuse("wrong_type");
+    }
+    r.enter()?;
+    r.pos += 1;
+    let mut field_rule: Option<SelectorRule> = None;
+    let mut field_set_by: Subject = Default::default();
+    let mut field_set_at: String = Default::default();
+    let mut field_why: String = Default::default();
+    let mut field_expires: String = Default::default();
+    let mut field_bundle_origin: Option<BundleOrigin> = None;
+    let mut seen: u32 = 0;
+    r.skip_ws();
+    if r.at() != b'}' {
+        loop {
+            r.skip_ws();
+            if r.at() != b'"' {
+                return r.refuse("malformed");
+            }
+            let key = r.string()?;
+            r.skip_ws();
+            if r.at() != b':' {
+                return r.refuse("malformed");
+            }
+            r.pos += 1;
+            r.skip_ws();
+            match key.as_str() {
+                "rule" => {
+                    if seen & 1 != 0 {
+                        return r.refuse("duplicate_field");
+                    }
+                    seen |= 1;
+                    field_rule = Some(decode_selector_rule(r)?);
+                }
+                "set_by" => {
+                    if seen & 2 != 0 {
+                        return r.refuse("duplicate_field");
+                    }
+                    seen |= 2;
+                    field_set_by = decode_subject(r)?;
+                }
+                "set_at" => {
+                    if seen & 4 != 0 {
+                        return r.refuse("duplicate_field");
+                    }
+                    seen |= 4;
+                    field_set_at = r.string()?;
+                }
+                "why" => {
+                    if seen & 8 != 0 {
+                        return r.refuse("duplicate_field");
+                    }
+                    seen |= 8;
+                    field_why = r.string()?;
+                }
+                "expires" => {
+                    if seen & 16 != 0 {
+                        return r.refuse("duplicate_field");
+                    }
+                    seen |= 16;
+                    field_expires = r.string()?;
+                }
+                "bundle_origin" => {
+                    if seen & 32 != 0 {
+                        return r.refuse("duplicate_field");
+                    }
+                    seen |= 32;
+                    field_bundle_origin = Some(decode_bundle_origin(r)?);
+                }
+                _ => {
+                    return r.refuse("unknown_field");
+                }
+            }
+            r.skip_ws();
+            if r.at() != b',' {
+                break;
+            }
+            r.pos += 1;
+        }
+    }
+    if r.at() != b'}' {
+        return r.refuse("malformed");
+    }
+    r.pos += 1;
+    r.depth -= 1;
+    if seen & 31 != 31 {
+        return r.refuse("missing_field");
+    }
+    let Some(field_rule) = field_rule else {
+        return r.refuse("missing_field");
+    };
+    Ok(SelectorRuleRecord {
+        rule: field_rule,
+        set_by: field_set_by,
+        set_at: field_set_at,
+        why: field_why,
+        expires: field_expires,
+        bundle_origin: field_bundle_origin,
+    })
+}
+
+fn decode_selector_rule_page(r: &mut Reader) -> Result<SelectorRulePage, Refusal> {
+    if r.at() != b'{' {
+        return r.refuse("wrong_type");
+    }
+    r.enter()?;
+    r.pos += 1;
+    let mut field_outcome: Option<String> = None;
+    let mut field_revision: String = Default::default();
+    let mut field_records: Vec<SelectorRuleRecord> = Default::default();
+    let mut field_next: String = Default::default();
+    let mut field_complete: bool = Default::default();
+    let mut seen: u32 = 0;
+    r.skip_ws();
+    if r.at() != b'}' {
+        loop {
+            r.skip_ws();
+            if r.at() != b'"' {
+                return r.refuse("malformed");
+            }
+            let key = r.string()?;
+            r.skip_ws();
+            if r.at() != b':' {
+                return r.refuse("malformed");
+            }
+            r.pos += 1;
+            r.skip_ws();
+            match key.as_str() {
+                "outcome" => {
+                    if seen & 1 != 0 {
+                        return r.refuse("duplicate_field");
+                    }
+                    seen |= 1;
+                    field_outcome = Some(r.string()?);
+                }
+                "revision" => {
+                    if seen & 2 != 0 {
+                        return r.refuse("duplicate_field");
+                    }
+                    seen |= 2;
+                    field_revision = r.string()?;
+                }
+                "records" => {
+                    if seen & 4 != 0 {
+                        return r.refuse("duplicate_field");
+                    }
+                    seen |= 4;
+                    field_records = decode_list(r, decode_selector_rule_record)?;
+                }
+                "next" => {
+                    if seen & 8 != 0 {
+                        return r.refuse("duplicate_field");
+                    }
+                    seen |= 8;
+                    field_next = r.string()?;
+                }
+                "complete" => {
+                    if seen & 16 != 0 {
+                        return r.refuse("duplicate_field");
+                    }
+                    seen |= 16;
+                    field_complete = r.boolean()?;
+                }
+                _ => {
+                    return r.refuse("unknown_field");
+                }
+            }
+            r.skip_ws();
+            if r.at() != b',' {
+                break;
+            }
+            r.pos += 1;
+        }
+    }
+    if r.at() != b'}' {
+        return r.refuse("malformed");
+    }
+    r.pos += 1;
+    r.depth -= 1;
+    if seen & 31 != 31 {
+        return r.refuse("missing_field");
+    }
+    let Some(field_outcome) = field_outcome.as_deref().and_then(PolicyPageOutcome::from_wire) else {
+        return r.refuse("bad_enum");
+    };
+    Ok(SelectorRulePage {
+        outcome: field_outcome,
+        revision: field_revision,
+        records: field_records,
+        next: field_next,
+        complete: field_complete,
+    })
+}
+
+fn decode_selector_rule_read(r: &mut Reader) -> Result<SelectorRuleRead, Refusal> {
+    if r.at() != b'{' {
+        return r.refuse("wrong_type");
+    }
+    r.enter()?;
+    r.pos += 1;
+    let mut field_outcome: Option<String> = None;
+    let mut field_revision: String = Default::default();
+    let mut field_record: Option<SelectorRuleRecord> = None;
+    let mut seen: u32 = 0;
+    r.skip_ws();
+    if r.at() != b'}' {
+        loop {
+            r.skip_ws();
+            if r.at() != b'"' {
+                return r.refuse("malformed");
+            }
+            let key = r.string()?;
+            r.skip_ws();
+            if r.at() != b':' {
+                return r.refuse("malformed");
+            }
+            r.pos += 1;
+            r.skip_ws();
+            match key.as_str() {
+                "outcome" => {
+                    if seen & 1 != 0 {
+                        return r.refuse("duplicate_field");
+                    }
+                    seen |= 1;
+                    field_outcome = Some(r.string()?);
+                }
+                "revision" => {
+                    if seen & 2 != 0 {
+                        return r.refuse("duplicate_field");
+                    }
+                    seen |= 2;
+                    field_revision = r.string()?;
+                }
+                "record" => {
+                    if seen & 4 != 0 {
+                        return r.refuse("duplicate_field");
+                    }
+                    seen |= 4;
+                    field_record = Some(decode_selector_rule_record(r)?);
+                }
+                _ => {
+                    return r.refuse("unknown_field");
+                }
+            }
+            r.skip_ws();
+            if r.at() != b',' {
+                break;
+            }
+            r.pos += 1;
+        }
+    }
+    if r.at() != b'}' {
+        return r.refuse("malformed");
+    }
+    r.pos += 1;
+    r.depth -= 1;
+    if seen & 3 != 3 {
+        return r.refuse("missing_field");
+    }
+    let Some(field_outcome) = field_outcome.as_deref().and_then(RuleReadOutcome::from_wire) else {
+        return r.refuse("bad_enum");
+    };
+    Ok(SelectorRuleRead {
+        outcome: field_outcome,
+        revision: field_revision,
+        record: field_record,
+    })
+}
+
+fn decode_selector_edit(r: &mut Reader) -> Result<SelectorEdit, Refusal> {
+    if r.at() != b'{' {
+        return r.refuse("wrong_type");
+    }
+    r.enter()?;
+    r.pos += 1;
+    let mut field_outcome: Option<String> = None;
+    let mut field_revision: String = Default::default();
+    let mut field_current: Vec<SelectorRuleRecord> = Default::default();
+    let mut field_bundle_origin: Option<BundleOrigin> = None;
+    let mut seen: u32 = 0;
+    r.skip_ws();
+    if r.at() != b'}' {
+        loop {
+            r.skip_ws();
+            if r.at() != b'"' {
+                return r.refuse("malformed");
+            }
+            let key = r.string()?;
+            r.skip_ws();
+            if r.at() != b':' {
+                return r.refuse("malformed");
+            }
+            r.pos += 1;
+            r.skip_ws();
+            match key.as_str() {
+                "outcome" => {
+                    if seen & 1 != 0 {
+                        return r.refuse("duplicate_field");
+                    }
+                    seen |= 1;
+                    field_outcome = Some(r.string()?);
+                }
+                "revision" => {
+                    if seen & 2 != 0 {
+                        return r.refuse("duplicate_field");
+                    }
+                    seen |= 2;
+                    field_revision = r.string()?;
+                }
+                "current" => {
+                    if seen & 4 != 0 {
+                        return r.refuse("duplicate_field");
+                    }
+                    seen |= 4;
+                    field_current = decode_list(r, decode_selector_rule_record)?;
+                }
+                "bundle_origin" => {
+                    if seen & 8 != 0 {
+                        return r.refuse("duplicate_field");
+                    }
+                    seen |= 8;
+                    field_bundle_origin = Some(decode_bundle_origin(r)?);
+                }
+                _ => {
+                    return r.refuse("unknown_field");
+                }
+            }
+            r.skip_ws();
+            if r.at() != b',' {
+                break;
+            }
+            r.pos += 1;
+        }
+    }
+    if r.at() != b'}' {
+        return r.refuse("malformed");
+    }
+    r.pos += 1;
+    r.depth -= 1;
+    if seen & 7 != 7 {
+        return r.refuse("missing_field");
+    }
+    let Some(field_outcome) = field_outcome.as_deref().and_then(PolicyEditOutcome::from_wire) else {
+        return r.refuse("bad_enum");
+    };
+    Ok(SelectorEdit {
+        outcome: field_outcome,
+        revision: field_revision,
+        current: field_current,
+        bundle_origin: field_bundle_origin,
+    })
+}
+
+fn decode_legacy_operation_request(r: &mut Reader) -> Result<LegacyOperationRequest, Refusal> {
+    if r.at() != b'{' {
+        return r.refuse("wrong_type");
+    }
+    r.enter()?;
+    r.pos += 1;
+    let mut field_legacy_action: String = Default::default();
+    let mut field_legacy_resource: String = Default::default();
+    let mut field_concrete_operation: Option<ConcreteResource> = None;
+    let mut seen: u32 = 0;
+    r.skip_ws();
+    if r.at() != b'}' {
+        loop {
+            r.skip_ws();
+            if r.at() != b'"' {
+                return r.refuse("malformed");
+            }
+            let key = r.string()?;
+            r.skip_ws();
+            if r.at() != b':' {
+                return r.refuse("malformed");
+            }
+            r.pos += 1;
+            r.skip_ws();
+            match key.as_str() {
+                "legacy_action" => {
+                    if seen & 1 != 0 {
+                        return r.refuse("duplicate_field");
+                    }
+                    seen |= 1;
+                    field_legacy_action = r.string()?;
+                }
+                "legacy_resource" => {
+                    if seen & 2 != 0 {
+                        return r.refuse("duplicate_field");
+                    }
+                    seen |= 2;
+                    field_legacy_resource = r.string()?;
+                }
+                "concrete_operation" => {
+                    if seen & 4 != 0 {
+                        return r.refuse("duplicate_field");
+                    }
+                    seen |= 4;
+                    field_concrete_operation = Some(decode_concrete_resource(r)?);
+                }
+                _ => {
+                    return r.refuse("unknown_field");
+                }
+            }
+            r.skip_ws();
+            if r.at() != b',' {
+                break;
+            }
+            r.pos += 1;
+        }
+    }
+    if r.at() != b'}' {
+        return r.refuse("malformed");
+    }
+    r.pos += 1;
+    r.depth -= 1;
+    if seen & 3 != 3 {
+        return r.refuse("missing_field");
+    }
+    Ok(LegacyOperationRequest {
+        legacy_action: field_legacy_action,
+        legacy_resource: field_legacy_resource,
+        concrete_operation: field_concrete_operation,
+    })
+}
+
+fn decode_oa_authorization_list_action_descriptions_arguments(r: &mut Reader) -> Result<OAAuthorizationListActionDescriptionsArguments, Refusal> {
+    if r.at() != b'{' {
+        return r.refuse("wrong_type");
+    }
+    r.enter()?;
+    r.pos += 1;
+    let mut field_cursor: String = Default::default();
+    let mut field_limit: i64 = Default::default();
+    let mut seen: u32 = 0;
+    r.skip_ws();
+    if r.at() != b'}' {
+        loop {
+            r.skip_ws();
+            if r.at() != b'"' {
+                return r.refuse("malformed");
+            }
+            let key = r.string()?;
+            r.skip_ws();
+            if r.at() != b':' {
+                return r.refuse("malformed");
+            }
+            r.pos += 1;
+            r.skip_ws();
+            match key.as_str() {
+                "cursor" => {
+                    if seen & 1 != 0 {
+                        return r.refuse("duplicate_field");
+                    }
+                    seen |= 1;
+                    field_cursor = r.string()?;
+                }
+                "limit" => {
+                    if seen & 2 != 0 {
+                        return r.refuse("duplicate_field");
+                    }
+                    seen |= 2;
+                    field_limit = r.integer(i64::MIN, i64::MAX)?;
+                }
+                _ => {
+                    return r.refuse("unknown_field");
+                }
+            }
+            r.skip_ws();
+            if r.at() != b',' {
+                break;
+            }
+            r.pos += 1;
+        }
+    }
+    if r.at() != b'}' {
+        return r.refuse("malformed");
+    }
+    r.pos += 1;
+    r.depth -= 1;
+    if seen & 3 != 3 {
+        return r.refuse("missing_field");
+    }
+    Ok(OAAuthorizationListActionDescriptionsArguments {
+        cursor: field_cursor,
+        limit: field_limit,
     })
 }
 
@@ -2400,6 +7833,132 @@ fn decode_oa_authorization_decide_for_arguments(r: &mut Reader) -> Result<OAAuth
         subject: field_subject,
         action: field_action,
         resource: field_resource,
+    })
+}
+
+fn decode_oa_authorization_operator_register_described_action_arguments(r: &mut Reader) -> Result<OAAuthorizationOperatorRegisterDescribedActionArguments, Refusal> {
+    if r.at() != b'{' {
+        return r.refuse("wrong_type");
+    }
+    r.enter()?;
+    r.pos += 1;
+    let mut field_expected_revision: String = Default::default();
+    let mut field_description: ActionDescription = Default::default();
+    let mut seen: u32 = 0;
+    r.skip_ws();
+    if r.at() != b'}' {
+        loop {
+            r.skip_ws();
+            if r.at() != b'"' {
+                return r.refuse("malformed");
+            }
+            let key = r.string()?;
+            r.skip_ws();
+            if r.at() != b':' {
+                return r.refuse("malformed");
+            }
+            r.pos += 1;
+            r.skip_ws();
+            match key.as_str() {
+                "expected_revision" => {
+                    if seen & 1 != 0 {
+                        return r.refuse("duplicate_field");
+                    }
+                    seen |= 1;
+                    field_expected_revision = r.string()?;
+                }
+                "description" => {
+                    if seen & 2 != 0 {
+                        return r.refuse("duplicate_field");
+                    }
+                    seen |= 2;
+                    field_description = decode_action_description(r)?;
+                }
+                _ => {
+                    return r.refuse("unknown_field");
+                }
+            }
+            r.skip_ws();
+            if r.at() != b',' {
+                break;
+            }
+            r.pos += 1;
+        }
+    }
+    if r.at() != b'}' {
+        return r.refuse("malformed");
+    }
+    r.pos += 1;
+    r.depth -= 1;
+    if seen & 3 != 3 {
+        return r.refuse("missing_field");
+    }
+    Ok(OAAuthorizationOperatorRegisterDescribedActionArguments {
+        expected_revision: field_expected_revision,
+        description: field_description,
+    })
+}
+
+fn decode_oa_authorization_operator_apply_first_use_allow_arguments(r: &mut Reader) -> Result<OAAuthorizationOperatorApplyFirstUseAllowArguments, Refusal> {
+    if r.at() != b'{' {
+        return r.refuse("wrong_type");
+    }
+    r.enter()?;
+    r.pos += 1;
+    let mut field_expected_revision: String = Default::default();
+    let mut field_question_id: String = Default::default();
+    let mut seen: u32 = 0;
+    r.skip_ws();
+    if r.at() != b'}' {
+        loop {
+            r.skip_ws();
+            if r.at() != b'"' {
+                return r.refuse("malformed");
+            }
+            let key = r.string()?;
+            r.skip_ws();
+            if r.at() != b':' {
+                return r.refuse("malformed");
+            }
+            r.pos += 1;
+            r.skip_ws();
+            match key.as_str() {
+                "expected_revision" => {
+                    if seen & 1 != 0 {
+                        return r.refuse("duplicate_field");
+                    }
+                    seen |= 1;
+                    field_expected_revision = r.string()?;
+                }
+                "question_id" => {
+                    if seen & 2 != 0 {
+                        return r.refuse("duplicate_field");
+                    }
+                    seen |= 2;
+                    field_question_id = r.string()?;
+                }
+                _ => {
+                    return r.refuse("unknown_field");
+                }
+            }
+            r.skip_ws();
+            if r.at() != b',' {
+                break;
+            }
+            r.pos += 1;
+        }
+    }
+    if r.at() != b'}' {
+        return r.refuse("malformed");
+    }
+    r.pos += 1;
+    r.depth -= 1;
+    if seen & 3 != 3 {
+        return r.refuse("missing_field");
+    }
+    Ok(OAAuthorizationOperatorApplyFirstUseAllowArguments {
+        expected_revision: field_expected_revision,
+        question_id: field_question_id,
     })
 }
 
@@ -2610,6 +8169,177 @@ fn decode_oa_authorization_operator_revoke_rule_arguments(r: &mut Reader) -> Res
     })
 }
 
+fn decode_oa_authorization_operator_stop_answerer_arguments(r: &mut Reader) -> Result<OAAuthorizationOperatorStopAnswererArguments, Refusal> {
+    if r.at() != b'{' {
+        return r.refuse("wrong_type");
+    }
+    r.enter()?;
+    r.pos += 1;
+    let mut field_expected_revision: String = Default::default();
+    let mut field_answerer: Subject = Default::default();
+    let mut field_also_revoke_grants: bool = Default::default();
+    let mut seen: u32 = 0;
+    r.skip_ws();
+    if r.at() != b'}' {
+        loop {
+            r.skip_ws();
+            if r.at() != b'"' {
+                return r.refuse("malformed");
+            }
+            let key = r.string()?;
+            r.skip_ws();
+            if r.at() != b':' {
+                return r.refuse("malformed");
+            }
+            r.pos += 1;
+            r.skip_ws();
+            match key.as_str() {
+                "expected_revision" => {
+                    if seen & 1 != 0 {
+                        return r.refuse("duplicate_field");
+                    }
+                    seen |= 1;
+                    field_expected_revision = r.string()?;
+                }
+                "answerer" => {
+                    if seen & 2 != 0 {
+                        return r.refuse("duplicate_field");
+                    }
+                    seen |= 2;
+                    field_answerer = decode_subject(r)?;
+                }
+                "also_revoke_grants" => {
+                    if seen & 4 != 0 {
+                        return r.refuse("duplicate_field");
+                    }
+                    seen |= 4;
+                    field_also_revoke_grants = r.boolean()?;
+                }
+                _ => {
+                    return r.refuse("unknown_field");
+                }
+            }
+            r.skip_ws();
+            if r.at() != b',' {
+                break;
+            }
+            r.pos += 1;
+        }
+    }
+    if r.at() != b'}' {
+        return r.refuse("malformed");
+    }
+    r.pos += 1;
+    r.depth -= 1;
+    if seen & 7 != 7 {
+        return r.refuse("missing_field");
+    }
+    Ok(OAAuthorizationOperatorStopAnswererArguments {
+        expected_revision: field_expected_revision,
+        answerer: field_answerer,
+        also_revoke_grants: field_also_revoke_grants,
+    })
+}
+
+fn decode_oa_authorization_operator_revoke_answer_permits_arguments(r: &mut Reader) -> Result<OAAuthorizationOperatorRevokeAnswerPermitsArguments, Refusal> {
+    if r.at() != b'{' {
+        return r.refuse("wrong_type");
+    }
+    r.enter()?;
+    r.pos += 1;
+    let mut field_expected_revision: String = Default::default();
+    let mut field_answerer: Subject = Default::default();
+    let mut field_target: Subject = Default::default();
+    let mut field_actions: Vec<String> = Default::default();
+    let mut field_resource: String = Default::default();
+    let mut field_question_id: String = Default::default();
+    let mut seen: u32 = 0;
+    r.skip_ws();
+    if r.at() != b'}' {
+        loop {
+            r.skip_ws();
+            if r.at() != b'"' {
+                return r.refuse("malformed");
+            }
+            let key = r.string()?;
+            r.skip_ws();
+            if r.at() != b':' {
+                return r.refuse("malformed");
+            }
+            r.pos += 1;
+            r.skip_ws();
+            match key.as_str() {
+                "expected_revision" => {
+                    if seen & 1 != 0 {
+                        return r.refuse("duplicate_field");
+                    }
+                    seen |= 1;
+                    field_expected_revision = r.string()?;
+                }
+                "answerer" => {
+                    if seen & 2 != 0 {
+                        return r.refuse("duplicate_field");
+                    }
+                    seen |= 2;
+                    field_answerer = decode_subject(r)?;
+                }
+                "target" => {
+                    if seen & 4 != 0 {
+                        return r.refuse("duplicate_field");
+                    }
+                    seen |= 4;
+                    field_target = decode_subject(r)?;
+                }
+                "actions" => {
+                    if seen & 8 != 0 {
+                        return r.refuse("duplicate_field");
+                    }
+                    seen |= 8;
+                    field_actions = r.str_list()?;
+                }
+                "resource" => {
+                    if seen & 16 != 0 {
+                        return r.refuse("duplicate_field");
+                    }
+                    seen |= 16;
+                    field_resource = r.string()?;
+                }
+                "question_id" => {
+                    if seen & 32 != 0 {
+                        return r.refuse("duplicate_field");
+                    }
+                    seen |= 32;
+                    field_question_id = r.string()?;
+                }
+                _ => {
+                    return r.refuse("unknown_field");
+                }
+            }
+            r.skip_ws();
+            if r.at() != b',' {
+                break;
+            }
+            r.pos += 1;
+        }
+    }
+    if r.at() != b'}' {
+        return r.refuse("malformed");
+    }
+    r.pos += 1;
+    r.depth -= 1;
+    if seen & 63 != 63 {
+        return r.refuse("missing_field");
+    }
+    Ok(OAAuthorizationOperatorRevokeAnswerPermitsArguments {
+        expected_revision: field_expected_revision,
+        answerer: field_answerer,
+        target: field_target,
+        actions: field_actions,
+        resource: field_resource,
+        question_id: field_question_id,
+    })
+}
+
 fn decode_oa_authorization_operator_set_rule_for_arguments(r: &mut Reader) -> Result<OAAuthorizationOperatorSetRuleForArguments, Refusal> {
     if r.at() != b'{' {
         return r.refuse("wrong_type");
@@ -2686,6 +8416,87 @@ fn decode_oa_authorization_operator_set_rule_for_arguments(r: &mut Reader) -> Re
     Ok(OAAuthorizationOperatorSetRuleForArguments {
         expected_revision: field_expected_revision,
         rule: field_rule,
+        ttl_ms: field_ttl_ms,
+        why: field_why,
+    })
+}
+
+fn decode_oa_authorization_operator_set_rules_for_arguments(r: &mut Reader) -> Result<OAAuthorizationOperatorSetRulesForArguments, Refusal> {
+    if r.at() != b'{' {
+        return r.refuse("wrong_type");
+    }
+    r.enter()?;
+    r.pos += 1;
+    let mut field_expected_revision: String = Default::default();
+    let mut field_rules: Vec<PolicyRule> = Default::default();
+    let mut field_ttl_ms: i64 = Default::default();
+    let mut field_why: String = Default::default();
+    let mut seen: u32 = 0;
+    r.skip_ws();
+    if r.at() != b'}' {
+        loop {
+            r.skip_ws();
+            if r.at() != b'"' {
+                return r.refuse("malformed");
+            }
+            let key = r.string()?;
+            r.skip_ws();
+            if r.at() != b':' {
+                return r.refuse("malformed");
+            }
+            r.pos += 1;
+            r.skip_ws();
+            match key.as_str() {
+                "expected_revision" => {
+                    if seen & 1 != 0 {
+                        return r.refuse("duplicate_field");
+                    }
+                    seen |= 1;
+                    field_expected_revision = r.string()?;
+                }
+                "rules" => {
+                    if seen & 2 != 0 {
+                        return r.refuse("duplicate_field");
+                    }
+                    seen |= 2;
+                    field_rules = decode_list(r, decode_policy_rule)?;
+                }
+                "ttl_ms" => {
+                    if seen & 4 != 0 {
+                        return r.refuse("duplicate_field");
+                    }
+                    seen |= 4;
+                    field_ttl_ms = r.integer(i64::MIN, i64::MAX)?;
+                }
+                "why" => {
+                    if seen & 8 != 0 {
+                        return r.refuse("duplicate_field");
+                    }
+                    seen |= 8;
+                    field_why = r.string()?;
+                }
+                _ => {
+                    return r.refuse("unknown_field");
+                }
+            }
+            r.skip_ws();
+            if r.at() != b',' {
+                break;
+            }
+            r.pos += 1;
+        }
+    }
+    if r.at() != b'}' {
+        return r.refuse("malformed");
+    }
+    r.pos += 1;
+    r.depth -= 1;
+    if seen & 15 != 15 {
+        return r.refuse("missing_field");
+    }
+    Ok(OAAuthorizationOperatorSetRulesForArguments {
+        expected_revision: field_expected_revision,
+        rules: field_rules,
         ttl_ms: field_ttl_ms,
         why: field_why,
     })
@@ -2886,6 +8697,1070 @@ fn decode_oa_authorization_operator_retire_action_arguments(r: &mut Reader) -> R
     Ok(OAAuthorizationOperatorRetireActionArguments {
         expected_revision: field_expected_revision,
         action: field_action,
+    })
+}
+
+fn decode_oa_authorization_operator_explain_for_arguments(r: &mut Reader) -> Result<OAAuthorizationOperatorExplainForArguments, Refusal> {
+    if r.at() != b'{' {
+        return r.refuse("wrong_type");
+    }
+    r.enter()?;
+    r.pos += 1;
+    let mut field_subject: Subject = Default::default();
+    let mut field_action: String = Default::default();
+    let mut field_resource: String = Default::default();
+    let mut seen: u32 = 0;
+    r.skip_ws();
+    if r.at() != b'}' {
+        loop {
+            r.skip_ws();
+            if r.at() != b'"' {
+                return r.refuse("malformed");
+            }
+            let key = r.string()?;
+            r.skip_ws();
+            if r.at() != b':' {
+                return r.refuse("malformed");
+            }
+            r.pos += 1;
+            r.skip_ws();
+            match key.as_str() {
+                "subject" => {
+                    if seen & 1 != 0 {
+                        return r.refuse("duplicate_field");
+                    }
+                    seen |= 1;
+                    field_subject = decode_subject(r)?;
+                }
+                "action" => {
+                    if seen & 2 != 0 {
+                        return r.refuse("duplicate_field");
+                    }
+                    seen |= 2;
+                    field_action = r.string()?;
+                }
+                "resource" => {
+                    if seen & 4 != 0 {
+                        return r.refuse("duplicate_field");
+                    }
+                    seen |= 4;
+                    field_resource = r.string()?;
+                }
+                _ => {
+                    return r.refuse("unknown_field");
+                }
+            }
+            r.skip_ws();
+            if r.at() != b',' {
+                break;
+            }
+            r.pos += 1;
+        }
+    }
+    if r.at() != b'}' {
+        return r.refuse("malformed");
+    }
+    r.pos += 1;
+    r.depth -= 1;
+    if seen & 7 != 7 {
+        return r.refuse("missing_field");
+    }
+    Ok(OAAuthorizationOperatorExplainForArguments {
+        subject: field_subject,
+        action: field_action,
+        resource: field_resource,
+    })
+}
+
+fn decode_oa_authorization_operator_list_defaults_arguments(r: &mut Reader) -> Result<OAAuthorizationOperatorListDefaultsArguments, Refusal> {
+    if r.at() != b'{' {
+        return r.refuse("wrong_type");
+    }
+    r.enter()?;
+    r.pos += 1;
+    r.skip_ws();
+    if r.at() != b'}' {
+        if r.at() != b'"' {
+            return r.refuse("malformed");
+        }
+        r.string()?;
+        r.skip_ws();
+        if r.at() != b':' {
+            return r.refuse("malformed");
+        }
+        return r.refuse("unknown_field");
+    }
+    if r.at() != b'}' {
+        return r.refuse("malformed");
+    }
+    r.pos += 1;
+    r.depth -= 1;
+    Ok(OAAuthorizationOperatorListDefaultsArguments {})
+}
+
+fn decode_oa_authorization_operator_set_default_arguments(r: &mut Reader) -> Result<OAAuthorizationOperatorSetDefaultArguments, Refusal> {
+    if r.at() != b'{' {
+        return r.refuse("wrong_type");
+    }
+    r.enter()?;
+    r.pos += 1;
+    let mut field_expected_revision: String = Default::default();
+    let mut field_name: String = Default::default();
+    let mut field_on: bool = Default::default();
+    let mut seen: u32 = 0;
+    r.skip_ws();
+    if r.at() != b'}' {
+        loop {
+            r.skip_ws();
+            if r.at() != b'"' {
+                return r.refuse("malformed");
+            }
+            let key = r.string()?;
+            r.skip_ws();
+            if r.at() != b':' {
+                return r.refuse("malformed");
+            }
+            r.pos += 1;
+            r.skip_ws();
+            match key.as_str() {
+                "expected_revision" => {
+                    if seen & 1 != 0 {
+                        return r.refuse("duplicate_field");
+                    }
+                    seen |= 1;
+                    field_expected_revision = r.string()?;
+                }
+                "name" => {
+                    if seen & 2 != 0 {
+                        return r.refuse("duplicate_field");
+                    }
+                    seen |= 2;
+                    field_name = r.string()?;
+                }
+                "on" => {
+                    if seen & 4 != 0 {
+                        return r.refuse("duplicate_field");
+                    }
+                    seen |= 4;
+                    field_on = r.boolean()?;
+                }
+                _ => {
+                    return r.refuse("unknown_field");
+                }
+            }
+            r.skip_ws();
+            if r.at() != b',' {
+                break;
+            }
+            r.pos += 1;
+        }
+    }
+    if r.at() != b'}' {
+        return r.refuse("malformed");
+    }
+    r.pos += 1;
+    r.depth -= 1;
+    if seen & 7 != 7 {
+        return r.refuse("missing_field");
+    }
+    Ok(OAAuthorizationOperatorSetDefaultArguments {
+        expected_revision: field_expected_revision,
+        name: field_name,
+        on: field_on,
+    })
+}
+
+fn decode_oa_selector_authorization_list_permission_definitions_arguments(r: &mut Reader) -> Result<OASelectorAuthorizationListPermissionDefinitionsArguments, Refusal> {
+    if r.at() != b'{' {
+        return r.refuse("wrong_type");
+    }
+    r.enter()?;
+    r.pos += 1;
+    let mut field_cursor: String = Default::default();
+    let mut field_limit: i64 = Default::default();
+    let mut seen: u32 = 0;
+    r.skip_ws();
+    if r.at() != b'}' {
+        loop {
+            r.skip_ws();
+            if r.at() != b'"' {
+                return r.refuse("malformed");
+            }
+            let key = r.string()?;
+            r.skip_ws();
+            if r.at() != b':' {
+                return r.refuse("malformed");
+            }
+            r.pos += 1;
+            r.skip_ws();
+            match key.as_str() {
+                "cursor" => {
+                    if seen & 1 != 0 {
+                        return r.refuse("duplicate_field");
+                    }
+                    seen |= 1;
+                    field_cursor = r.string()?;
+                }
+                "limit" => {
+                    if seen & 2 != 0 {
+                        return r.refuse("duplicate_field");
+                    }
+                    seen |= 2;
+                    field_limit = r.integer(i64::MIN, i64::MAX)?;
+                }
+                _ => {
+                    return r.refuse("unknown_field");
+                }
+            }
+            r.skip_ws();
+            if r.at() != b',' {
+                break;
+            }
+            r.pos += 1;
+        }
+    }
+    if r.at() != b'}' {
+        return r.refuse("malformed");
+    }
+    r.pos += 1;
+    r.depth -= 1;
+    if seen & 3 != 3 {
+        return r.refuse("missing_field");
+    }
+    Ok(OASelectorAuthorizationListPermissionDefinitionsArguments {
+        cursor: field_cursor,
+        limit: field_limit,
+    })
+}
+
+fn decode_oa_selector_authorization_list_permission_bundles_arguments(r: &mut Reader) -> Result<OASelectorAuthorizationListPermissionBundlesArguments, Refusal> {
+    if r.at() != b'{' {
+        return r.refuse("wrong_type");
+    }
+    r.enter()?;
+    r.pos += 1;
+    let mut field_cursor: String = Default::default();
+    let mut field_limit: i64 = Default::default();
+    let mut seen: u32 = 0;
+    r.skip_ws();
+    if r.at() != b'}' {
+        loop {
+            r.skip_ws();
+            if r.at() != b'"' {
+                return r.refuse("malformed");
+            }
+            let key = r.string()?;
+            r.skip_ws();
+            if r.at() != b':' {
+                return r.refuse("malformed");
+            }
+            r.pos += 1;
+            r.skip_ws();
+            match key.as_str() {
+                "cursor" => {
+                    if seen & 1 != 0 {
+                        return r.refuse("duplicate_field");
+                    }
+                    seen |= 1;
+                    field_cursor = r.string()?;
+                }
+                "limit" => {
+                    if seen & 2 != 0 {
+                        return r.refuse("duplicate_field");
+                    }
+                    seen |= 2;
+                    field_limit = r.integer(i64::MIN, i64::MAX)?;
+                }
+                _ => {
+                    return r.refuse("unknown_field");
+                }
+            }
+            r.skip_ws();
+            if r.at() != b',' {
+                break;
+            }
+            r.pos += 1;
+        }
+    }
+    if r.at() != b'}' {
+        return r.refuse("malformed");
+    }
+    r.pos += 1;
+    r.depth -= 1;
+    if seen & 3 != 3 {
+        return r.refuse("missing_field");
+    }
+    Ok(OASelectorAuthorizationListPermissionBundlesArguments {
+        cursor: field_cursor,
+        limit: field_limit,
+    })
+}
+
+fn decode_oa_selector_authorization_check_batch_arguments(r: &mut Reader) -> Result<OASelectorAuthorizationCheckBatchArguments, Refusal> {
+    if r.at() != b'{' {
+        return r.refuse("wrong_type");
+    }
+    r.enter()?;
+    r.pos += 1;
+    let mut field_request: CheckBatchRequest = Default::default();
+    let mut seen: u32 = 0;
+    r.skip_ws();
+    if r.at() != b'}' {
+        loop {
+            r.skip_ws();
+            if r.at() != b'"' {
+                return r.refuse("malformed");
+            }
+            let key = r.string()?;
+            r.skip_ws();
+            if r.at() != b':' {
+                return r.refuse("malformed");
+            }
+            r.pos += 1;
+            r.skip_ws();
+            match key.as_str() {
+                "request" => {
+                    if seen & 1 != 0 {
+                        return r.refuse("duplicate_field");
+                    }
+                    seen |= 1;
+                    field_request = decode_check_batch_request(r)?;
+                }
+                _ => {
+                    return r.refuse("unknown_field");
+                }
+            }
+            r.skip_ws();
+            if r.at() != b',' {
+                break;
+            }
+            r.pos += 1;
+        }
+    }
+    if r.at() != b'}' {
+        return r.refuse("malformed");
+    }
+    r.pos += 1;
+    r.depth -= 1;
+    if seen & 1 != 1 {
+        return r.refuse("missing_field");
+    }
+    Ok(OASelectorAuthorizationCheckBatchArguments {
+        request: field_request,
+    })
+}
+
+fn decode_oa_selector_authorization_check_batch_for_arguments(r: &mut Reader) -> Result<OASelectorAuthorizationCheckBatchForArguments, Refusal> {
+    if r.at() != b'{' {
+        return r.refuse("wrong_type");
+    }
+    r.enter()?;
+    r.pos += 1;
+    let mut field_subject: Subject = Default::default();
+    let mut field_request: CheckBatchRequest = Default::default();
+    let mut seen: u32 = 0;
+    r.skip_ws();
+    if r.at() != b'}' {
+        loop {
+            r.skip_ws();
+            if r.at() != b'"' {
+                return r.refuse("malformed");
+            }
+            let key = r.string()?;
+            r.skip_ws();
+            if r.at() != b':' {
+                return r.refuse("malformed");
+            }
+            r.pos += 1;
+            r.skip_ws();
+            match key.as_str() {
+                "subject" => {
+                    if seen & 1 != 0 {
+                        return r.refuse("duplicate_field");
+                    }
+                    seen |= 1;
+                    field_subject = decode_subject(r)?;
+                }
+                "request" => {
+                    if seen & 2 != 0 {
+                        return r.refuse("duplicate_field");
+                    }
+                    seen |= 2;
+                    field_request = decode_check_batch_request(r)?;
+                }
+                _ => {
+                    return r.refuse("unknown_field");
+                }
+            }
+            r.skip_ws();
+            if r.at() != b',' {
+                break;
+            }
+            r.pos += 1;
+        }
+    }
+    if r.at() != b'}' {
+        return r.refuse("malformed");
+    }
+    r.pos += 1;
+    r.depth -= 1;
+    if seen & 3 != 3 {
+        return r.refuse("missing_field");
+    }
+    Ok(OASelectorAuthorizationCheckBatchForArguments {
+        subject: field_subject,
+        request: field_request,
+    })
+}
+
+fn decode_oa_selector_authorization_check_legacy_operation_for_arguments(r: &mut Reader) -> Result<OASelectorAuthorizationCheckLegacyOperationForArguments, Refusal> {
+    if r.at() != b'{' {
+        return r.refuse("wrong_type");
+    }
+    r.enter()?;
+    r.pos += 1;
+    let mut field_subject: Subject = Default::default();
+    let mut field_request: LegacyOperationRequest = Default::default();
+    let mut seen: u32 = 0;
+    r.skip_ws();
+    if r.at() != b'}' {
+        loop {
+            r.skip_ws();
+            if r.at() != b'"' {
+                return r.refuse("malformed");
+            }
+            let key = r.string()?;
+            r.skip_ws();
+            if r.at() != b':' {
+                return r.refuse("malformed");
+            }
+            r.pos += 1;
+            r.skip_ws();
+            match key.as_str() {
+                "subject" => {
+                    if seen & 1 != 0 {
+                        return r.refuse("duplicate_field");
+                    }
+                    seen |= 1;
+                    field_subject = decode_subject(r)?;
+                }
+                "request" => {
+                    if seen & 2 != 0 {
+                        return r.refuse("duplicate_field");
+                    }
+                    seen |= 2;
+                    field_request = decode_legacy_operation_request(r)?;
+                }
+                _ => {
+                    return r.refuse("unknown_field");
+                }
+            }
+            r.skip_ws();
+            if r.at() != b',' {
+                break;
+            }
+            r.pos += 1;
+        }
+    }
+    if r.at() != b'}' {
+        return r.refuse("malformed");
+    }
+    r.pos += 1;
+    r.depth -= 1;
+    if seen & 3 != 3 {
+        return r.refuse("missing_field");
+    }
+    Ok(OASelectorAuthorizationCheckLegacyOperationForArguments {
+        subject: field_subject,
+        request: field_request,
+    })
+}
+
+fn decode_oa_selector_authorization_operator_list_selector_rules_arguments(r: &mut Reader) -> Result<OASelectorAuthorizationOperatorListSelectorRulesArguments, Refusal> {
+    if r.at() != b'{' {
+        return r.refuse("wrong_type");
+    }
+    r.enter()?;
+    r.pos += 1;
+    let mut field_cursor: String = Default::default();
+    let mut field_limit: i64 = Default::default();
+    let mut seen: u32 = 0;
+    r.skip_ws();
+    if r.at() != b'}' {
+        loop {
+            r.skip_ws();
+            if r.at() != b'"' {
+                return r.refuse("malformed");
+            }
+            let key = r.string()?;
+            r.skip_ws();
+            if r.at() != b':' {
+                return r.refuse("malformed");
+            }
+            r.pos += 1;
+            r.skip_ws();
+            match key.as_str() {
+                "cursor" => {
+                    if seen & 1 != 0 {
+                        return r.refuse("duplicate_field");
+                    }
+                    seen |= 1;
+                    field_cursor = r.string()?;
+                }
+                "limit" => {
+                    if seen & 2 != 0 {
+                        return r.refuse("duplicate_field");
+                    }
+                    seen |= 2;
+                    field_limit = r.integer(i64::MIN, i64::MAX)?;
+                }
+                _ => {
+                    return r.refuse("unknown_field");
+                }
+            }
+            r.skip_ws();
+            if r.at() != b',' {
+                break;
+            }
+            r.pos += 1;
+        }
+    }
+    if r.at() != b'}' {
+        return r.refuse("malformed");
+    }
+    r.pos += 1;
+    r.depth -= 1;
+    if seen & 3 != 3 {
+        return r.refuse("missing_field");
+    }
+    Ok(OASelectorAuthorizationOperatorListSelectorRulesArguments {
+        cursor: field_cursor,
+        limit: field_limit,
+    })
+}
+
+fn decode_oa_selector_authorization_operator_read_selector_rule_arguments(r: &mut Reader) -> Result<OASelectorAuthorizationOperatorReadSelectorRuleArguments, Refusal> {
+    if r.at() != b'{' {
+        return r.refuse("wrong_type");
+    }
+    r.enter()?;
+    r.pos += 1;
+    let mut field_subject: Subject = Default::default();
+    let mut field_selection: Option<PermissionSelection> = None;
+    let mut seen: u32 = 0;
+    r.skip_ws();
+    if r.at() != b'}' {
+        loop {
+            r.skip_ws();
+            if r.at() != b'"' {
+                return r.refuse("malformed");
+            }
+            let key = r.string()?;
+            r.skip_ws();
+            if r.at() != b':' {
+                return r.refuse("malformed");
+            }
+            r.pos += 1;
+            r.skip_ws();
+            match key.as_str() {
+                "subject" => {
+                    if seen & 1 != 0 {
+                        return r.refuse("duplicate_field");
+                    }
+                    seen |= 1;
+                    field_subject = decode_subject(r)?;
+                }
+                "selection" => {
+                    if seen & 2 != 0 {
+                        return r.refuse("duplicate_field");
+                    }
+                    seen |= 2;
+                    field_selection = Some(decode_permission_selection(r)?);
+                }
+                _ => {
+                    return r.refuse("unknown_field");
+                }
+            }
+            r.skip_ws();
+            if r.at() != b',' {
+                break;
+            }
+            r.pos += 1;
+        }
+    }
+    if r.at() != b'}' {
+        return r.refuse("malformed");
+    }
+    r.pos += 1;
+    r.depth -= 1;
+    if seen & 3 != 3 {
+        return r.refuse("missing_field");
+    }
+    let Some(field_selection) = field_selection else {
+        return r.refuse("missing_field");
+    };
+    Ok(OASelectorAuthorizationOperatorReadSelectorRuleArguments {
+        subject: field_subject,
+        selection: field_selection,
+    })
+}
+
+fn decode_oa_selector_authorization_operator_set_selector_rule_arguments(r: &mut Reader) -> Result<OASelectorAuthorizationOperatorSetSelectorRuleArguments, Refusal> {
+    if r.at() != b'{' {
+        return r.refuse("wrong_type");
+    }
+    r.enter()?;
+    r.pos += 1;
+    let mut field_expected_revision: String = Default::default();
+    let mut field_rule: Option<SelectorRule> = None;
+    let mut field_ttl_ms: i64 = Default::default();
+    let mut field_why: String = Default::default();
+    let mut seen: u32 = 0;
+    r.skip_ws();
+    if r.at() != b'}' {
+        loop {
+            r.skip_ws();
+            if r.at() != b'"' {
+                return r.refuse("malformed");
+            }
+            let key = r.string()?;
+            r.skip_ws();
+            if r.at() != b':' {
+                return r.refuse("malformed");
+            }
+            r.pos += 1;
+            r.skip_ws();
+            match key.as_str() {
+                "expected_revision" => {
+                    if seen & 1 != 0 {
+                        return r.refuse("duplicate_field");
+                    }
+                    seen |= 1;
+                    field_expected_revision = r.string()?;
+                }
+                "rule" => {
+                    if seen & 2 != 0 {
+                        return r.refuse("duplicate_field");
+                    }
+                    seen |= 2;
+                    field_rule = Some(decode_selector_rule(r)?);
+                }
+                "ttl_ms" => {
+                    if seen & 4 != 0 {
+                        return r.refuse("duplicate_field");
+                    }
+                    seen |= 4;
+                    field_ttl_ms = r.integer(i64::MIN, i64::MAX)?;
+                }
+                "why" => {
+                    if seen & 8 != 0 {
+                        return r.refuse("duplicate_field");
+                    }
+                    seen |= 8;
+                    field_why = r.string()?;
+                }
+                _ => {
+                    return r.refuse("unknown_field");
+                }
+            }
+            r.skip_ws();
+            if r.at() != b',' {
+                break;
+            }
+            r.pos += 1;
+        }
+    }
+    if r.at() != b'}' {
+        return r.refuse("malformed");
+    }
+    r.pos += 1;
+    r.depth -= 1;
+    if seen & 15 != 15 {
+        return r.refuse("missing_field");
+    }
+    let Some(field_rule) = field_rule else {
+        return r.refuse("missing_field");
+    };
+    Ok(OASelectorAuthorizationOperatorSetSelectorRuleArguments {
+        expected_revision: field_expected_revision,
+        rule: field_rule,
+        ttl_ms: field_ttl_ms,
+        why: field_why,
+    })
+}
+
+fn decode_oa_selector_authorization_operator_remove_selector_rule_arguments(r: &mut Reader) -> Result<OASelectorAuthorizationOperatorRemoveSelectorRuleArguments, Refusal> {
+    if r.at() != b'{' {
+        return r.refuse("wrong_type");
+    }
+    r.enter()?;
+    r.pos += 1;
+    let mut field_expected_revision: String = Default::default();
+    let mut field_subject: Subject = Default::default();
+    let mut field_selection: Option<PermissionSelection> = None;
+    let mut seen: u32 = 0;
+    r.skip_ws();
+    if r.at() != b'}' {
+        loop {
+            r.skip_ws();
+            if r.at() != b'"' {
+                return r.refuse("malformed");
+            }
+            let key = r.string()?;
+            r.skip_ws();
+            if r.at() != b':' {
+                return r.refuse("malformed");
+            }
+            r.pos += 1;
+            r.skip_ws();
+            match key.as_str() {
+                "expected_revision" => {
+                    if seen & 1 != 0 {
+                        return r.refuse("duplicate_field");
+                    }
+                    seen |= 1;
+                    field_expected_revision = r.string()?;
+                }
+                "subject" => {
+                    if seen & 2 != 0 {
+                        return r.refuse("duplicate_field");
+                    }
+                    seen |= 2;
+                    field_subject = decode_subject(r)?;
+                }
+                "selection" => {
+                    if seen & 4 != 0 {
+                        return r.refuse("duplicate_field");
+                    }
+                    seen |= 4;
+                    field_selection = Some(decode_permission_selection(r)?);
+                }
+                _ => {
+                    return r.refuse("unknown_field");
+                }
+            }
+            r.skip_ws();
+            if r.at() != b',' {
+                break;
+            }
+            r.pos += 1;
+        }
+    }
+    if r.at() != b'}' {
+        return r.refuse("malformed");
+    }
+    r.pos += 1;
+    r.depth -= 1;
+    if seen & 7 != 7 {
+        return r.refuse("missing_field");
+    }
+    let Some(field_selection) = field_selection else {
+        return r.refuse("missing_field");
+    };
+    Ok(OASelectorAuthorizationOperatorRemoveSelectorRuleArguments {
+        expected_revision: field_expected_revision,
+        subject: field_subject,
+        selection: field_selection,
+    })
+}
+
+fn decode_oa_selector_authorization_operator_apply_bundle_arguments(r: &mut Reader) -> Result<OASelectorAuthorizationOperatorApplyBundleArguments, Refusal> {
+    if r.at() != b'{' {
+        return r.refuse("wrong_type");
+    }
+    r.enter()?;
+    r.pos += 1;
+    let mut field_expected_revision: String = Default::default();
+    let mut field_subject: Subject = Default::default();
+    let mut field_bundle_ref: String = Default::default();
+    let mut field_selector: Option<ResourceSelector> = None;
+    let mut field_ttl_ms: i64 = Default::default();
+    let mut field_why: String = Default::default();
+    let mut seen: u32 = 0;
+    r.skip_ws();
+    if r.at() != b'}' {
+        loop {
+            r.skip_ws();
+            if r.at() != b'"' {
+                return r.refuse("malformed");
+            }
+            let key = r.string()?;
+            r.skip_ws();
+            if r.at() != b':' {
+                return r.refuse("malformed");
+            }
+            r.pos += 1;
+            r.skip_ws();
+            match key.as_str() {
+                "expected_revision" => {
+                    if seen & 1 != 0 {
+                        return r.refuse("duplicate_field");
+                    }
+                    seen |= 1;
+                    field_expected_revision = r.string()?;
+                }
+                "subject" => {
+                    if seen & 2 != 0 {
+                        return r.refuse("duplicate_field");
+                    }
+                    seen |= 2;
+                    field_subject = decode_subject(r)?;
+                }
+                "bundle_ref" => {
+                    if seen & 4 != 0 {
+                        return r.refuse("duplicate_field");
+                    }
+                    seen |= 4;
+                    field_bundle_ref = r.string()?;
+                }
+                "selector" => {
+                    if seen & 8 != 0 {
+                        return r.refuse("duplicate_field");
+                    }
+                    seen |= 8;
+                    field_selector = Some(decode_resource_selector(r)?);
+                }
+                "ttl_ms" => {
+                    if seen & 16 != 0 {
+                        return r.refuse("duplicate_field");
+                    }
+                    seen |= 16;
+                    field_ttl_ms = r.integer(i64::MIN, i64::MAX)?;
+                }
+                "why" => {
+                    if seen & 32 != 0 {
+                        return r.refuse("duplicate_field");
+                    }
+                    seen |= 32;
+                    field_why = r.string()?;
+                }
+                _ => {
+                    return r.refuse("unknown_field");
+                }
+            }
+            r.skip_ws();
+            if r.at() != b',' {
+                break;
+            }
+            r.pos += 1;
+        }
+    }
+    if r.at() != b'}' {
+        return r.refuse("malformed");
+    }
+    r.pos += 1;
+    r.depth -= 1;
+    if seen & 63 != 63 {
+        return r.refuse("missing_field");
+    }
+    let Some(field_selector) = field_selector else {
+        return r.refuse("missing_field");
+    };
+    Ok(OASelectorAuthorizationOperatorApplyBundleArguments {
+        expected_revision: field_expected_revision,
+        subject: field_subject,
+        bundle_ref: field_bundle_ref,
+        selector: field_selector,
+        ttl_ms: field_ttl_ms,
+        why: field_why,
+    })
+}
+
+fn decode_oa_selector_authorization_operator_remove_bundle_arguments(r: &mut Reader) -> Result<OASelectorAuthorizationOperatorRemoveBundleArguments, Refusal> {
+    if r.at() != b'{' {
+        return r.refuse("wrong_type");
+    }
+    r.enter()?;
+    r.pos += 1;
+    let mut field_expected_revision: String = Default::default();
+    let mut field_subject: Subject = Default::default();
+    let mut field_origin_id: String = Default::default();
+    let mut seen: u32 = 0;
+    r.skip_ws();
+    if r.at() != b'}' {
+        loop {
+            r.skip_ws();
+            if r.at() != b'"' {
+                return r.refuse("malformed");
+            }
+            let key = r.string()?;
+            r.skip_ws();
+            if r.at() != b':' {
+                return r.refuse("malformed");
+            }
+            r.pos += 1;
+            r.skip_ws();
+            match key.as_str() {
+                "expected_revision" => {
+                    if seen & 1 != 0 {
+                        return r.refuse("duplicate_field");
+                    }
+                    seen |= 1;
+                    field_expected_revision = r.string()?;
+                }
+                "subject" => {
+                    if seen & 2 != 0 {
+                        return r.refuse("duplicate_field");
+                    }
+                    seen |= 2;
+                    field_subject = decode_subject(r)?;
+                }
+                "origin_id" => {
+                    if seen & 4 != 0 {
+                        return r.refuse("duplicate_field");
+                    }
+                    seen |= 4;
+                    field_origin_id = r.string()?;
+                }
+                _ => {
+                    return r.refuse("unknown_field");
+                }
+            }
+            r.skip_ws();
+            if r.at() != b',' {
+                break;
+            }
+            r.pos += 1;
+        }
+    }
+    if r.at() != b'}' {
+        return r.refuse("malformed");
+    }
+    r.pos += 1;
+    r.depth -= 1;
+    if seen & 7 != 7 {
+        return r.refuse("missing_field");
+    }
+    Ok(OASelectorAuthorizationOperatorRemoveBundleArguments {
+        expected_revision: field_expected_revision,
+        subject: field_subject,
+        origin_id: field_origin_id,
+    })
+}
+
+fn decode_oa_selector_authorization_operator_apply_permission_allow_arguments(r: &mut Reader) -> Result<OASelectorAuthorizationOperatorApplyPermissionAllowArguments, Refusal> {
+    if r.at() != b'{' {
+        return r.refuse("wrong_type");
+    }
+    r.enter()?;
+    r.pos += 1;
+    let mut field_expected_revision: String = Default::default();
+    let mut field_question_id: String = Default::default();
+    let mut seen: u32 = 0;
+    r.skip_ws();
+    if r.at() != b'}' {
+        loop {
+            r.skip_ws();
+            if r.at() != b'"' {
+                return r.refuse("malformed");
+            }
+            let key = r.string()?;
+            r.skip_ws();
+            if r.at() != b':' {
+                return r.refuse("malformed");
+            }
+            r.pos += 1;
+            r.skip_ws();
+            match key.as_str() {
+                "expected_revision" => {
+                    if seen & 1 != 0 {
+                        return r.refuse("duplicate_field");
+                    }
+                    seen |= 1;
+                    field_expected_revision = r.string()?;
+                }
+                "question_id" => {
+                    if seen & 2 != 0 {
+                        return r.refuse("duplicate_field");
+                    }
+                    seen |= 2;
+                    field_question_id = r.string()?;
+                }
+                _ => {
+                    return r.refuse("unknown_field");
+                }
+            }
+            r.skip_ws();
+            if r.at() != b',' {
+                break;
+            }
+            r.pos += 1;
+        }
+    }
+    if r.at() != b'}' {
+        return r.refuse("malformed");
+    }
+    r.pos += 1;
+    r.depth -= 1;
+    if seen & 3 != 3 {
+        return r.refuse("missing_field");
+    }
+    Ok(OASelectorAuthorizationOperatorApplyPermissionAllowArguments {
+        expected_revision: field_expected_revision,
+        question_id: field_question_id,
+    })
+}
+
+fn decode_oa_selector_authorization_operator_undo_permission_effect_arguments(r: &mut Reader) -> Result<OASelectorAuthorizationOperatorUndoPermissionEffectArguments, Refusal> {
+    if r.at() != b'{' {
+        return r.refuse("wrong_type");
+    }
+    r.enter()?;
+    r.pos += 1;
+    let mut field_expected_revision: String = Default::default();
+    let mut field_question_id: String = Default::default();
+    let mut seen: u32 = 0;
+    r.skip_ws();
+    if r.at() != b'}' {
+        loop {
+            r.skip_ws();
+            if r.at() != b'"' {
+                return r.refuse("malformed");
+            }
+            let key = r.string()?;
+            r.skip_ws();
+            if r.at() != b':' {
+                return r.refuse("malformed");
+            }
+            r.pos += 1;
+            r.skip_ws();
+            match key.as_str() {
+                "expected_revision" => {
+                    if seen & 1 != 0 {
+                        return r.refuse("duplicate_field");
+                    }
+                    seen |= 1;
+                    field_expected_revision = r.string()?;
+                }
+                "question_id" => {
+                    if seen & 2 != 0 {
+                        return r.refuse("duplicate_field");
+                    }
+                    seen |= 2;
+                    field_question_id = r.string()?;
+                }
+                _ => {
+                    return r.refuse("unknown_field");
+                }
+            }
+            r.skip_ws();
+            if r.at() != b',' {
+                break;
+            }
+            r.pos += 1;
+        }
+    }
+    if r.at() != b'}' {
+        return r.refuse("malformed");
+    }
+    r.pos += 1;
+    r.depth -= 1;
+    if seen & 3 != 3 {
+        return r.refuse("missing_field");
+    }
+    Ok(OASelectorAuthorizationOperatorUndoPermissionEffectArguments {
+        expected_revision: field_expected_revision,
+        question_id: field_question_id,
     })
 }
 
@@ -3123,6 +9998,63 @@ fn decode_oa_service_error(r: &mut Reader) -> Result<OAServiceError, Refusal> {
     })
 }
 
+fn decode_oa_authorization_list_action_descriptions_result(r: &mut Reader) -> Result<OAAuthorizationListActionDescriptionsResult, Refusal> {
+    if r.at() != b'{' {
+        return r.refuse("wrong_type");
+    }
+    r.enter()?;
+    r.pos += 1;
+    let mut field_value: Option<DescriptionPage> = None;
+    let mut seen: u32 = 0;
+    r.skip_ws();
+    if r.at() != b'}' {
+        loop {
+            r.skip_ws();
+            if r.at() != b'"' {
+                return r.refuse("malformed");
+            }
+            let key = r.string()?;
+            r.skip_ws();
+            if r.at() != b':' {
+                return r.refuse("malformed");
+            }
+            r.pos += 1;
+            r.skip_ws();
+            match key.as_str() {
+                "value" => {
+                    if seen & 1 != 0 {
+                        return r.refuse("duplicate_field");
+                    }
+                    seen |= 1;
+                    field_value = Some(decode_description_page(r)?);
+                }
+                _ => {
+                    return r.refuse("unknown_field");
+                }
+            }
+            r.skip_ws();
+            if r.at() != b',' {
+                break;
+            }
+            r.pos += 1;
+        }
+    }
+    if r.at() != b'}' {
+        return r.refuse("malformed");
+    }
+    r.pos += 1;
+    r.depth -= 1;
+    if seen & 1 != 1 {
+        return r.refuse("missing_field");
+    }
+    let Some(field_value) = field_value else {
+        return r.refuse("missing_field");
+    };
+    Ok(OAAuthorizationListActionDescriptionsResult {
+        value: field_value,
+    })
+}
+
 fn decode_oa_authorization_decide_result(r: &mut Reader) -> Result<OAAuthorizationDecideResult, Refusal> {
     if r.at() != b'{' {
         return r.refuse("wrong_type");
@@ -3233,6 +10165,120 @@ fn decode_oa_authorization_decide_for_result(r: &mut Reader) -> Result<OAAuthori
         return r.refuse("missing_field");
     };
     Ok(OAAuthorizationDecideForResult {
+        value: field_value,
+    })
+}
+
+fn decode_oa_authorization_operator_register_described_action_result(r: &mut Reader) -> Result<OAAuthorizationOperatorRegisterDescribedActionResult, Refusal> {
+    if r.at() != b'{' {
+        return r.refuse("wrong_type");
+    }
+    r.enter()?;
+    r.pos += 1;
+    let mut field_value: Option<DescriptionEdit> = None;
+    let mut seen: u32 = 0;
+    r.skip_ws();
+    if r.at() != b'}' {
+        loop {
+            r.skip_ws();
+            if r.at() != b'"' {
+                return r.refuse("malformed");
+            }
+            let key = r.string()?;
+            r.skip_ws();
+            if r.at() != b':' {
+                return r.refuse("malformed");
+            }
+            r.pos += 1;
+            r.skip_ws();
+            match key.as_str() {
+                "value" => {
+                    if seen & 1 != 0 {
+                        return r.refuse("duplicate_field");
+                    }
+                    seen |= 1;
+                    field_value = Some(decode_description_edit(r)?);
+                }
+                _ => {
+                    return r.refuse("unknown_field");
+                }
+            }
+            r.skip_ws();
+            if r.at() != b',' {
+                break;
+            }
+            r.pos += 1;
+        }
+    }
+    if r.at() != b'}' {
+        return r.refuse("malformed");
+    }
+    r.pos += 1;
+    r.depth -= 1;
+    if seen & 1 != 1 {
+        return r.refuse("missing_field");
+    }
+    let Some(field_value) = field_value else {
+        return r.refuse("missing_field");
+    };
+    Ok(OAAuthorizationOperatorRegisterDescribedActionResult {
+        value: field_value,
+    })
+}
+
+fn decode_oa_authorization_operator_apply_first_use_allow_result(r: &mut Reader) -> Result<OAAuthorizationOperatorApplyFirstUseAllowResult, Refusal> {
+    if r.at() != b'{' {
+        return r.refuse("wrong_type");
+    }
+    r.enter()?;
+    r.pos += 1;
+    let mut field_value: Option<PolicyEdit> = None;
+    let mut seen: u32 = 0;
+    r.skip_ws();
+    if r.at() != b'}' {
+        loop {
+            r.skip_ws();
+            if r.at() != b'"' {
+                return r.refuse("malformed");
+            }
+            let key = r.string()?;
+            r.skip_ws();
+            if r.at() != b':' {
+                return r.refuse("malformed");
+            }
+            r.pos += 1;
+            r.skip_ws();
+            match key.as_str() {
+                "value" => {
+                    if seen & 1 != 0 {
+                        return r.refuse("duplicate_field");
+                    }
+                    seen |= 1;
+                    field_value = Some(decode_policy_edit(r)?);
+                }
+                _ => {
+                    return r.refuse("unknown_field");
+                }
+            }
+            r.skip_ws();
+            if r.at() != b',' {
+                break;
+            }
+            r.pos += 1;
+        }
+    }
+    if r.at() != b'}' {
+        return r.refuse("malformed");
+    }
+    r.pos += 1;
+    r.depth -= 1;
+    if seen & 1 != 1 {
+        return r.refuse("missing_field");
+    }
+    let Some(field_value) = field_value else {
+        return r.refuse("missing_field");
+    };
+    Ok(OAAuthorizationOperatorApplyFirstUseAllowResult {
         value: field_value,
     })
 }
@@ -3408,6 +10454,120 @@ fn decode_oa_authorization_operator_revoke_rule_result(r: &mut Reader) -> Result
     })
 }
 
+fn decode_oa_authorization_operator_stop_answerer_result(r: &mut Reader) -> Result<OAAuthorizationOperatorStopAnswererResult, Refusal> {
+    if r.at() != b'{' {
+        return r.refuse("wrong_type");
+    }
+    r.enter()?;
+    r.pos += 1;
+    let mut field_value: Option<PolicyEdit> = None;
+    let mut seen: u32 = 0;
+    r.skip_ws();
+    if r.at() != b'}' {
+        loop {
+            r.skip_ws();
+            if r.at() != b'"' {
+                return r.refuse("malformed");
+            }
+            let key = r.string()?;
+            r.skip_ws();
+            if r.at() != b':' {
+                return r.refuse("malformed");
+            }
+            r.pos += 1;
+            r.skip_ws();
+            match key.as_str() {
+                "value" => {
+                    if seen & 1 != 0 {
+                        return r.refuse("duplicate_field");
+                    }
+                    seen |= 1;
+                    field_value = Some(decode_policy_edit(r)?);
+                }
+                _ => {
+                    return r.refuse("unknown_field");
+                }
+            }
+            r.skip_ws();
+            if r.at() != b',' {
+                break;
+            }
+            r.pos += 1;
+        }
+    }
+    if r.at() != b'}' {
+        return r.refuse("malformed");
+    }
+    r.pos += 1;
+    r.depth -= 1;
+    if seen & 1 != 1 {
+        return r.refuse("missing_field");
+    }
+    let Some(field_value) = field_value else {
+        return r.refuse("missing_field");
+    };
+    Ok(OAAuthorizationOperatorStopAnswererResult {
+        value: field_value,
+    })
+}
+
+fn decode_oa_authorization_operator_revoke_answer_permits_result(r: &mut Reader) -> Result<OAAuthorizationOperatorRevokeAnswerPermitsResult, Refusal> {
+    if r.at() != b'{' {
+        return r.refuse("wrong_type");
+    }
+    r.enter()?;
+    r.pos += 1;
+    let mut field_value: Option<PolicyEdit> = None;
+    let mut seen: u32 = 0;
+    r.skip_ws();
+    if r.at() != b'}' {
+        loop {
+            r.skip_ws();
+            if r.at() != b'"' {
+                return r.refuse("malformed");
+            }
+            let key = r.string()?;
+            r.skip_ws();
+            if r.at() != b':' {
+                return r.refuse("malformed");
+            }
+            r.pos += 1;
+            r.skip_ws();
+            match key.as_str() {
+                "value" => {
+                    if seen & 1 != 0 {
+                        return r.refuse("duplicate_field");
+                    }
+                    seen |= 1;
+                    field_value = Some(decode_policy_edit(r)?);
+                }
+                _ => {
+                    return r.refuse("unknown_field");
+                }
+            }
+            r.skip_ws();
+            if r.at() != b',' {
+                break;
+            }
+            r.pos += 1;
+        }
+    }
+    if r.at() != b'}' {
+        return r.refuse("malformed");
+    }
+    r.pos += 1;
+    r.depth -= 1;
+    if seen & 1 != 1 {
+        return r.refuse("missing_field");
+    }
+    let Some(field_value) = field_value else {
+        return r.refuse("missing_field");
+    };
+    Ok(OAAuthorizationOperatorRevokeAnswerPermitsResult {
+        value: field_value,
+    })
+}
+
 fn decode_oa_authorization_operator_set_rule_for_result(r: &mut Reader) -> Result<OAAuthorizationOperatorSetRuleForResult, Refusal> {
     if r.at() != b'{' {
         return r.refuse("wrong_type");
@@ -3461,6 +10621,63 @@ fn decode_oa_authorization_operator_set_rule_for_result(r: &mut Reader) -> Resul
         return r.refuse("missing_field");
     };
     Ok(OAAuthorizationOperatorSetRuleForResult {
+        value: field_value,
+    })
+}
+
+fn decode_oa_authorization_operator_set_rules_for_result(r: &mut Reader) -> Result<OAAuthorizationOperatorSetRulesForResult, Refusal> {
+    if r.at() != b'{' {
+        return r.refuse("wrong_type");
+    }
+    r.enter()?;
+    r.pos += 1;
+    let mut field_value: Option<PolicyEdit> = None;
+    let mut seen: u32 = 0;
+    r.skip_ws();
+    if r.at() != b'}' {
+        loop {
+            r.skip_ws();
+            if r.at() != b'"' {
+                return r.refuse("malformed");
+            }
+            let key = r.string()?;
+            r.skip_ws();
+            if r.at() != b':' {
+                return r.refuse("malformed");
+            }
+            r.pos += 1;
+            r.skip_ws();
+            match key.as_str() {
+                "value" => {
+                    if seen & 1 != 0 {
+                        return r.refuse("duplicate_field");
+                    }
+                    seen |= 1;
+                    field_value = Some(decode_policy_edit(r)?);
+                }
+                _ => {
+                    return r.refuse("unknown_field");
+                }
+            }
+            r.skip_ws();
+            if r.at() != b',' {
+                break;
+            }
+            r.pos += 1;
+        }
+    }
+    if r.at() != b'}' {
+        return r.refuse("malformed");
+    }
+    r.pos += 1;
+    r.depth -= 1;
+    if seen & 1 != 1 {
+        return r.refuse("missing_field");
+    }
+    let Some(field_value) = field_value else {
+        return r.refuse("missing_field");
+    };
+    Ok(OAAuthorizationOperatorSetRulesForResult {
         value: field_value,
     })
 }
@@ -3636,8 +10853,920 @@ fn decode_oa_authorization_operator_retire_action_result(r: &mut Reader) -> Resu
     })
 }
 
+fn decode_oa_authorization_operator_explain_for_result(r: &mut Reader) -> Result<OAAuthorizationOperatorExplainForResult, Refusal> {
+    if r.at() != b'{' {
+        return r.refuse("wrong_type");
+    }
+    r.enter()?;
+    r.pos += 1;
+    let mut field_value: Option<DecisionExplanation> = None;
+    let mut seen: u32 = 0;
+    r.skip_ws();
+    if r.at() != b'}' {
+        loop {
+            r.skip_ws();
+            if r.at() != b'"' {
+                return r.refuse("malformed");
+            }
+            let key = r.string()?;
+            r.skip_ws();
+            if r.at() != b':' {
+                return r.refuse("malformed");
+            }
+            r.pos += 1;
+            r.skip_ws();
+            match key.as_str() {
+                "value" => {
+                    if seen & 1 != 0 {
+                        return r.refuse("duplicate_field");
+                    }
+                    seen |= 1;
+                    field_value = Some(decode_decision_explanation(r)?);
+                }
+                _ => {
+                    return r.refuse("unknown_field");
+                }
+            }
+            r.skip_ws();
+            if r.at() != b',' {
+                break;
+            }
+            r.pos += 1;
+        }
+    }
+    if r.at() != b'}' {
+        return r.refuse("malformed");
+    }
+    r.pos += 1;
+    r.depth -= 1;
+    if seen & 1 != 1 {
+        return r.refuse("missing_field");
+    }
+    let Some(field_value) = field_value else {
+        return r.refuse("missing_field");
+    };
+    Ok(OAAuthorizationOperatorExplainForResult {
+        value: field_value,
+    })
+}
+
+fn decode_oa_authorization_operator_list_defaults_result(r: &mut Reader) -> Result<OAAuthorizationOperatorListDefaultsResult, Refusal> {
+    if r.at() != b'{' {
+        return r.refuse("wrong_type");
+    }
+    r.enter()?;
+    r.pos += 1;
+    let mut field_value: Option<DefaultPage> = None;
+    let mut seen: u32 = 0;
+    r.skip_ws();
+    if r.at() != b'}' {
+        loop {
+            r.skip_ws();
+            if r.at() != b'"' {
+                return r.refuse("malformed");
+            }
+            let key = r.string()?;
+            r.skip_ws();
+            if r.at() != b':' {
+                return r.refuse("malformed");
+            }
+            r.pos += 1;
+            r.skip_ws();
+            match key.as_str() {
+                "value" => {
+                    if seen & 1 != 0 {
+                        return r.refuse("duplicate_field");
+                    }
+                    seen |= 1;
+                    field_value = Some(decode_default_page(r)?);
+                }
+                _ => {
+                    return r.refuse("unknown_field");
+                }
+            }
+            r.skip_ws();
+            if r.at() != b',' {
+                break;
+            }
+            r.pos += 1;
+        }
+    }
+    if r.at() != b'}' {
+        return r.refuse("malformed");
+    }
+    r.pos += 1;
+    r.depth -= 1;
+    if seen & 1 != 1 {
+        return r.refuse("missing_field");
+    }
+    let Some(field_value) = field_value else {
+        return r.refuse("missing_field");
+    };
+    Ok(OAAuthorizationOperatorListDefaultsResult {
+        value: field_value,
+    })
+}
+
+fn decode_oa_authorization_operator_set_default_result(r: &mut Reader) -> Result<OAAuthorizationOperatorSetDefaultResult, Refusal> {
+    if r.at() != b'{' {
+        return r.refuse("wrong_type");
+    }
+    r.enter()?;
+    r.pos += 1;
+    let mut field_value: Option<DefaultEdit> = None;
+    let mut seen: u32 = 0;
+    r.skip_ws();
+    if r.at() != b'}' {
+        loop {
+            r.skip_ws();
+            if r.at() != b'"' {
+                return r.refuse("malformed");
+            }
+            let key = r.string()?;
+            r.skip_ws();
+            if r.at() != b':' {
+                return r.refuse("malformed");
+            }
+            r.pos += 1;
+            r.skip_ws();
+            match key.as_str() {
+                "value" => {
+                    if seen & 1 != 0 {
+                        return r.refuse("duplicate_field");
+                    }
+                    seen |= 1;
+                    field_value = Some(decode_default_edit(r)?);
+                }
+                _ => {
+                    return r.refuse("unknown_field");
+                }
+            }
+            r.skip_ws();
+            if r.at() != b',' {
+                break;
+            }
+            r.pos += 1;
+        }
+    }
+    if r.at() != b'}' {
+        return r.refuse("malformed");
+    }
+    r.pos += 1;
+    r.depth -= 1;
+    if seen & 1 != 1 {
+        return r.refuse("missing_field");
+    }
+    let Some(field_value) = field_value else {
+        return r.refuse("missing_field");
+    };
+    Ok(OAAuthorizationOperatorSetDefaultResult {
+        value: field_value,
+    })
+}
+
+fn decode_oa_selector_authorization_list_permission_definitions_result(r: &mut Reader) -> Result<OASelectorAuthorizationListPermissionDefinitionsResult, Refusal> {
+    if r.at() != b'{' {
+        return r.refuse("wrong_type");
+    }
+    r.enter()?;
+    r.pos += 1;
+    let mut field_value: Option<PermissionDefinitionPage> = None;
+    let mut seen: u32 = 0;
+    r.skip_ws();
+    if r.at() != b'}' {
+        loop {
+            r.skip_ws();
+            if r.at() != b'"' {
+                return r.refuse("malformed");
+            }
+            let key = r.string()?;
+            r.skip_ws();
+            if r.at() != b':' {
+                return r.refuse("malformed");
+            }
+            r.pos += 1;
+            r.skip_ws();
+            match key.as_str() {
+                "value" => {
+                    if seen & 1 != 0 {
+                        return r.refuse("duplicate_field");
+                    }
+                    seen |= 1;
+                    field_value = Some(decode_permission_definition_page(r)?);
+                }
+                _ => {
+                    return r.refuse("unknown_field");
+                }
+            }
+            r.skip_ws();
+            if r.at() != b',' {
+                break;
+            }
+            r.pos += 1;
+        }
+    }
+    if r.at() != b'}' {
+        return r.refuse("malformed");
+    }
+    r.pos += 1;
+    r.depth -= 1;
+    if seen & 1 != 1 {
+        return r.refuse("missing_field");
+    }
+    let Some(field_value) = field_value else {
+        return r.refuse("missing_field");
+    };
+    Ok(OASelectorAuthorizationListPermissionDefinitionsResult {
+        value: field_value,
+    })
+}
+
+fn decode_oa_selector_authorization_list_permission_bundles_result(r: &mut Reader) -> Result<OASelectorAuthorizationListPermissionBundlesResult, Refusal> {
+    if r.at() != b'{' {
+        return r.refuse("wrong_type");
+    }
+    r.enter()?;
+    r.pos += 1;
+    let mut field_value: Option<PermissionBundlePage> = None;
+    let mut seen: u32 = 0;
+    r.skip_ws();
+    if r.at() != b'}' {
+        loop {
+            r.skip_ws();
+            if r.at() != b'"' {
+                return r.refuse("malformed");
+            }
+            let key = r.string()?;
+            r.skip_ws();
+            if r.at() != b':' {
+                return r.refuse("malformed");
+            }
+            r.pos += 1;
+            r.skip_ws();
+            match key.as_str() {
+                "value" => {
+                    if seen & 1 != 0 {
+                        return r.refuse("duplicate_field");
+                    }
+                    seen |= 1;
+                    field_value = Some(decode_permission_bundle_page(r)?);
+                }
+                _ => {
+                    return r.refuse("unknown_field");
+                }
+            }
+            r.skip_ws();
+            if r.at() != b',' {
+                break;
+            }
+            r.pos += 1;
+        }
+    }
+    if r.at() != b'}' {
+        return r.refuse("malformed");
+    }
+    r.pos += 1;
+    r.depth -= 1;
+    if seen & 1 != 1 {
+        return r.refuse("missing_field");
+    }
+    let Some(field_value) = field_value else {
+        return r.refuse("missing_field");
+    };
+    Ok(OASelectorAuthorizationListPermissionBundlesResult {
+        value: field_value,
+    })
+}
+
+fn decode_oa_selector_authorization_check_batch_result(r: &mut Reader) -> Result<OASelectorAuthorizationCheckBatchResult, Refusal> {
+    if r.at() != b'{' {
+        return r.refuse("wrong_type");
+    }
+    r.enter()?;
+    r.pos += 1;
+    let mut field_value: Option<BatchDecision> = None;
+    let mut seen: u32 = 0;
+    r.skip_ws();
+    if r.at() != b'}' {
+        loop {
+            r.skip_ws();
+            if r.at() != b'"' {
+                return r.refuse("malformed");
+            }
+            let key = r.string()?;
+            r.skip_ws();
+            if r.at() != b':' {
+                return r.refuse("malformed");
+            }
+            r.pos += 1;
+            r.skip_ws();
+            match key.as_str() {
+                "value" => {
+                    if seen & 1 != 0 {
+                        return r.refuse("duplicate_field");
+                    }
+                    seen |= 1;
+                    field_value = Some(decode_batch_decision(r)?);
+                }
+                _ => {
+                    return r.refuse("unknown_field");
+                }
+            }
+            r.skip_ws();
+            if r.at() != b',' {
+                break;
+            }
+            r.pos += 1;
+        }
+    }
+    if r.at() != b'}' {
+        return r.refuse("malformed");
+    }
+    r.pos += 1;
+    r.depth -= 1;
+    if seen & 1 != 1 {
+        return r.refuse("missing_field");
+    }
+    let Some(field_value) = field_value else {
+        return r.refuse("missing_field");
+    };
+    Ok(OASelectorAuthorizationCheckBatchResult {
+        value: field_value,
+    })
+}
+
+fn decode_oa_selector_authorization_check_batch_for_result(r: &mut Reader) -> Result<OASelectorAuthorizationCheckBatchForResult, Refusal> {
+    if r.at() != b'{' {
+        return r.refuse("wrong_type");
+    }
+    r.enter()?;
+    r.pos += 1;
+    let mut field_value: Option<BatchDecision> = None;
+    let mut seen: u32 = 0;
+    r.skip_ws();
+    if r.at() != b'}' {
+        loop {
+            r.skip_ws();
+            if r.at() != b'"' {
+                return r.refuse("malformed");
+            }
+            let key = r.string()?;
+            r.skip_ws();
+            if r.at() != b':' {
+                return r.refuse("malformed");
+            }
+            r.pos += 1;
+            r.skip_ws();
+            match key.as_str() {
+                "value" => {
+                    if seen & 1 != 0 {
+                        return r.refuse("duplicate_field");
+                    }
+                    seen |= 1;
+                    field_value = Some(decode_batch_decision(r)?);
+                }
+                _ => {
+                    return r.refuse("unknown_field");
+                }
+            }
+            r.skip_ws();
+            if r.at() != b',' {
+                break;
+            }
+            r.pos += 1;
+        }
+    }
+    if r.at() != b'}' {
+        return r.refuse("malformed");
+    }
+    r.pos += 1;
+    r.depth -= 1;
+    if seen & 1 != 1 {
+        return r.refuse("missing_field");
+    }
+    let Some(field_value) = field_value else {
+        return r.refuse("missing_field");
+    };
+    Ok(OASelectorAuthorizationCheckBatchForResult {
+        value: field_value,
+    })
+}
+
+fn decode_oa_selector_authorization_check_legacy_operation_for_result(r: &mut Reader) -> Result<OASelectorAuthorizationCheckLegacyOperationForResult, Refusal> {
+    if r.at() != b'{' {
+        return r.refuse("wrong_type");
+    }
+    r.enter()?;
+    r.pos += 1;
+    let mut field_value: Option<Decision> = None;
+    let mut seen: u32 = 0;
+    r.skip_ws();
+    if r.at() != b'}' {
+        loop {
+            r.skip_ws();
+            if r.at() != b'"' {
+                return r.refuse("malformed");
+            }
+            let key = r.string()?;
+            r.skip_ws();
+            if r.at() != b':' {
+                return r.refuse("malformed");
+            }
+            r.pos += 1;
+            r.skip_ws();
+            match key.as_str() {
+                "value" => {
+                    if seen & 1 != 0 {
+                        return r.refuse("duplicate_field");
+                    }
+                    seen |= 1;
+                    field_value = Some(decode_decision(r)?);
+                }
+                _ => {
+                    return r.refuse("unknown_field");
+                }
+            }
+            r.skip_ws();
+            if r.at() != b',' {
+                break;
+            }
+            r.pos += 1;
+        }
+    }
+    if r.at() != b'}' {
+        return r.refuse("malformed");
+    }
+    r.pos += 1;
+    r.depth -= 1;
+    if seen & 1 != 1 {
+        return r.refuse("missing_field");
+    }
+    let Some(field_value) = field_value else {
+        return r.refuse("missing_field");
+    };
+    Ok(OASelectorAuthorizationCheckLegacyOperationForResult {
+        value: field_value,
+    })
+}
+
+fn decode_oa_selector_authorization_operator_list_selector_rules_result(r: &mut Reader) -> Result<OASelectorAuthorizationOperatorListSelectorRulesResult, Refusal> {
+    if r.at() != b'{' {
+        return r.refuse("wrong_type");
+    }
+    r.enter()?;
+    r.pos += 1;
+    let mut field_value: Option<SelectorRulePage> = None;
+    let mut seen: u32 = 0;
+    r.skip_ws();
+    if r.at() != b'}' {
+        loop {
+            r.skip_ws();
+            if r.at() != b'"' {
+                return r.refuse("malformed");
+            }
+            let key = r.string()?;
+            r.skip_ws();
+            if r.at() != b':' {
+                return r.refuse("malformed");
+            }
+            r.pos += 1;
+            r.skip_ws();
+            match key.as_str() {
+                "value" => {
+                    if seen & 1 != 0 {
+                        return r.refuse("duplicate_field");
+                    }
+                    seen |= 1;
+                    field_value = Some(decode_selector_rule_page(r)?);
+                }
+                _ => {
+                    return r.refuse("unknown_field");
+                }
+            }
+            r.skip_ws();
+            if r.at() != b',' {
+                break;
+            }
+            r.pos += 1;
+        }
+    }
+    if r.at() != b'}' {
+        return r.refuse("malformed");
+    }
+    r.pos += 1;
+    r.depth -= 1;
+    if seen & 1 != 1 {
+        return r.refuse("missing_field");
+    }
+    let Some(field_value) = field_value else {
+        return r.refuse("missing_field");
+    };
+    Ok(OASelectorAuthorizationOperatorListSelectorRulesResult {
+        value: field_value,
+    })
+}
+
+fn decode_oa_selector_authorization_operator_read_selector_rule_result(r: &mut Reader) -> Result<OASelectorAuthorizationOperatorReadSelectorRuleResult, Refusal> {
+    if r.at() != b'{' {
+        return r.refuse("wrong_type");
+    }
+    r.enter()?;
+    r.pos += 1;
+    let mut field_value: Option<SelectorRuleRead> = None;
+    let mut seen: u32 = 0;
+    r.skip_ws();
+    if r.at() != b'}' {
+        loop {
+            r.skip_ws();
+            if r.at() != b'"' {
+                return r.refuse("malformed");
+            }
+            let key = r.string()?;
+            r.skip_ws();
+            if r.at() != b':' {
+                return r.refuse("malformed");
+            }
+            r.pos += 1;
+            r.skip_ws();
+            match key.as_str() {
+                "value" => {
+                    if seen & 1 != 0 {
+                        return r.refuse("duplicate_field");
+                    }
+                    seen |= 1;
+                    field_value = Some(decode_selector_rule_read(r)?);
+                }
+                _ => {
+                    return r.refuse("unknown_field");
+                }
+            }
+            r.skip_ws();
+            if r.at() != b',' {
+                break;
+            }
+            r.pos += 1;
+        }
+    }
+    if r.at() != b'}' {
+        return r.refuse("malformed");
+    }
+    r.pos += 1;
+    r.depth -= 1;
+    if seen & 1 != 1 {
+        return r.refuse("missing_field");
+    }
+    let Some(field_value) = field_value else {
+        return r.refuse("missing_field");
+    };
+    Ok(OASelectorAuthorizationOperatorReadSelectorRuleResult {
+        value: field_value,
+    })
+}
+
+fn decode_oa_selector_authorization_operator_set_selector_rule_result(r: &mut Reader) -> Result<OASelectorAuthorizationOperatorSetSelectorRuleResult, Refusal> {
+    if r.at() != b'{' {
+        return r.refuse("wrong_type");
+    }
+    r.enter()?;
+    r.pos += 1;
+    let mut field_value: Option<SelectorEdit> = None;
+    let mut seen: u32 = 0;
+    r.skip_ws();
+    if r.at() != b'}' {
+        loop {
+            r.skip_ws();
+            if r.at() != b'"' {
+                return r.refuse("malformed");
+            }
+            let key = r.string()?;
+            r.skip_ws();
+            if r.at() != b':' {
+                return r.refuse("malformed");
+            }
+            r.pos += 1;
+            r.skip_ws();
+            match key.as_str() {
+                "value" => {
+                    if seen & 1 != 0 {
+                        return r.refuse("duplicate_field");
+                    }
+                    seen |= 1;
+                    field_value = Some(decode_selector_edit(r)?);
+                }
+                _ => {
+                    return r.refuse("unknown_field");
+                }
+            }
+            r.skip_ws();
+            if r.at() != b',' {
+                break;
+            }
+            r.pos += 1;
+        }
+    }
+    if r.at() != b'}' {
+        return r.refuse("malformed");
+    }
+    r.pos += 1;
+    r.depth -= 1;
+    if seen & 1 != 1 {
+        return r.refuse("missing_field");
+    }
+    let Some(field_value) = field_value else {
+        return r.refuse("missing_field");
+    };
+    Ok(OASelectorAuthorizationOperatorSetSelectorRuleResult {
+        value: field_value,
+    })
+}
+
+fn decode_oa_selector_authorization_operator_remove_selector_rule_result(r: &mut Reader) -> Result<OASelectorAuthorizationOperatorRemoveSelectorRuleResult, Refusal> {
+    if r.at() != b'{' {
+        return r.refuse("wrong_type");
+    }
+    r.enter()?;
+    r.pos += 1;
+    let mut field_value: Option<SelectorEdit> = None;
+    let mut seen: u32 = 0;
+    r.skip_ws();
+    if r.at() != b'}' {
+        loop {
+            r.skip_ws();
+            if r.at() != b'"' {
+                return r.refuse("malformed");
+            }
+            let key = r.string()?;
+            r.skip_ws();
+            if r.at() != b':' {
+                return r.refuse("malformed");
+            }
+            r.pos += 1;
+            r.skip_ws();
+            match key.as_str() {
+                "value" => {
+                    if seen & 1 != 0 {
+                        return r.refuse("duplicate_field");
+                    }
+                    seen |= 1;
+                    field_value = Some(decode_selector_edit(r)?);
+                }
+                _ => {
+                    return r.refuse("unknown_field");
+                }
+            }
+            r.skip_ws();
+            if r.at() != b',' {
+                break;
+            }
+            r.pos += 1;
+        }
+    }
+    if r.at() != b'}' {
+        return r.refuse("malformed");
+    }
+    r.pos += 1;
+    r.depth -= 1;
+    if seen & 1 != 1 {
+        return r.refuse("missing_field");
+    }
+    let Some(field_value) = field_value else {
+        return r.refuse("missing_field");
+    };
+    Ok(OASelectorAuthorizationOperatorRemoveSelectorRuleResult {
+        value: field_value,
+    })
+}
+
+fn decode_oa_selector_authorization_operator_apply_bundle_result(r: &mut Reader) -> Result<OASelectorAuthorizationOperatorApplyBundleResult, Refusal> {
+    if r.at() != b'{' {
+        return r.refuse("wrong_type");
+    }
+    r.enter()?;
+    r.pos += 1;
+    let mut field_value: Option<SelectorEdit> = None;
+    let mut seen: u32 = 0;
+    r.skip_ws();
+    if r.at() != b'}' {
+        loop {
+            r.skip_ws();
+            if r.at() != b'"' {
+                return r.refuse("malformed");
+            }
+            let key = r.string()?;
+            r.skip_ws();
+            if r.at() != b':' {
+                return r.refuse("malformed");
+            }
+            r.pos += 1;
+            r.skip_ws();
+            match key.as_str() {
+                "value" => {
+                    if seen & 1 != 0 {
+                        return r.refuse("duplicate_field");
+                    }
+                    seen |= 1;
+                    field_value = Some(decode_selector_edit(r)?);
+                }
+                _ => {
+                    return r.refuse("unknown_field");
+                }
+            }
+            r.skip_ws();
+            if r.at() != b',' {
+                break;
+            }
+            r.pos += 1;
+        }
+    }
+    if r.at() != b'}' {
+        return r.refuse("malformed");
+    }
+    r.pos += 1;
+    r.depth -= 1;
+    if seen & 1 != 1 {
+        return r.refuse("missing_field");
+    }
+    let Some(field_value) = field_value else {
+        return r.refuse("missing_field");
+    };
+    Ok(OASelectorAuthorizationOperatorApplyBundleResult {
+        value: field_value,
+    })
+}
+
+fn decode_oa_selector_authorization_operator_remove_bundle_result(r: &mut Reader) -> Result<OASelectorAuthorizationOperatorRemoveBundleResult, Refusal> {
+    if r.at() != b'{' {
+        return r.refuse("wrong_type");
+    }
+    r.enter()?;
+    r.pos += 1;
+    let mut field_value: Option<SelectorEdit> = None;
+    let mut seen: u32 = 0;
+    r.skip_ws();
+    if r.at() != b'}' {
+        loop {
+            r.skip_ws();
+            if r.at() != b'"' {
+                return r.refuse("malformed");
+            }
+            let key = r.string()?;
+            r.skip_ws();
+            if r.at() != b':' {
+                return r.refuse("malformed");
+            }
+            r.pos += 1;
+            r.skip_ws();
+            match key.as_str() {
+                "value" => {
+                    if seen & 1 != 0 {
+                        return r.refuse("duplicate_field");
+                    }
+                    seen |= 1;
+                    field_value = Some(decode_selector_edit(r)?);
+                }
+                _ => {
+                    return r.refuse("unknown_field");
+                }
+            }
+            r.skip_ws();
+            if r.at() != b',' {
+                break;
+            }
+            r.pos += 1;
+        }
+    }
+    if r.at() != b'}' {
+        return r.refuse("malformed");
+    }
+    r.pos += 1;
+    r.depth -= 1;
+    if seen & 1 != 1 {
+        return r.refuse("missing_field");
+    }
+    let Some(field_value) = field_value else {
+        return r.refuse("missing_field");
+    };
+    Ok(OASelectorAuthorizationOperatorRemoveBundleResult {
+        value: field_value,
+    })
+}
+
+fn decode_oa_selector_authorization_operator_apply_permission_allow_result(r: &mut Reader) -> Result<OASelectorAuthorizationOperatorApplyPermissionAllowResult, Refusal> {
+    if r.at() != b'{' {
+        return r.refuse("wrong_type");
+    }
+    r.enter()?;
+    r.pos += 1;
+    let mut field_value: Option<SelectorEdit> = None;
+    let mut seen: u32 = 0;
+    r.skip_ws();
+    if r.at() != b'}' {
+        loop {
+            r.skip_ws();
+            if r.at() != b'"' {
+                return r.refuse("malformed");
+            }
+            let key = r.string()?;
+            r.skip_ws();
+            if r.at() != b':' {
+                return r.refuse("malformed");
+            }
+            r.pos += 1;
+            r.skip_ws();
+            match key.as_str() {
+                "value" => {
+                    if seen & 1 != 0 {
+                        return r.refuse("duplicate_field");
+                    }
+                    seen |= 1;
+                    field_value = Some(decode_selector_edit(r)?);
+                }
+                _ => {
+                    return r.refuse("unknown_field");
+                }
+            }
+            r.skip_ws();
+            if r.at() != b',' {
+                break;
+            }
+            r.pos += 1;
+        }
+    }
+    if r.at() != b'}' {
+        return r.refuse("malformed");
+    }
+    r.pos += 1;
+    r.depth -= 1;
+    if seen & 1 != 1 {
+        return r.refuse("missing_field");
+    }
+    let Some(field_value) = field_value else {
+        return r.refuse("missing_field");
+    };
+    Ok(OASelectorAuthorizationOperatorApplyPermissionAllowResult {
+        value: field_value,
+    })
+}
+
+fn decode_oa_selector_authorization_operator_undo_permission_effect_result(r: &mut Reader) -> Result<OASelectorAuthorizationOperatorUndoPermissionEffectResult, Refusal> {
+    if r.at() != b'{' {
+        return r.refuse("wrong_type");
+    }
+    r.enter()?;
+    r.pos += 1;
+    let mut field_value: Option<SelectorEdit> = None;
+    let mut seen: u32 = 0;
+    r.skip_ws();
+    if r.at() != b'}' {
+        loop {
+            r.skip_ws();
+            if r.at() != b'"' {
+                return r.refuse("malformed");
+            }
+            let key = r.string()?;
+            r.skip_ws();
+            if r.at() != b':' {
+                return r.refuse("malformed");
+            }
+            r.pos += 1;
+            r.skip_ws();
+            match key.as_str() {
+                "value" => {
+                    if seen & 1 != 0 {
+                        return r.refuse("duplicate_field");
+                    }
+                    seen |= 1;
+                    field_value = Some(decode_selector_edit(r)?);
+                }
+                _ => {
+                    return r.refuse("unknown_field");
+                }
+            }
+            r.skip_ws();
+            if r.at() != b',' {
+                break;
+            }
+            r.pos += 1;
+        }
+    }
+    if r.at() != b'}' {
+        return r.refuse("malformed");
+    }
+    r.pos += 1;
+    r.depth -= 1;
+    if seen & 1 != 1 {
+        return r.refuse("missing_field");
+    }
+    let Some(field_value) = field_value else {
+        return r.refuse("missing_field");
+    };
+    Ok(OASelectorAuthorizationOperatorUndoPermissionEffectResult {
+        value: field_value,
+    })
+}
+
 pub fn decode(data: &[u8]) -> Result<Request, Refusal> {
-    let mut r = Reader { buf: data, pos: 0, depth: 0 };
+    let mut r = Reader { buf: data, pos: 0, depth: 0, limit: DEPTH_LIMIT };
     r.skip_ws();
     let v = decode_request(&mut r)?;
     r.skip_ws();
@@ -3656,12 +11785,72 @@ fn service_check_policy_rule(v: &PolicyRule) -> Result<(), Refusal> {
     Ok(())
 }
 
+fn service_check_action_description(v: &ActionDescription) -> Result<(), Refusal> {
+    service_check_subject(&v.feature_app)?;
+    Ok(())
+}
+
+fn service_check_permission_key(_v: &PermissionKey) -> Result<(), Refusal> {
+    Ok(())
+}
+
+fn service_check_resource_selector(_v: &ResourceSelector) -> Result<(), Refusal> {
+    Ok(())
+}
+
+fn service_check_permission_selection(v: &PermissionSelection) -> Result<(), Refusal> {
+    service_check_permission_key(&v.permission)?;
+    service_check_resource_selector(&v.selector)?;
+    Ok(())
+}
+
+fn service_check_concrete_resource(v: &ConcreteResource) -> Result<(), Refusal> {
+    service_check_permission_key(&v.permission)?;
+    Ok(())
+}
+
+fn service_check_check_batch_request(v: &CheckBatchRequest) -> Result<(), Refusal> {
+    if let Some(value) = &v.collection_admission {
+        service_check_permission_key(value)?;
+    }
+    for value in &v.resources {
+        service_check_concrete_resource(value)?;
+    }
+    Ok(())
+}
+
+fn service_check_selector_rule(v: &SelectorRule) -> Result<(), Refusal> {
+    service_check_subject(&v.subject)?;
+    service_check_permission_selection(&v.selection)?;
+    Ok(())
+}
+
+fn service_check_legacy_operation_request(v: &LegacyOperationRequest) -> Result<(), Refusal> {
+    if let Some(value) = &v.concrete_operation {
+        service_check_concrete_resource(value)?;
+    }
+    Ok(())
+}
+
+fn service_check_oa_authorization_list_action_descriptions_arguments(_v: &OAAuthorizationListActionDescriptionsArguments) -> Result<(), Refusal> {
+    Ok(())
+}
+
 fn service_check_oa_authorization_decide_arguments(_v: &OAAuthorizationDecideArguments) -> Result<(), Refusal> {
     Ok(())
 }
 
 fn service_check_oa_authorization_decide_for_arguments(v: &OAAuthorizationDecideForArguments) -> Result<(), Refusal> {
     service_check_subject(&v.subject)?;
+    Ok(())
+}
+
+fn service_check_oa_authorization_operator_register_described_action_arguments(v: &OAAuthorizationOperatorRegisterDescribedActionArguments) -> Result<(), Refusal> {
+    service_check_action_description(&v.description)?;
+    Ok(())
+}
+
+fn service_check_oa_authorization_operator_apply_first_use_allow_arguments(_v: &OAAuthorizationOperatorApplyFirstUseAllowArguments) -> Result<(), Refusal> {
     Ok(())
 }
 
@@ -3679,8 +11868,26 @@ fn service_check_oa_authorization_operator_revoke_rule_arguments(v: &OAAuthoriza
     Ok(())
 }
 
+fn service_check_oa_authorization_operator_stop_answerer_arguments(v: &OAAuthorizationOperatorStopAnswererArguments) -> Result<(), Refusal> {
+    service_check_subject(&v.answerer)?;
+    Ok(())
+}
+
+fn service_check_oa_authorization_operator_revoke_answer_permits_arguments(v: &OAAuthorizationOperatorRevokeAnswerPermitsArguments) -> Result<(), Refusal> {
+    service_check_subject(&v.answerer)?;
+    service_check_subject(&v.target)?;
+    Ok(())
+}
+
 fn service_check_oa_authorization_operator_set_rule_for_arguments(v: &OAAuthorizationOperatorSetRuleForArguments) -> Result<(), Refusal> {
     service_check_policy_rule(&v.rule)?;
+    Ok(())
+}
+
+fn service_check_oa_authorization_operator_set_rules_for_arguments(v: &OAAuthorizationOperatorSetRulesForArguments) -> Result<(), Refusal> {
+    for value in &v.rules {
+        service_check_policy_rule(value)?;
+    }
     Ok(())
 }
 
@@ -3694,6 +11901,84 @@ fn service_check_oa_authorization_operator_register_action_arguments(_v: &OAAuth
 }
 
 fn service_check_oa_authorization_operator_retire_action_arguments(_v: &OAAuthorizationOperatorRetireActionArguments) -> Result<(), Refusal> {
+    Ok(())
+}
+
+fn service_check_oa_authorization_operator_explain_for_arguments(v: &OAAuthorizationOperatorExplainForArguments) -> Result<(), Refusal> {
+    service_check_subject(&v.subject)?;
+    Ok(())
+}
+
+fn service_check_oa_authorization_operator_list_defaults_arguments(_v: &OAAuthorizationOperatorListDefaultsArguments) -> Result<(), Refusal> {
+    Ok(())
+}
+
+fn service_check_oa_authorization_operator_set_default_arguments(_v: &OAAuthorizationOperatorSetDefaultArguments) -> Result<(), Refusal> {
+    Ok(())
+}
+
+fn service_check_oa_selector_authorization_list_permission_definitions_arguments(_v: &OASelectorAuthorizationListPermissionDefinitionsArguments) -> Result<(), Refusal> {
+    Ok(())
+}
+
+fn service_check_oa_selector_authorization_list_permission_bundles_arguments(_v: &OASelectorAuthorizationListPermissionBundlesArguments) -> Result<(), Refusal> {
+    Ok(())
+}
+
+fn service_check_oa_selector_authorization_check_batch_arguments(v: &OASelectorAuthorizationCheckBatchArguments) -> Result<(), Refusal> {
+    service_check_check_batch_request(&v.request)?;
+    Ok(())
+}
+
+fn service_check_oa_selector_authorization_check_batch_for_arguments(v: &OASelectorAuthorizationCheckBatchForArguments) -> Result<(), Refusal> {
+    service_check_subject(&v.subject)?;
+    service_check_check_batch_request(&v.request)?;
+    Ok(())
+}
+
+fn service_check_oa_selector_authorization_check_legacy_operation_for_arguments(v: &OASelectorAuthorizationCheckLegacyOperationForArguments) -> Result<(), Refusal> {
+    service_check_subject(&v.subject)?;
+    service_check_legacy_operation_request(&v.request)?;
+    Ok(())
+}
+
+fn service_check_oa_selector_authorization_operator_list_selector_rules_arguments(_v: &OASelectorAuthorizationOperatorListSelectorRulesArguments) -> Result<(), Refusal> {
+    Ok(())
+}
+
+fn service_check_oa_selector_authorization_operator_read_selector_rule_arguments(v: &OASelectorAuthorizationOperatorReadSelectorRuleArguments) -> Result<(), Refusal> {
+    service_check_subject(&v.subject)?;
+    service_check_permission_selection(&v.selection)?;
+    Ok(())
+}
+
+fn service_check_oa_selector_authorization_operator_set_selector_rule_arguments(v: &OASelectorAuthorizationOperatorSetSelectorRuleArguments) -> Result<(), Refusal> {
+    service_check_selector_rule(&v.rule)?;
+    Ok(())
+}
+
+fn service_check_oa_selector_authorization_operator_remove_selector_rule_arguments(v: &OASelectorAuthorizationOperatorRemoveSelectorRuleArguments) -> Result<(), Refusal> {
+    service_check_subject(&v.subject)?;
+    service_check_permission_selection(&v.selection)?;
+    Ok(())
+}
+
+fn service_check_oa_selector_authorization_operator_apply_bundle_arguments(v: &OASelectorAuthorizationOperatorApplyBundleArguments) -> Result<(), Refusal> {
+    service_check_subject(&v.subject)?;
+    service_check_resource_selector(&v.selector)?;
+    Ok(())
+}
+
+fn service_check_oa_selector_authorization_operator_remove_bundle_arguments(v: &OASelectorAuthorizationOperatorRemoveBundleArguments) -> Result<(), Refusal> {
+    service_check_subject(&v.subject)?;
+    Ok(())
+}
+
+fn service_check_oa_selector_authorization_operator_apply_permission_allow_arguments(_v: &OASelectorAuthorizationOperatorApplyPermissionAllowArguments) -> Result<(), Refusal> {
+    Ok(())
+}
+
+fn service_check_oa_selector_authorization_operator_undo_permission_effect_arguments(_v: &OASelectorAuthorizationOperatorUndoPermissionEffectArguments) -> Result<(), Refusal> {
     Ok(())
 }
 
@@ -3720,7 +12005,7 @@ pub enum CallError<E> {
 }
 
 fn service_decode<T>(data: &[u8], decode: fn(&mut Reader) -> Result<T, Refusal>) -> Result<T, Refusal> {
-    let mut r = Reader { buf: data, pos: 0, depth: 0 };
+    let mut r = Reader { buf: data, pos: 0, depth: 0, limit: DEPTH_LIMIT };
     r.skip_ws();
     let value = decode(&mut r)?;
     r.skip_ws();
@@ -3745,6 +12030,13 @@ fn service_encode<T>(value: &T, check: fn(&T) -> Result<(), Refusal>, encode: fn
 /// is introduced.
 pub trait Authorization {
     type Error;
+    /// Read published descriptive metadata for the current catalogue under
+    /// same-account receiving Program admission. No rules are exposed. Pages
+    /// carry one durable revision; continuations bind subject, host epoch and
+    /// revision and return gap after change/restart. Requested limit is 1..64
+    /// and encoded replies are at most 256 KiB. Recheck admission before
+    /// returning. An earlier authorization@1 service returns unknown_method.
+    fn list_action_descriptions(&self, cursor: String, limit: i64) -> Result<DescriptionPage, Self::Error>;
     /// Evaluate the bound receiving account/program against an exact
     /// action/resource rule. This result is advisory to the caller; resource
     /// services query the decision point themselves.
@@ -3773,6 +12065,30 @@ impl<T> AuthorizationClient<T> {
 
 impl<T: FrameTransport> Authorization for AuthorizationClient<T> {
     type Error = CallError<T::Error>;
+    fn list_action_descriptions(&self, cursor: String, limit: i64) -> Result<DescriptionPage, Self::Error> {
+        let args = OAAuthorizationListActionDescriptionsArguments { cursor, limit };
+        let arguments = service_encode(&args, service_check_oa_authorization_list_action_descriptions_arguments, enc_oa_authorization_list_action_descriptions_arguments, decode_oa_authorization_list_action_descriptions_arguments).map_err(CallError::Refusal)?;
+        let request = OAServiceFrame { version: 1, service: "abstraction.rights/authorization@1".into(), method: "ListActionDescriptions".into(), arguments };
+        let frame = service_encode(&request, service_check_oa_service_frame, enc_oa_service_frame, decode_oa_service_frame).map_err(CallError::Refusal)?;
+        let reply = self.transport.exchange_frame(&frame).map_err(CallError::Transport)?;
+        let reply = service_decode(&reply, decode_oa_service_reply).map_err(CallError::Refusal)?;
+        if reply.version != 1 {
+            return Err(CallError::Dispatch("unknown_version"));
+        }
+        if reply.service != "abstraction.rights/authorization@1" || reply.method != "ListActionDescriptions" {
+            return Err(CallError::Dispatch("mismatched_response"));
+        }
+        if !reply.ok {
+            let error = service_decode(&reply.payload, decode_oa_service_error).map_err(CallError::Refusal)?;
+            if error.code.is_empty() {
+                return Err(CallError::Dispatch("invalid_error"));
+            }
+            return Err(CallError::Service(ServiceError { code: error.code, message: error.message }));
+        }
+        let result = service_decode(&reply.payload, decode_oa_authorization_list_action_descriptions_result).map_err(CallError::Refusal)?;
+        Ok(result.value)
+    }
+
     fn decide(&self, action: String, resource: String) -> Result<Decision, Self::Error> {
         let args = OAAuthorizationDecideArguments { action, resource };
         let arguments = service_encode(&args, service_check_oa_authorization_decide_arguments, enc_oa_authorization_decide_arguments, decode_oa_authorization_decide_arguments).map_err(CallError::Refusal)?;
@@ -3831,6 +12147,31 @@ impl<T: FrameTransport> Authorization for AuthorizationClient<T> {
 /// enforcement points. Legacy bearer and awake lease behavior is separate.
 pub trait AuthorizationOperator {
     type Error;
+    /// Under existing explicit operator authority, atomically register an
+    /// action and publish/correct its descriptive metadata at the expected
+    /// durable revision. The service records the receiving publisher and
+    /// service time. Recheck context and authority after lock waiting. A
+    /// metadata edit changes no rule, expiry or completed-answer receipt,
+    /// including first publication on an action with existing rules. A stable
+    /// action identifies its existing feature; actual changed semantics require
+    /// a new action/version at the app owner. Metadata is no proof of behavior.
+    /// An earlier operator@1 service returns unknown_method; never fall back to
+    /// name-only registration while claiming published description.
+    fn register_described_action(&self, expected_revision: String, description: ActionDescription) -> Result<DescriptionEdit, Self::Error>;
+    /// Apply the complete exact permit or paired permits derived by trusted
+    /// runtime composition from this retained operator Allow and its runtime
+    /// admission. No caller supplies targets or rules. Authorization, question
+    /// occurrence and revision are checked while the Book is pinned and the
+    /// rights edit is locked. Commit complete permits and private durable
+    /// success proof in the same rights replacement; a first receipt-only
+    /// commit changes revision when permits already match. A previously
+    /// completed ID conflicts without rewriting rights, including after
+    /// revocation or expiry. Failed writes retain the answer for explicit
+    /// Retry. Missing composition is unavailable; missing, pending, foreign,
+    /// responder or non-Allow records are invalid. Both IDs and revision are
+    /// bounded to 128 UTF-8 bytes. An earlier operator@1 service returns
+    /// unknown_method; callers must not fall back to an untracked permit write.
+    fn apply_first_use_allow(&self, expected_revision: String, question_id: String) -> Result<PolicyEdit, Self::Error>;
     /// Read bounded current rules and catalogue under explicit operator
     /// authorization. Every continuation rechecks authorization; no enumeration
     /// session is retained for disconnected/slow callers.
@@ -3849,12 +12190,34 @@ pub trait AuthorizationOperator {
     /// no successful revocation; inspect current state before another intent.
     /// It does not cancel an existing connection-owned awake lease.
     fn revoke_rule(&self, expected_revision: String, subject: Subject, action: String, resource: String) -> Result<PolicyEdit, Self::Error>;
+    /// Atomically remove an answerer's question.answer/apps enrollment if the
+    /// revision matches. When also_revoke_grants is true, remove current
+    /// permits set by that answerer in the same edit; denies and rules set by
+    /// another program stay. With false, prior permits retain their stored
+    /// expiry. Stop ends future answers and never exits the answerer's process.
+    /// Authorization and revision are rechecked after lock waiting.
+    fn stop_answerer(&self, expected_revision: String, answerer: Subject, also_revoke_grants: bool) -> Result<PolicyEdit, Self::Error>;
+    /// Atomically remove any still-current permit among one or two exact
+    /// targets whose private question ID and setter match this retained
+    /// first-use answer. Earlier or later grants, person edits, blocks and
+    /// expired effects stay; zero matches or a revision change conflicts. The
+    /// asks answer record stays; this method is the permission effect of the
+    /// Panel's Undo. Authorization is rechecked after lock waiting.
+    fn revoke_answer_permits(&self, expected_revision: String, answerer: Subject, target: Subject, actions: Vec<String>, resource: String, question_id: String) -> Result<PolicyEdit, Self::Error>;
     /// As SetRule, recording why and an expiry ttl_ms after the service's edit
     /// time. ttl_ms 0 sets no expiry; otherwise it is 1..31536000000. why is
     /// 0..256 UTF-8 bytes without control characters. A retained rule with the
     /// same permit, reason and expiry is a no-op; any other difference writes,
     /// including a new expiry.
     fn set_rule_for(&self, expected_revision: String, rule: PolicyRule, ttl_ms: i64, why: String) -> Result<PolicyEdit, Self::Error>;
+    /// Atomically set one or two exact rules with the same target subject,
+    /// resource and permit, and distinct catalogued actions. The operator's
+    /// authorized intent may replace a previous opposite rule. All members are
+    /// validated before one revision and authority check under the rights edit
+    /// lock; the batch writes all or none with one setter, time, reason and
+    /// expiry. ttl_ms and why have SetRuleFor's bounds. A prior operator@1
+    /// service returns unknown_method.
+    fn set_rules_for(&self, expected_revision: String, rules: Vec<PolicyRule>, ttl_ms: i64, why: String) -> Result<PolicyEdit, Self::Error>;
     /// Read one exact rule with its provenance and expiry under operator
     /// authorization, rechecked after the read.
     fn read_rule(&self, subject: Subject, action: String, resource: String) -> Result<RuleRead, Self::Error>;
@@ -3870,6 +12233,23 @@ pub trait AuthorizationOperator {
     /// action is invalid. Retiring an action outside the catalogue is unknown.
     /// Decisions on a retired action read unknown_action.
     fn retire_action(&self, expected_revision: String, action: String) -> Result<ActionEdit, Self::Error>;
+    /// Under operator authorization, rechecked before returning, evaluate
+    /// subject on one exact action/resource exactly as a decision does and
+    /// report the step that decided it (RIGHTS-O14). It asks nobody, records
+    /// nothing and changes no rule or cache. An earlier operator@1 service
+    /// returns unknown_method.
+    fn explain_for(&self, subject: Subject, action: String, resource: String) -> Result<DecisionExplanation, Self::Error>;
+    /// Read every configured account-wide default and its switch under operator
+    /// authorization, rechecked before returning. An earlier operator@1 service
+    /// returns unknown_method.
+    fn list_defaults(&self) -> Result<DefaultPage, Self::Error>;
+    /// Atomically compare the expected durable revision and turn one configured
+    /// account-wide default on or off, recording the operator subject and
+    /// service time. An unconfigured name is invalid. Authorization and
+    /// revision are rechecked after lock waiting. The next fresh decision
+    /// observes the switch. No rule is written or removed. An earlier
+    /// operator@1 service returns unknown_method.
+    fn set_default(&self, expected_revision: String, name: String, on: bool) -> Result<DefaultEdit, Self::Error>;
 }
 
 pub struct AuthorizationOperatorClient<T> {
@@ -3888,6 +12268,54 @@ impl<T> AuthorizationOperatorClient<T> {
 
 impl<T: FrameTransport> AuthorizationOperator for AuthorizationOperatorClient<T> {
     type Error = CallError<T::Error>;
+    fn register_described_action(&self, expected_revision: String, description: ActionDescription) -> Result<DescriptionEdit, Self::Error> {
+        let args = OAAuthorizationOperatorRegisterDescribedActionArguments { expected_revision, description };
+        let arguments = service_encode(&args, service_check_oa_authorization_operator_register_described_action_arguments, enc_oa_authorization_operator_register_described_action_arguments, decode_oa_authorization_operator_register_described_action_arguments).map_err(CallError::Refusal)?;
+        let request = OAServiceFrame { version: 1, service: "abstraction.rights/operator@1".into(), method: "RegisterDescribedAction".into(), arguments };
+        let frame = service_encode(&request, service_check_oa_service_frame, enc_oa_service_frame, decode_oa_service_frame).map_err(CallError::Refusal)?;
+        let reply = self.transport.exchange_frame(&frame).map_err(CallError::Transport)?;
+        let reply = service_decode(&reply, decode_oa_service_reply).map_err(CallError::Refusal)?;
+        if reply.version != 1 {
+            return Err(CallError::Dispatch("unknown_version"));
+        }
+        if reply.service != "abstraction.rights/operator@1" || reply.method != "RegisterDescribedAction" {
+            return Err(CallError::Dispatch("mismatched_response"));
+        }
+        if !reply.ok {
+            let error = service_decode(&reply.payload, decode_oa_service_error).map_err(CallError::Refusal)?;
+            if error.code.is_empty() {
+                return Err(CallError::Dispatch("invalid_error"));
+            }
+            return Err(CallError::Service(ServiceError { code: error.code, message: error.message }));
+        }
+        let result = service_decode(&reply.payload, decode_oa_authorization_operator_register_described_action_result).map_err(CallError::Refusal)?;
+        Ok(result.value)
+    }
+
+    fn apply_first_use_allow(&self, expected_revision: String, question_id: String) -> Result<PolicyEdit, Self::Error> {
+        let args = OAAuthorizationOperatorApplyFirstUseAllowArguments { expected_revision, question_id };
+        let arguments = service_encode(&args, service_check_oa_authorization_operator_apply_first_use_allow_arguments, enc_oa_authorization_operator_apply_first_use_allow_arguments, decode_oa_authorization_operator_apply_first_use_allow_arguments).map_err(CallError::Refusal)?;
+        let request = OAServiceFrame { version: 1, service: "abstraction.rights/operator@1".into(), method: "ApplyFirstUseAllow".into(), arguments };
+        let frame = service_encode(&request, service_check_oa_service_frame, enc_oa_service_frame, decode_oa_service_frame).map_err(CallError::Refusal)?;
+        let reply = self.transport.exchange_frame(&frame).map_err(CallError::Transport)?;
+        let reply = service_decode(&reply, decode_oa_service_reply).map_err(CallError::Refusal)?;
+        if reply.version != 1 {
+            return Err(CallError::Dispatch("unknown_version"));
+        }
+        if reply.service != "abstraction.rights/operator@1" || reply.method != "ApplyFirstUseAllow" {
+            return Err(CallError::Dispatch("mismatched_response"));
+        }
+        if !reply.ok {
+            let error = service_decode(&reply.payload, decode_oa_service_error).map_err(CallError::Refusal)?;
+            if error.code.is_empty() {
+                return Err(CallError::Dispatch("invalid_error"));
+            }
+            return Err(CallError::Service(ServiceError { code: error.code, message: error.message }));
+        }
+        let result = service_decode(&reply.payload, decode_oa_authorization_operator_apply_first_use_allow_result).map_err(CallError::Refusal)?;
+        Ok(result.value)
+    }
+
     fn list_policy(&self, cursor: String, limit: i64) -> Result<PolicyPage, Self::Error> {
         let args = OAAuthorizationOperatorListPolicyArguments { cursor, limit };
         let arguments = service_encode(&args, service_check_oa_authorization_operator_list_policy_arguments, enc_oa_authorization_operator_list_policy_arguments, decode_oa_authorization_operator_list_policy_arguments).map_err(CallError::Refusal)?;
@@ -3960,6 +12388,54 @@ impl<T: FrameTransport> AuthorizationOperator for AuthorizationOperatorClient<T>
         Ok(result.value)
     }
 
+    fn stop_answerer(&self, expected_revision: String, answerer: Subject, also_revoke_grants: bool) -> Result<PolicyEdit, Self::Error> {
+        let args = OAAuthorizationOperatorStopAnswererArguments { expected_revision, answerer, also_revoke_grants };
+        let arguments = service_encode(&args, service_check_oa_authorization_operator_stop_answerer_arguments, enc_oa_authorization_operator_stop_answerer_arguments, decode_oa_authorization_operator_stop_answerer_arguments).map_err(CallError::Refusal)?;
+        let request = OAServiceFrame { version: 1, service: "abstraction.rights/operator@1".into(), method: "StopAnswerer".into(), arguments };
+        let frame = service_encode(&request, service_check_oa_service_frame, enc_oa_service_frame, decode_oa_service_frame).map_err(CallError::Refusal)?;
+        let reply = self.transport.exchange_frame(&frame).map_err(CallError::Transport)?;
+        let reply = service_decode(&reply, decode_oa_service_reply).map_err(CallError::Refusal)?;
+        if reply.version != 1 {
+            return Err(CallError::Dispatch("unknown_version"));
+        }
+        if reply.service != "abstraction.rights/operator@1" || reply.method != "StopAnswerer" {
+            return Err(CallError::Dispatch("mismatched_response"));
+        }
+        if !reply.ok {
+            let error = service_decode(&reply.payload, decode_oa_service_error).map_err(CallError::Refusal)?;
+            if error.code.is_empty() {
+                return Err(CallError::Dispatch("invalid_error"));
+            }
+            return Err(CallError::Service(ServiceError { code: error.code, message: error.message }));
+        }
+        let result = service_decode(&reply.payload, decode_oa_authorization_operator_stop_answerer_result).map_err(CallError::Refusal)?;
+        Ok(result.value)
+    }
+
+    fn revoke_answer_permits(&self, expected_revision: String, answerer: Subject, target: Subject, actions: Vec<String>, resource: String, question_id: String) -> Result<PolicyEdit, Self::Error> {
+        let args = OAAuthorizationOperatorRevokeAnswerPermitsArguments { expected_revision, answerer, target, actions, resource, question_id };
+        let arguments = service_encode(&args, service_check_oa_authorization_operator_revoke_answer_permits_arguments, enc_oa_authorization_operator_revoke_answer_permits_arguments, decode_oa_authorization_operator_revoke_answer_permits_arguments).map_err(CallError::Refusal)?;
+        let request = OAServiceFrame { version: 1, service: "abstraction.rights/operator@1".into(), method: "RevokeAnswerPermits".into(), arguments };
+        let frame = service_encode(&request, service_check_oa_service_frame, enc_oa_service_frame, decode_oa_service_frame).map_err(CallError::Refusal)?;
+        let reply = self.transport.exchange_frame(&frame).map_err(CallError::Transport)?;
+        let reply = service_decode(&reply, decode_oa_service_reply).map_err(CallError::Refusal)?;
+        if reply.version != 1 {
+            return Err(CallError::Dispatch("unknown_version"));
+        }
+        if reply.service != "abstraction.rights/operator@1" || reply.method != "RevokeAnswerPermits" {
+            return Err(CallError::Dispatch("mismatched_response"));
+        }
+        if !reply.ok {
+            let error = service_decode(&reply.payload, decode_oa_service_error).map_err(CallError::Refusal)?;
+            if error.code.is_empty() {
+                return Err(CallError::Dispatch("invalid_error"));
+            }
+            return Err(CallError::Service(ServiceError { code: error.code, message: error.message }));
+        }
+        let result = service_decode(&reply.payload, decode_oa_authorization_operator_revoke_answer_permits_result).map_err(CallError::Refusal)?;
+        Ok(result.value)
+    }
+
     fn set_rule_for(&self, expected_revision: String, rule: PolicyRule, ttl_ms: i64, why: String) -> Result<PolicyEdit, Self::Error> {
         let args = OAAuthorizationOperatorSetRuleForArguments { expected_revision, rule, ttl_ms, why };
         let arguments = service_encode(&args, service_check_oa_authorization_operator_set_rule_for_arguments, enc_oa_authorization_operator_set_rule_for_arguments, decode_oa_authorization_operator_set_rule_for_arguments).map_err(CallError::Refusal)?;
@@ -3981,6 +12457,30 @@ impl<T: FrameTransport> AuthorizationOperator for AuthorizationOperatorClient<T>
             return Err(CallError::Service(ServiceError { code: error.code, message: error.message }));
         }
         let result = service_decode(&reply.payload, decode_oa_authorization_operator_set_rule_for_result).map_err(CallError::Refusal)?;
+        Ok(result.value)
+    }
+
+    fn set_rules_for(&self, expected_revision: String, rules: Vec<PolicyRule>, ttl_ms: i64, why: String) -> Result<PolicyEdit, Self::Error> {
+        let args = OAAuthorizationOperatorSetRulesForArguments { expected_revision, rules, ttl_ms, why };
+        let arguments = service_encode(&args, service_check_oa_authorization_operator_set_rules_for_arguments, enc_oa_authorization_operator_set_rules_for_arguments, decode_oa_authorization_operator_set_rules_for_arguments).map_err(CallError::Refusal)?;
+        let request = OAServiceFrame { version: 1, service: "abstraction.rights/operator@1".into(), method: "SetRulesFor".into(), arguments };
+        let frame = service_encode(&request, service_check_oa_service_frame, enc_oa_service_frame, decode_oa_service_frame).map_err(CallError::Refusal)?;
+        let reply = self.transport.exchange_frame(&frame).map_err(CallError::Transport)?;
+        let reply = service_decode(&reply, decode_oa_service_reply).map_err(CallError::Refusal)?;
+        if reply.version != 1 {
+            return Err(CallError::Dispatch("unknown_version"));
+        }
+        if reply.service != "abstraction.rights/operator@1" || reply.method != "SetRulesFor" {
+            return Err(CallError::Dispatch("mismatched_response"));
+        }
+        if !reply.ok {
+            let error = service_decode(&reply.payload, decode_oa_service_error).map_err(CallError::Refusal)?;
+            if error.code.is_empty() {
+                return Err(CallError::Dispatch("invalid_error"));
+            }
+            return Err(CallError::Service(ServiceError { code: error.code, message: error.message }));
+        }
+        let result = service_decode(&reply.payload, decode_oa_authorization_operator_set_rules_for_result).map_err(CallError::Refusal)?;
         Ok(result.value)
     }
 
@@ -4054,5 +12554,3282 @@ impl<T: FrameTransport> AuthorizationOperator for AuthorizationOperatorClient<T>
         }
         let result = service_decode(&reply.payload, decode_oa_authorization_operator_retire_action_result).map_err(CallError::Refusal)?;
         Ok(result.value)
+    }
+
+    fn explain_for(&self, subject: Subject, action: String, resource: String) -> Result<DecisionExplanation, Self::Error> {
+        let args = OAAuthorizationOperatorExplainForArguments { subject, action, resource };
+        let arguments = service_encode(&args, service_check_oa_authorization_operator_explain_for_arguments, enc_oa_authorization_operator_explain_for_arguments, decode_oa_authorization_operator_explain_for_arguments).map_err(CallError::Refusal)?;
+        let request = OAServiceFrame { version: 1, service: "abstraction.rights/operator@1".into(), method: "ExplainFor".into(), arguments };
+        let frame = service_encode(&request, service_check_oa_service_frame, enc_oa_service_frame, decode_oa_service_frame).map_err(CallError::Refusal)?;
+        let reply = self.transport.exchange_frame(&frame).map_err(CallError::Transport)?;
+        let reply = service_decode(&reply, decode_oa_service_reply).map_err(CallError::Refusal)?;
+        if reply.version != 1 {
+            return Err(CallError::Dispatch("unknown_version"));
+        }
+        if reply.service != "abstraction.rights/operator@1" || reply.method != "ExplainFor" {
+            return Err(CallError::Dispatch("mismatched_response"));
+        }
+        if !reply.ok {
+            let error = service_decode(&reply.payload, decode_oa_service_error).map_err(CallError::Refusal)?;
+            if error.code.is_empty() {
+                return Err(CallError::Dispatch("invalid_error"));
+            }
+            return Err(CallError::Service(ServiceError { code: error.code, message: error.message }));
+        }
+        let result = service_decode(&reply.payload, decode_oa_authorization_operator_explain_for_result).map_err(CallError::Refusal)?;
+        Ok(result.value)
+    }
+
+    fn list_defaults(&self) -> Result<DefaultPage, Self::Error> {
+        let args = OAAuthorizationOperatorListDefaultsArguments {};
+        let arguments = service_encode(&args, service_check_oa_authorization_operator_list_defaults_arguments, enc_oa_authorization_operator_list_defaults_arguments, decode_oa_authorization_operator_list_defaults_arguments).map_err(CallError::Refusal)?;
+        let request = OAServiceFrame { version: 1, service: "abstraction.rights/operator@1".into(), method: "ListDefaults".into(), arguments };
+        let frame = service_encode(&request, service_check_oa_service_frame, enc_oa_service_frame, decode_oa_service_frame).map_err(CallError::Refusal)?;
+        let reply = self.transport.exchange_frame(&frame).map_err(CallError::Transport)?;
+        let reply = service_decode(&reply, decode_oa_service_reply).map_err(CallError::Refusal)?;
+        if reply.version != 1 {
+            return Err(CallError::Dispatch("unknown_version"));
+        }
+        if reply.service != "abstraction.rights/operator@1" || reply.method != "ListDefaults" {
+            return Err(CallError::Dispatch("mismatched_response"));
+        }
+        if !reply.ok {
+            let error = service_decode(&reply.payload, decode_oa_service_error).map_err(CallError::Refusal)?;
+            if error.code.is_empty() {
+                return Err(CallError::Dispatch("invalid_error"));
+            }
+            return Err(CallError::Service(ServiceError { code: error.code, message: error.message }));
+        }
+        let result = service_decode(&reply.payload, decode_oa_authorization_operator_list_defaults_result).map_err(CallError::Refusal)?;
+        Ok(result.value)
+    }
+
+    fn set_default(&self, expected_revision: String, name: String, on: bool) -> Result<DefaultEdit, Self::Error> {
+        let args = OAAuthorizationOperatorSetDefaultArguments { expected_revision, name, on };
+        let arguments = service_encode(&args, service_check_oa_authorization_operator_set_default_arguments, enc_oa_authorization_operator_set_default_arguments, decode_oa_authorization_operator_set_default_arguments).map_err(CallError::Refusal)?;
+        let request = OAServiceFrame { version: 1, service: "abstraction.rights/operator@1".into(), method: "SetDefault".into(), arguments };
+        let frame = service_encode(&request, service_check_oa_service_frame, enc_oa_service_frame, decode_oa_service_frame).map_err(CallError::Refusal)?;
+        let reply = self.transport.exchange_frame(&frame).map_err(CallError::Transport)?;
+        let reply = service_decode(&reply, decode_oa_service_reply).map_err(CallError::Refusal)?;
+        if reply.version != 1 {
+            return Err(CallError::Dispatch("unknown_version"));
+        }
+        if reply.service != "abstraction.rights/operator@1" || reply.method != "SetDefault" {
+            return Err(CallError::Dispatch("mismatched_response"));
+        }
+        if !reply.ok {
+            let error = service_decode(&reply.payload, decode_oa_service_error).map_err(CallError::Refusal)?;
+            if error.code.is_empty() {
+                return Err(CallError::Dispatch("invalid_error"));
+            }
+            return Err(CallError::Service(ServiceError { code: error.code, message: error.message }));
+        }
+        let result = service_decode(&reply.payload, decode_oa_authorization_operator_set_default_result).map_err(CallError::Refusal)?;
+        Ok(result.value)
+    }
+}
+
+pub trait SelectorAuthorization {
+    type Error;
+    fn list_permission_definitions(&self, cursor: String, limit: i64) -> Result<PermissionDefinitionPage, Self::Error>;
+    fn list_permission_bundles(&self, cursor: String, limit: i64) -> Result<PermissionBundlePage, Self::Error>;
+    fn check_batch(&self, request: CheckBatchRequest) -> Result<BatchDecision, Self::Error>;
+    fn check_batch_for(&self, subject: Subject, request: CheckBatchRequest) -> Result<BatchDecision, Self::Error>;
+    fn check_legacy_operation_for(&self, subject: Subject, request: LegacyOperationRequest) -> Result<Decision, Self::Error>;
+}
+
+pub struct SelectorAuthorizationClient<T> {
+    transport: T,
+}
+
+impl<T> SelectorAuthorizationClient<T> {
+    pub fn new(transport: T) -> Self {
+        Self { transport }
+    }
+
+    pub fn transport(&self) -> &T {
+        &self.transport
+    }
+}
+
+impl<T: FrameTransport> SelectorAuthorization for SelectorAuthorizationClient<T> {
+    type Error = CallError<T::Error>;
+    fn list_permission_definitions(&self, cursor: String, limit: i64) -> Result<PermissionDefinitionPage, Self::Error> {
+        let args = OASelectorAuthorizationListPermissionDefinitionsArguments { cursor, limit };
+        let arguments = service_encode(&args, service_check_oa_selector_authorization_list_permission_definitions_arguments, enc_oa_selector_authorization_list_permission_definitions_arguments, decode_oa_selector_authorization_list_permission_definitions_arguments).map_err(CallError::Refusal)?;
+        let request = OAServiceFrame { version: 1, service: "abstraction.rights/authorization@2".into(), method: "ListPermissionDefinitions".into(), arguments };
+        let frame = service_encode(&request, service_check_oa_service_frame, enc_oa_service_frame, decode_oa_service_frame).map_err(CallError::Refusal)?;
+        let reply = self.transport.exchange_frame(&frame).map_err(CallError::Transport)?;
+        let reply = service_decode(&reply, decode_oa_service_reply).map_err(CallError::Refusal)?;
+        if reply.version != 1 {
+            return Err(CallError::Dispatch("unknown_version"));
+        }
+        if reply.service != "abstraction.rights/authorization@2" || reply.method != "ListPermissionDefinitions" {
+            return Err(CallError::Dispatch("mismatched_response"));
+        }
+        if !reply.ok {
+            let error = service_decode(&reply.payload, decode_oa_service_error).map_err(CallError::Refusal)?;
+            if error.code.is_empty() {
+                return Err(CallError::Dispatch("invalid_error"));
+            }
+            return Err(CallError::Service(ServiceError { code: error.code, message: error.message }));
+        }
+        let result = service_decode(&reply.payload, decode_oa_selector_authorization_list_permission_definitions_result).map_err(CallError::Refusal)?;
+        Ok(result.value)
+    }
+
+    fn list_permission_bundles(&self, cursor: String, limit: i64) -> Result<PermissionBundlePage, Self::Error> {
+        let args = OASelectorAuthorizationListPermissionBundlesArguments { cursor, limit };
+        let arguments = service_encode(&args, service_check_oa_selector_authorization_list_permission_bundles_arguments, enc_oa_selector_authorization_list_permission_bundles_arguments, decode_oa_selector_authorization_list_permission_bundles_arguments).map_err(CallError::Refusal)?;
+        let request = OAServiceFrame { version: 1, service: "abstraction.rights/authorization@2".into(), method: "ListPermissionBundles".into(), arguments };
+        let frame = service_encode(&request, service_check_oa_service_frame, enc_oa_service_frame, decode_oa_service_frame).map_err(CallError::Refusal)?;
+        let reply = self.transport.exchange_frame(&frame).map_err(CallError::Transport)?;
+        let reply = service_decode(&reply, decode_oa_service_reply).map_err(CallError::Refusal)?;
+        if reply.version != 1 {
+            return Err(CallError::Dispatch("unknown_version"));
+        }
+        if reply.service != "abstraction.rights/authorization@2" || reply.method != "ListPermissionBundles" {
+            return Err(CallError::Dispatch("mismatched_response"));
+        }
+        if !reply.ok {
+            let error = service_decode(&reply.payload, decode_oa_service_error).map_err(CallError::Refusal)?;
+            if error.code.is_empty() {
+                return Err(CallError::Dispatch("invalid_error"));
+            }
+            return Err(CallError::Service(ServiceError { code: error.code, message: error.message }));
+        }
+        let result = service_decode(&reply.payload, decode_oa_selector_authorization_list_permission_bundles_result).map_err(CallError::Refusal)?;
+        Ok(result.value)
+    }
+
+    fn check_batch(&self, request: CheckBatchRequest) -> Result<BatchDecision, Self::Error> {
+        let args = OASelectorAuthorizationCheckBatchArguments { request };
+        let arguments = service_encode(&args, service_check_oa_selector_authorization_check_batch_arguments, enc_oa_selector_authorization_check_batch_arguments, decode_oa_selector_authorization_check_batch_arguments).map_err(CallError::Refusal)?;
+        let request = OAServiceFrame { version: 1, service: "abstraction.rights/authorization@2".into(), method: "CheckBatch".into(), arguments };
+        let frame = service_encode(&request, service_check_oa_service_frame, enc_oa_service_frame, decode_oa_service_frame).map_err(CallError::Refusal)?;
+        let reply = self.transport.exchange_frame(&frame).map_err(CallError::Transport)?;
+        let reply = service_decode(&reply, decode_oa_service_reply).map_err(CallError::Refusal)?;
+        if reply.version != 1 {
+            return Err(CallError::Dispatch("unknown_version"));
+        }
+        if reply.service != "abstraction.rights/authorization@2" || reply.method != "CheckBatch" {
+            return Err(CallError::Dispatch("mismatched_response"));
+        }
+        if !reply.ok {
+            let error = service_decode(&reply.payload, decode_oa_service_error).map_err(CallError::Refusal)?;
+            if error.code.is_empty() {
+                return Err(CallError::Dispatch("invalid_error"));
+            }
+            return Err(CallError::Service(ServiceError { code: error.code, message: error.message }));
+        }
+        let result = service_decode(&reply.payload, decode_oa_selector_authorization_check_batch_result).map_err(CallError::Refusal)?;
+        Ok(result.value)
+    }
+
+    fn check_batch_for(&self, subject: Subject, request: CheckBatchRequest) -> Result<BatchDecision, Self::Error> {
+        let args = OASelectorAuthorizationCheckBatchForArguments { subject, request };
+        let arguments = service_encode(&args, service_check_oa_selector_authorization_check_batch_for_arguments, enc_oa_selector_authorization_check_batch_for_arguments, decode_oa_selector_authorization_check_batch_for_arguments).map_err(CallError::Refusal)?;
+        let request = OAServiceFrame { version: 1, service: "abstraction.rights/authorization@2".into(), method: "CheckBatchFor".into(), arguments };
+        let frame = service_encode(&request, service_check_oa_service_frame, enc_oa_service_frame, decode_oa_service_frame).map_err(CallError::Refusal)?;
+        let reply = self.transport.exchange_frame(&frame).map_err(CallError::Transport)?;
+        let reply = service_decode(&reply, decode_oa_service_reply).map_err(CallError::Refusal)?;
+        if reply.version != 1 {
+            return Err(CallError::Dispatch("unknown_version"));
+        }
+        if reply.service != "abstraction.rights/authorization@2" || reply.method != "CheckBatchFor" {
+            return Err(CallError::Dispatch("mismatched_response"));
+        }
+        if !reply.ok {
+            let error = service_decode(&reply.payload, decode_oa_service_error).map_err(CallError::Refusal)?;
+            if error.code.is_empty() {
+                return Err(CallError::Dispatch("invalid_error"));
+            }
+            return Err(CallError::Service(ServiceError { code: error.code, message: error.message }));
+        }
+        let result = service_decode(&reply.payload, decode_oa_selector_authorization_check_batch_for_result).map_err(CallError::Refusal)?;
+        Ok(result.value)
+    }
+
+    fn check_legacy_operation_for(&self, subject: Subject, request: LegacyOperationRequest) -> Result<Decision, Self::Error> {
+        let args = OASelectorAuthorizationCheckLegacyOperationForArguments { subject, request };
+        let arguments = service_encode(&args, service_check_oa_selector_authorization_check_legacy_operation_for_arguments, enc_oa_selector_authorization_check_legacy_operation_for_arguments, decode_oa_selector_authorization_check_legacy_operation_for_arguments).map_err(CallError::Refusal)?;
+        let request = OAServiceFrame { version: 1, service: "abstraction.rights/authorization@2".into(), method: "CheckLegacyOperationFor".into(), arguments };
+        let frame = service_encode(&request, service_check_oa_service_frame, enc_oa_service_frame, decode_oa_service_frame).map_err(CallError::Refusal)?;
+        let reply = self.transport.exchange_frame(&frame).map_err(CallError::Transport)?;
+        let reply = service_decode(&reply, decode_oa_service_reply).map_err(CallError::Refusal)?;
+        if reply.version != 1 {
+            return Err(CallError::Dispatch("unknown_version"));
+        }
+        if reply.service != "abstraction.rights/authorization@2" || reply.method != "CheckLegacyOperationFor" {
+            return Err(CallError::Dispatch("mismatched_response"));
+        }
+        if !reply.ok {
+            let error = service_decode(&reply.payload, decode_oa_service_error).map_err(CallError::Refusal)?;
+            if error.code.is_empty() {
+                return Err(CallError::Dispatch("invalid_error"));
+            }
+            return Err(CallError::Service(ServiceError { code: error.code, message: error.message }));
+        }
+        let result = service_decode(&reply.payload, decode_oa_selector_authorization_check_legacy_operation_for_result).map_err(CallError::Refusal)?;
+        Ok(result.value)
+    }
+}
+
+/// Existing explicit operator admission, receiving provenance and in-lock
+/// authority recheck apply. First-use methods accept no caller-supplied
+/// targets: trusted composition resolves and pins the new typed Book
+/// occurrence. Existing operator@1 completion records are preserved with their
+/// original semantics.
+pub trait SelectorAuthorizationOperator {
+    type Error;
+    fn list_selector_rules(&self, cursor: String, limit: i64) -> Result<SelectorRulePage, Self::Error>;
+    fn read_selector_rule(&self, subject: Subject, selection: PermissionSelection) -> Result<SelectorRuleRead, Self::Error>;
+    fn set_selector_rule(&self, expected_revision: String, rule: SelectorRule, ttl_ms: i64, why: String) -> Result<SelectorEdit, Self::Error>;
+    fn remove_selector_rule(&self, expected_revision: String, subject: Subject, selection: PermissionSelection) -> Result<SelectorEdit, Self::Error>;
+    fn apply_bundle(&self, expected_revision: String, subject: Subject, bundle_ref: String, selector: ResourceSelector, ttl_ms: i64, why: String) -> Result<SelectorEdit, Self::Error>;
+    fn remove_bundle(&self, expected_revision: String, subject: Subject, origin_id: String) -> Result<SelectorEdit, Self::Error>;
+    fn apply_permission_allow(&self, expected_revision: String, question_id: String) -> Result<SelectorEdit, Self::Error>;
+    fn undo_permission_effect(&self, expected_revision: String, question_id: String) -> Result<SelectorEdit, Self::Error>;
+}
+
+pub struct SelectorAuthorizationOperatorClient<T> {
+    transport: T,
+}
+
+impl<T> SelectorAuthorizationOperatorClient<T> {
+    pub fn new(transport: T) -> Self {
+        Self { transport }
+    }
+
+    pub fn transport(&self) -> &T {
+        &self.transport
+    }
+}
+
+impl<T: FrameTransport> SelectorAuthorizationOperator for SelectorAuthorizationOperatorClient<T> {
+    type Error = CallError<T::Error>;
+    fn list_selector_rules(&self, cursor: String, limit: i64) -> Result<SelectorRulePage, Self::Error> {
+        let args = OASelectorAuthorizationOperatorListSelectorRulesArguments { cursor, limit };
+        let arguments = service_encode(&args, service_check_oa_selector_authorization_operator_list_selector_rules_arguments, enc_oa_selector_authorization_operator_list_selector_rules_arguments, decode_oa_selector_authorization_operator_list_selector_rules_arguments).map_err(CallError::Refusal)?;
+        let request = OAServiceFrame { version: 1, service: "abstraction.rights/operator@2".into(), method: "ListSelectorRules".into(), arguments };
+        let frame = service_encode(&request, service_check_oa_service_frame, enc_oa_service_frame, decode_oa_service_frame).map_err(CallError::Refusal)?;
+        let reply = self.transport.exchange_frame(&frame).map_err(CallError::Transport)?;
+        let reply = service_decode(&reply, decode_oa_service_reply).map_err(CallError::Refusal)?;
+        if reply.version != 1 {
+            return Err(CallError::Dispatch("unknown_version"));
+        }
+        if reply.service != "abstraction.rights/operator@2" || reply.method != "ListSelectorRules" {
+            return Err(CallError::Dispatch("mismatched_response"));
+        }
+        if !reply.ok {
+            let error = service_decode(&reply.payload, decode_oa_service_error).map_err(CallError::Refusal)?;
+            if error.code.is_empty() {
+                return Err(CallError::Dispatch("invalid_error"));
+            }
+            return Err(CallError::Service(ServiceError { code: error.code, message: error.message }));
+        }
+        let result = service_decode(&reply.payload, decode_oa_selector_authorization_operator_list_selector_rules_result).map_err(CallError::Refusal)?;
+        Ok(result.value)
+    }
+
+    fn read_selector_rule(&self, subject: Subject, selection: PermissionSelection) -> Result<SelectorRuleRead, Self::Error> {
+        let args = OASelectorAuthorizationOperatorReadSelectorRuleArguments { subject, selection };
+        let arguments = service_encode(&args, service_check_oa_selector_authorization_operator_read_selector_rule_arguments, enc_oa_selector_authorization_operator_read_selector_rule_arguments, decode_oa_selector_authorization_operator_read_selector_rule_arguments).map_err(CallError::Refusal)?;
+        let request = OAServiceFrame { version: 1, service: "abstraction.rights/operator@2".into(), method: "ReadSelectorRule".into(), arguments };
+        let frame = service_encode(&request, service_check_oa_service_frame, enc_oa_service_frame, decode_oa_service_frame).map_err(CallError::Refusal)?;
+        let reply = self.transport.exchange_frame(&frame).map_err(CallError::Transport)?;
+        let reply = service_decode(&reply, decode_oa_service_reply).map_err(CallError::Refusal)?;
+        if reply.version != 1 {
+            return Err(CallError::Dispatch("unknown_version"));
+        }
+        if reply.service != "abstraction.rights/operator@2" || reply.method != "ReadSelectorRule" {
+            return Err(CallError::Dispatch("mismatched_response"));
+        }
+        if !reply.ok {
+            let error = service_decode(&reply.payload, decode_oa_service_error).map_err(CallError::Refusal)?;
+            if error.code.is_empty() {
+                return Err(CallError::Dispatch("invalid_error"));
+            }
+            return Err(CallError::Service(ServiceError { code: error.code, message: error.message }));
+        }
+        let result = service_decode(&reply.payload, decode_oa_selector_authorization_operator_read_selector_rule_result).map_err(CallError::Refusal)?;
+        Ok(result.value)
+    }
+
+    fn set_selector_rule(&self, expected_revision: String, rule: SelectorRule, ttl_ms: i64, why: String) -> Result<SelectorEdit, Self::Error> {
+        let args = OASelectorAuthorizationOperatorSetSelectorRuleArguments { expected_revision, rule, ttl_ms, why };
+        let arguments = service_encode(&args, service_check_oa_selector_authorization_operator_set_selector_rule_arguments, enc_oa_selector_authorization_operator_set_selector_rule_arguments, decode_oa_selector_authorization_operator_set_selector_rule_arguments).map_err(CallError::Refusal)?;
+        let request = OAServiceFrame { version: 1, service: "abstraction.rights/operator@2".into(), method: "SetSelectorRule".into(), arguments };
+        let frame = service_encode(&request, service_check_oa_service_frame, enc_oa_service_frame, decode_oa_service_frame).map_err(CallError::Refusal)?;
+        let reply = self.transport.exchange_frame(&frame).map_err(CallError::Transport)?;
+        let reply = service_decode(&reply, decode_oa_service_reply).map_err(CallError::Refusal)?;
+        if reply.version != 1 {
+            return Err(CallError::Dispatch("unknown_version"));
+        }
+        if reply.service != "abstraction.rights/operator@2" || reply.method != "SetSelectorRule" {
+            return Err(CallError::Dispatch("mismatched_response"));
+        }
+        if !reply.ok {
+            let error = service_decode(&reply.payload, decode_oa_service_error).map_err(CallError::Refusal)?;
+            if error.code.is_empty() {
+                return Err(CallError::Dispatch("invalid_error"));
+            }
+            return Err(CallError::Service(ServiceError { code: error.code, message: error.message }));
+        }
+        let result = service_decode(&reply.payload, decode_oa_selector_authorization_operator_set_selector_rule_result).map_err(CallError::Refusal)?;
+        Ok(result.value)
+    }
+
+    fn remove_selector_rule(&self, expected_revision: String, subject: Subject, selection: PermissionSelection) -> Result<SelectorEdit, Self::Error> {
+        let args = OASelectorAuthorizationOperatorRemoveSelectorRuleArguments { expected_revision, subject, selection };
+        let arguments = service_encode(&args, service_check_oa_selector_authorization_operator_remove_selector_rule_arguments, enc_oa_selector_authorization_operator_remove_selector_rule_arguments, decode_oa_selector_authorization_operator_remove_selector_rule_arguments).map_err(CallError::Refusal)?;
+        let request = OAServiceFrame { version: 1, service: "abstraction.rights/operator@2".into(), method: "RemoveSelectorRule".into(), arguments };
+        let frame = service_encode(&request, service_check_oa_service_frame, enc_oa_service_frame, decode_oa_service_frame).map_err(CallError::Refusal)?;
+        let reply = self.transport.exchange_frame(&frame).map_err(CallError::Transport)?;
+        let reply = service_decode(&reply, decode_oa_service_reply).map_err(CallError::Refusal)?;
+        if reply.version != 1 {
+            return Err(CallError::Dispatch("unknown_version"));
+        }
+        if reply.service != "abstraction.rights/operator@2" || reply.method != "RemoveSelectorRule" {
+            return Err(CallError::Dispatch("mismatched_response"));
+        }
+        if !reply.ok {
+            let error = service_decode(&reply.payload, decode_oa_service_error).map_err(CallError::Refusal)?;
+            if error.code.is_empty() {
+                return Err(CallError::Dispatch("invalid_error"));
+            }
+            return Err(CallError::Service(ServiceError { code: error.code, message: error.message }));
+        }
+        let result = service_decode(&reply.payload, decode_oa_selector_authorization_operator_remove_selector_rule_result).map_err(CallError::Refusal)?;
+        Ok(result.value)
+    }
+
+    fn apply_bundle(&self, expected_revision: String, subject: Subject, bundle_ref: String, selector: ResourceSelector, ttl_ms: i64, why: String) -> Result<SelectorEdit, Self::Error> {
+        let args = OASelectorAuthorizationOperatorApplyBundleArguments { expected_revision, subject, bundle_ref, selector, ttl_ms, why };
+        let arguments = service_encode(&args, service_check_oa_selector_authorization_operator_apply_bundle_arguments, enc_oa_selector_authorization_operator_apply_bundle_arguments, decode_oa_selector_authorization_operator_apply_bundle_arguments).map_err(CallError::Refusal)?;
+        let request = OAServiceFrame { version: 1, service: "abstraction.rights/operator@2".into(), method: "ApplyBundle".into(), arguments };
+        let frame = service_encode(&request, service_check_oa_service_frame, enc_oa_service_frame, decode_oa_service_frame).map_err(CallError::Refusal)?;
+        let reply = self.transport.exchange_frame(&frame).map_err(CallError::Transport)?;
+        let reply = service_decode(&reply, decode_oa_service_reply).map_err(CallError::Refusal)?;
+        if reply.version != 1 {
+            return Err(CallError::Dispatch("unknown_version"));
+        }
+        if reply.service != "abstraction.rights/operator@2" || reply.method != "ApplyBundle" {
+            return Err(CallError::Dispatch("mismatched_response"));
+        }
+        if !reply.ok {
+            let error = service_decode(&reply.payload, decode_oa_service_error).map_err(CallError::Refusal)?;
+            if error.code.is_empty() {
+                return Err(CallError::Dispatch("invalid_error"));
+            }
+            return Err(CallError::Service(ServiceError { code: error.code, message: error.message }));
+        }
+        let result = service_decode(&reply.payload, decode_oa_selector_authorization_operator_apply_bundle_result).map_err(CallError::Refusal)?;
+        Ok(result.value)
+    }
+
+    fn remove_bundle(&self, expected_revision: String, subject: Subject, origin_id: String) -> Result<SelectorEdit, Self::Error> {
+        let args = OASelectorAuthorizationOperatorRemoveBundleArguments { expected_revision, subject, origin_id };
+        let arguments = service_encode(&args, service_check_oa_selector_authorization_operator_remove_bundle_arguments, enc_oa_selector_authorization_operator_remove_bundle_arguments, decode_oa_selector_authorization_operator_remove_bundle_arguments).map_err(CallError::Refusal)?;
+        let request = OAServiceFrame { version: 1, service: "abstraction.rights/operator@2".into(), method: "RemoveBundle".into(), arguments };
+        let frame = service_encode(&request, service_check_oa_service_frame, enc_oa_service_frame, decode_oa_service_frame).map_err(CallError::Refusal)?;
+        let reply = self.transport.exchange_frame(&frame).map_err(CallError::Transport)?;
+        let reply = service_decode(&reply, decode_oa_service_reply).map_err(CallError::Refusal)?;
+        if reply.version != 1 {
+            return Err(CallError::Dispatch("unknown_version"));
+        }
+        if reply.service != "abstraction.rights/operator@2" || reply.method != "RemoveBundle" {
+            return Err(CallError::Dispatch("mismatched_response"));
+        }
+        if !reply.ok {
+            let error = service_decode(&reply.payload, decode_oa_service_error).map_err(CallError::Refusal)?;
+            if error.code.is_empty() {
+                return Err(CallError::Dispatch("invalid_error"));
+            }
+            return Err(CallError::Service(ServiceError { code: error.code, message: error.message }));
+        }
+        let result = service_decode(&reply.payload, decode_oa_selector_authorization_operator_remove_bundle_result).map_err(CallError::Refusal)?;
+        Ok(result.value)
+    }
+
+    fn apply_permission_allow(&self, expected_revision: String, question_id: String) -> Result<SelectorEdit, Self::Error> {
+        let args = OASelectorAuthorizationOperatorApplyPermissionAllowArguments { expected_revision, question_id };
+        let arguments = service_encode(&args, service_check_oa_selector_authorization_operator_apply_permission_allow_arguments, enc_oa_selector_authorization_operator_apply_permission_allow_arguments, decode_oa_selector_authorization_operator_apply_permission_allow_arguments).map_err(CallError::Refusal)?;
+        let request = OAServiceFrame { version: 1, service: "abstraction.rights/operator@2".into(), method: "ApplyPermissionAllow".into(), arguments };
+        let frame = service_encode(&request, service_check_oa_service_frame, enc_oa_service_frame, decode_oa_service_frame).map_err(CallError::Refusal)?;
+        let reply = self.transport.exchange_frame(&frame).map_err(CallError::Transport)?;
+        let reply = service_decode(&reply, decode_oa_service_reply).map_err(CallError::Refusal)?;
+        if reply.version != 1 {
+            return Err(CallError::Dispatch("unknown_version"));
+        }
+        if reply.service != "abstraction.rights/operator@2" || reply.method != "ApplyPermissionAllow" {
+            return Err(CallError::Dispatch("mismatched_response"));
+        }
+        if !reply.ok {
+            let error = service_decode(&reply.payload, decode_oa_service_error).map_err(CallError::Refusal)?;
+            if error.code.is_empty() {
+                return Err(CallError::Dispatch("invalid_error"));
+            }
+            return Err(CallError::Service(ServiceError { code: error.code, message: error.message }));
+        }
+        let result = service_decode(&reply.payload, decode_oa_selector_authorization_operator_apply_permission_allow_result).map_err(CallError::Refusal)?;
+        Ok(result.value)
+    }
+
+    fn undo_permission_effect(&self, expected_revision: String, question_id: String) -> Result<SelectorEdit, Self::Error> {
+        let args = OASelectorAuthorizationOperatorUndoPermissionEffectArguments { expected_revision, question_id };
+        let arguments = service_encode(&args, service_check_oa_selector_authorization_operator_undo_permission_effect_arguments, enc_oa_selector_authorization_operator_undo_permission_effect_arguments, decode_oa_selector_authorization_operator_undo_permission_effect_arguments).map_err(CallError::Refusal)?;
+        let request = OAServiceFrame { version: 1, service: "abstraction.rights/operator@2".into(), method: "UndoPermissionEffect".into(), arguments };
+        let frame = service_encode(&request, service_check_oa_service_frame, enc_oa_service_frame, decode_oa_service_frame).map_err(CallError::Refusal)?;
+        let reply = self.transport.exchange_frame(&frame).map_err(CallError::Transport)?;
+        let reply = service_decode(&reply, decode_oa_service_reply).map_err(CallError::Refusal)?;
+        if reply.version != 1 {
+            return Err(CallError::Dispatch("unknown_version"));
+        }
+        if reply.service != "abstraction.rights/operator@2" || reply.method != "UndoPermissionEffect" {
+            return Err(CallError::Dispatch("mismatched_response"));
+        }
+        if !reply.ok {
+            let error = service_decode(&reply.payload, decode_oa_service_error).map_err(CallError::Refusal)?;
+            if error.code.is_empty() {
+                return Err(CallError::Dispatch("invalid_error"));
+            }
+            return Err(CallError::Service(ServiceError { code: error.code, message: error.message }));
+        }
+        let result = service_decode(&reply.payload, decode_oa_selector_authorization_operator_undo_permission_effect_result).map_err(CallError::Refusal)?;
+        Ok(result.value)
+    }
+}
+
+fn named_encode_request(v: &Request, depth: i32) -> Result<Vec<u8>, Refusal> {
+    match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        let mut out = Vec::new();
+        enc_request(&mut out, v, depth);
+        out
+    })) {
+        Ok(out) => Ok(out),
+        Err(p) => match p.downcast::<Refusal>() {
+            Ok(e) => Err(*e),
+            Err(p) => std::panic::resume_unwind(p),
+        },
+    }
+}
+
+fn decode_request_at(data: &[u8], depth: i32, limit: i32) -> Result<(Request, usize), Refusal> {
+    let mut r = Reader { buf: data, pos: 0, depth, limit: if limit < DEPTH_LIMIT { limit } else { DEPTH_LIMIT } };
+    if depth < 0 || limit < 1 {
+        return r.refuse("depth_exceeded");
+    }
+    r.skip_ws();
+    let v = decode_request(&mut r)?;
+    Ok((v, r.pos))
+}
+
+fn check_request(v: &Request, depth: i32, limit: i32) -> Result<(), Refusal> {
+    if depth < 0 || limit < 1 {
+        return Err(Refusal { word: "depth_exceeded", offset: 0 });
+    }
+    let out = named_encode_request(v, depth)?;
+    decode_request_at(&out, depth, limit).map(|_| ())
+}
+
+fn encode_request_at(v: &Request, depth: i32) -> Result<Vec<u8>, Refusal> {
+    if !(0..DEPTH_LIMIT).contains(&depth) {
+        return Err(Refusal { word: "depth_exceeded", offset: 0 });
+    }
+    let out = named_encode_request(v, depth)?;
+    decode_request_at(&out, depth, DEPTH_LIMIT)?;
+    Ok(out)
+}
+
+pub fn encode_request_document(v: &Request) -> Result<Vec<u8>, Refusal> {
+    let mut out = encode_request_at(v, 0)?;
+    out.push(b'\n');
+    Ok(out)
+}
+
+pub fn decode_request_document(data: &[u8]) -> Result<Request, Refusal> {
+    let (v, n) = decode_request_at(data, 0, DEPTH_LIMIT)?;
+    let mut r = Reader { buf: data, pos: n, depth: 0, limit: DEPTH_LIMIT };
+    r.skip_ws();
+    if r.pos != data.len() {
+        return r.refuse("trailing_bytes");
+    }
+    Ok(v)
+}
+
+fn named_encode_app_metadata(v: &AppMetadata, depth: i32) -> Result<Vec<u8>, Refusal> {
+    match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        let mut out = Vec::new();
+        enc_app_metadata(&mut out, v, depth);
+        out
+    })) {
+        Ok(out) => Ok(out),
+        Err(p) => match p.downcast::<Refusal>() {
+            Ok(e) => Err(*e),
+            Err(p) => std::panic::resume_unwind(p),
+        },
+    }
+}
+
+fn decode_app_metadata_at(data: &[u8], depth: i32, limit: i32) -> Result<(AppMetadata, usize), Refusal> {
+    let mut r = Reader { buf: data, pos: 0, depth, limit: if limit < DEPTH_LIMIT { limit } else { DEPTH_LIMIT } };
+    if depth < 0 || limit < 1 {
+        return r.refuse("depth_exceeded");
+    }
+    r.skip_ws();
+    let v = decode_app_metadata(&mut r)?;
+    Ok((v, r.pos))
+}
+
+fn check_app_metadata(v: &AppMetadata, depth: i32, limit: i32) -> Result<(), Refusal> {
+    if depth < 0 || limit < 1 {
+        return Err(Refusal { word: "depth_exceeded", offset: 0 });
+    }
+    let out = named_encode_app_metadata(v, depth)?;
+    decode_app_metadata_at(&out, depth, limit).map(|_| ())
+}
+
+fn encode_app_metadata_at(v: &AppMetadata, depth: i32) -> Result<Vec<u8>, Refusal> {
+    if !(0..DEPTH_LIMIT).contains(&depth) {
+        return Err(Refusal { word: "depth_exceeded", offset: 0 });
+    }
+    let out = named_encode_app_metadata(v, depth)?;
+    decode_app_metadata_at(&out, depth, DEPTH_LIMIT)?;
+    Ok(out)
+}
+
+pub fn encode_app_metadata_document(v: &AppMetadata) -> Result<Vec<u8>, Refusal> {
+    let mut out = encode_app_metadata_at(v, 0)?;
+    out.push(b'\n');
+    Ok(out)
+}
+
+pub fn decode_app_metadata_document(data: &[u8]) -> Result<AppMetadata, Refusal> {
+    let (v, n) = decode_app_metadata_at(data, 0, DEPTH_LIMIT)?;
+    let mut r = Reader { buf: data, pos: n, depth: 0, limit: DEPTH_LIMIT };
+    r.skip_ws();
+    if r.pos != data.len() {
+        return r.refuse("trailing_bytes");
+    }
+    Ok(v)
+}
+
+fn named_encode_hold_metadata(v: &HoldMetadata, depth: i32) -> Result<Vec<u8>, Refusal> {
+    match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        let mut out = Vec::new();
+        enc_hold_metadata(&mut out, v, depth);
+        out
+    })) {
+        Ok(out) => Ok(out),
+        Err(p) => match p.downcast::<Refusal>() {
+            Ok(e) => Err(*e),
+            Err(p) => std::panic::resume_unwind(p),
+        },
+    }
+}
+
+fn decode_hold_metadata_at(data: &[u8], depth: i32, limit: i32) -> Result<(HoldMetadata, usize), Refusal> {
+    let mut r = Reader { buf: data, pos: 0, depth, limit: if limit < DEPTH_LIMIT { limit } else { DEPTH_LIMIT } };
+    if depth < 0 || limit < 1 {
+        return r.refuse("depth_exceeded");
+    }
+    r.skip_ws();
+    let v = decode_hold_metadata(&mut r)?;
+    Ok((v, r.pos))
+}
+
+fn check_hold_metadata(v: &HoldMetadata, depth: i32, limit: i32) -> Result<(), Refusal> {
+    if depth < 0 || limit < 1 {
+        return Err(Refusal { word: "depth_exceeded", offset: 0 });
+    }
+    let out = named_encode_hold_metadata(v, depth)?;
+    decode_hold_metadata_at(&out, depth, limit).map(|_| ())
+}
+
+fn encode_hold_metadata_at(v: &HoldMetadata, depth: i32) -> Result<Vec<u8>, Refusal> {
+    if !(0..DEPTH_LIMIT).contains(&depth) {
+        return Err(Refusal { word: "depth_exceeded", offset: 0 });
+    }
+    let out = named_encode_hold_metadata(v, depth)?;
+    decode_hold_metadata_at(&out, depth, DEPTH_LIMIT)?;
+    Ok(out)
+}
+
+pub fn encode_hold_metadata_document(v: &HoldMetadata) -> Result<Vec<u8>, Refusal> {
+    let mut out = encode_hold_metadata_at(v, 0)?;
+    out.push(b'\n');
+    Ok(out)
+}
+
+pub fn decode_hold_metadata_document(data: &[u8]) -> Result<HoldMetadata, Refusal> {
+    let (v, n) = decode_hold_metadata_at(data, 0, DEPTH_LIMIT)?;
+    let mut r = Reader { buf: data, pos: n, depth: 0, limit: DEPTH_LIMIT };
+    r.skip_ws();
+    if r.pos != data.len() {
+        return r.refuse("trailing_bytes");
+    }
+    Ok(v)
+}
+
+fn named_encode_response_metadata(v: &ResponseMetadata, depth: i32) -> Result<Vec<u8>, Refusal> {
+    match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        let mut out = Vec::new();
+        enc_response_metadata(&mut out, v, depth);
+        out
+    })) {
+        Ok(out) => Ok(out),
+        Err(p) => match p.downcast::<Refusal>() {
+            Ok(e) => Err(*e),
+            Err(p) => std::panic::resume_unwind(p),
+        },
+    }
+}
+
+fn decode_response_metadata_at(data: &[u8], depth: i32, limit: i32) -> Result<(ResponseMetadata, usize), Refusal> {
+    let mut r = Reader { buf: data, pos: 0, depth, limit: if limit < DEPTH_LIMIT { limit } else { DEPTH_LIMIT } };
+    if depth < 0 || limit < 1 {
+        return r.refuse("depth_exceeded");
+    }
+    r.skip_ws();
+    let v = decode_response_metadata(&mut r)?;
+    Ok((v, r.pos))
+}
+
+fn check_response_metadata(v: &ResponseMetadata, depth: i32, limit: i32) -> Result<(), Refusal> {
+    if depth < 0 || limit < 1 {
+        return Err(Refusal { word: "depth_exceeded", offset: 0 });
+    }
+    let out = named_encode_response_metadata(v, depth)?;
+    decode_response_metadata_at(&out, depth, limit).map(|_| ())
+}
+
+fn encode_response_metadata_at(v: &ResponseMetadata, depth: i32) -> Result<Vec<u8>, Refusal> {
+    if !(0..DEPTH_LIMIT).contains(&depth) {
+        return Err(Refusal { word: "depth_exceeded", offset: 0 });
+    }
+    let out = named_encode_response_metadata(v, depth)?;
+    decode_response_metadata_at(&out, depth, DEPTH_LIMIT)?;
+    Ok(out)
+}
+
+pub fn encode_response_metadata_document(v: &ResponseMetadata) -> Result<Vec<u8>, Refusal> {
+    let mut out = encode_response_metadata_at(v, 0)?;
+    out.push(b'\n');
+    Ok(out)
+}
+
+pub fn decode_response_metadata_document(data: &[u8]) -> Result<ResponseMetadata, Refusal> {
+    let (v, n) = decode_response_metadata_at(data, 0, DEPTH_LIMIT)?;
+    let mut r = Reader { buf: data, pos: n, depth: 0, limit: DEPTH_LIMIT };
+    r.skip_ws();
+    if r.pos != data.len() {
+        return r.refuse("trailing_bytes");
+    }
+    Ok(v)
+}
+
+fn named_encode_subject(v: &Subject, depth: i32) -> Result<Vec<u8>, Refusal> {
+    match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        let mut out = Vec::new();
+        enc_subject(&mut out, v, depth);
+        out
+    })) {
+        Ok(out) => Ok(out),
+        Err(p) => match p.downcast::<Refusal>() {
+            Ok(e) => Err(*e),
+            Err(p) => std::panic::resume_unwind(p),
+        },
+    }
+}
+
+fn decode_subject_at(data: &[u8], depth: i32, limit: i32) -> Result<(Subject, usize), Refusal> {
+    let mut r = Reader { buf: data, pos: 0, depth, limit: if limit < DEPTH_LIMIT { limit } else { DEPTH_LIMIT } };
+    if depth < 0 || limit < 1 {
+        return r.refuse("depth_exceeded");
+    }
+    r.skip_ws();
+    let v = decode_subject(&mut r)?;
+    Ok((v, r.pos))
+}
+
+fn check_subject(v: &Subject, depth: i32, limit: i32) -> Result<(), Refusal> {
+    if depth < 0 || limit < 1 {
+        return Err(Refusal { word: "depth_exceeded", offset: 0 });
+    }
+    let out = named_encode_subject(v, depth)?;
+    decode_subject_at(&out, depth, limit).map(|_| ())
+}
+
+fn encode_subject_at(v: &Subject, depth: i32) -> Result<Vec<u8>, Refusal> {
+    if !(0..DEPTH_LIMIT).contains(&depth) {
+        return Err(Refusal { word: "depth_exceeded", offset: 0 });
+    }
+    let out = named_encode_subject(v, depth)?;
+    decode_subject_at(&out, depth, DEPTH_LIMIT)?;
+    Ok(out)
+}
+
+pub fn encode_subject_document(v: &Subject) -> Result<Vec<u8>, Refusal> {
+    let mut out = encode_subject_at(v, 0)?;
+    out.push(b'\n');
+    Ok(out)
+}
+
+pub fn decode_subject_document(data: &[u8]) -> Result<Subject, Refusal> {
+    let (v, n) = decode_subject_at(data, 0, DEPTH_LIMIT)?;
+    let mut r = Reader { buf: data, pos: n, depth: 0, limit: DEPTH_LIMIT };
+    r.skip_ws();
+    if r.pos != data.len() {
+        return r.refuse("trailing_bytes");
+    }
+    Ok(v)
+}
+
+fn named_encode_decision(v: &Decision, depth: i32) -> Result<Vec<u8>, Refusal> {
+    match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        let mut out = Vec::new();
+        enc_decision(&mut out, v, depth);
+        out
+    })) {
+        Ok(out) => Ok(out),
+        Err(p) => match p.downcast::<Refusal>() {
+            Ok(e) => Err(*e),
+            Err(p) => std::panic::resume_unwind(p),
+        },
+    }
+}
+
+fn decode_decision_at(data: &[u8], depth: i32, limit: i32) -> Result<(Decision, usize), Refusal> {
+    let mut r = Reader { buf: data, pos: 0, depth, limit: if limit < DEPTH_LIMIT { limit } else { DEPTH_LIMIT } };
+    if depth < 0 || limit < 1 {
+        return r.refuse("depth_exceeded");
+    }
+    r.skip_ws();
+    let v = decode_decision(&mut r)?;
+    Ok((v, r.pos))
+}
+
+fn check_decision(v: &Decision, depth: i32, limit: i32) -> Result<(), Refusal> {
+    if depth < 0 || limit < 1 {
+        return Err(Refusal { word: "depth_exceeded", offset: 0 });
+    }
+    let out = named_encode_decision(v, depth)?;
+    decode_decision_at(&out, depth, limit).map(|_| ())
+}
+
+fn encode_decision_at(v: &Decision, depth: i32) -> Result<Vec<u8>, Refusal> {
+    if !(0..DEPTH_LIMIT).contains(&depth) {
+        return Err(Refusal { word: "depth_exceeded", offset: 0 });
+    }
+    let out = named_encode_decision(v, depth)?;
+    decode_decision_at(&out, depth, DEPTH_LIMIT)?;
+    Ok(out)
+}
+
+pub fn encode_decision_document(v: &Decision) -> Result<Vec<u8>, Refusal> {
+    let mut out = encode_decision_at(v, 0)?;
+    out.push(b'\n');
+    Ok(out)
+}
+
+pub fn decode_decision_document(data: &[u8]) -> Result<Decision, Refusal> {
+    let (v, n) = decode_decision_at(data, 0, DEPTH_LIMIT)?;
+    let mut r = Reader { buf: data, pos: n, depth: 0, limit: DEPTH_LIMIT };
+    r.skip_ws();
+    if r.pos != data.len() {
+        return r.refuse("trailing_bytes");
+    }
+    Ok(v)
+}
+
+fn named_encode_policy_rule(v: &PolicyRule, depth: i32) -> Result<Vec<u8>, Refusal> {
+    match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        let mut out = Vec::new();
+        enc_policy_rule(&mut out, v, depth);
+        out
+    })) {
+        Ok(out) => Ok(out),
+        Err(p) => match p.downcast::<Refusal>() {
+            Ok(e) => Err(*e),
+            Err(p) => std::panic::resume_unwind(p),
+        },
+    }
+}
+
+fn decode_policy_rule_at(data: &[u8], depth: i32, limit: i32) -> Result<(PolicyRule, usize), Refusal> {
+    let mut r = Reader { buf: data, pos: 0, depth, limit: if limit < DEPTH_LIMIT { limit } else { DEPTH_LIMIT } };
+    if depth < 0 || limit < 1 {
+        return r.refuse("depth_exceeded");
+    }
+    r.skip_ws();
+    let v = decode_policy_rule(&mut r)?;
+    Ok((v, r.pos))
+}
+
+fn check_policy_rule(v: &PolicyRule, depth: i32, limit: i32) -> Result<(), Refusal> {
+    if depth < 0 || limit < 1 {
+        return Err(Refusal { word: "depth_exceeded", offset: 0 });
+    }
+    let out = named_encode_policy_rule(v, depth)?;
+    decode_policy_rule_at(&out, depth, limit).map(|_| ())
+}
+
+fn encode_policy_rule_at(v: &PolicyRule, depth: i32) -> Result<Vec<u8>, Refusal> {
+    if !(0..DEPTH_LIMIT).contains(&depth) {
+        return Err(Refusal { word: "depth_exceeded", offset: 0 });
+    }
+    let out = named_encode_policy_rule(v, depth)?;
+    decode_policy_rule_at(&out, depth, DEPTH_LIMIT)?;
+    Ok(out)
+}
+
+pub fn encode_policy_rule_document(v: &PolicyRule) -> Result<Vec<u8>, Refusal> {
+    let mut out = encode_policy_rule_at(v, 0)?;
+    out.push(b'\n');
+    Ok(out)
+}
+
+pub fn decode_policy_rule_document(data: &[u8]) -> Result<PolicyRule, Refusal> {
+    let (v, n) = decode_policy_rule_at(data, 0, DEPTH_LIMIT)?;
+    let mut r = Reader { buf: data, pos: n, depth: 0, limit: DEPTH_LIMIT };
+    r.skip_ws();
+    if r.pos != data.len() {
+        return r.refuse("trailing_bytes");
+    }
+    Ok(v)
+}
+
+fn named_encode_policy_page(v: &PolicyPage, depth: i32) -> Result<Vec<u8>, Refusal> {
+    match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        let mut out = Vec::new();
+        enc_policy_page(&mut out, v, depth);
+        out
+    })) {
+        Ok(out) => Ok(out),
+        Err(p) => match p.downcast::<Refusal>() {
+            Ok(e) => Err(*e),
+            Err(p) => std::panic::resume_unwind(p),
+        },
+    }
+}
+
+fn decode_policy_page_at(data: &[u8], depth: i32, limit: i32) -> Result<(PolicyPage, usize), Refusal> {
+    let mut r = Reader { buf: data, pos: 0, depth, limit: if limit < DEPTH_LIMIT { limit } else { DEPTH_LIMIT } };
+    if depth < 0 || limit < 1 {
+        return r.refuse("depth_exceeded");
+    }
+    r.skip_ws();
+    let v = decode_policy_page(&mut r)?;
+    Ok((v, r.pos))
+}
+
+fn check_policy_page(v: &PolicyPage, depth: i32, limit: i32) -> Result<(), Refusal> {
+    if depth < 0 || limit < 1 {
+        return Err(Refusal { word: "depth_exceeded", offset: 0 });
+    }
+    let out = named_encode_policy_page(v, depth)?;
+    decode_policy_page_at(&out, depth, limit).map(|_| ())
+}
+
+fn encode_policy_page_at(v: &PolicyPage, depth: i32) -> Result<Vec<u8>, Refusal> {
+    if !(0..DEPTH_LIMIT).contains(&depth) {
+        return Err(Refusal { word: "depth_exceeded", offset: 0 });
+    }
+    let out = named_encode_policy_page(v, depth)?;
+    decode_policy_page_at(&out, depth, DEPTH_LIMIT)?;
+    Ok(out)
+}
+
+pub fn encode_policy_page_document(v: &PolicyPage) -> Result<Vec<u8>, Refusal> {
+    let mut out = encode_policy_page_at(v, 0)?;
+    out.push(b'\n');
+    Ok(out)
+}
+
+pub fn decode_policy_page_document(data: &[u8]) -> Result<PolicyPage, Refusal> {
+    let (v, n) = decode_policy_page_at(data, 0, DEPTH_LIMIT)?;
+    let mut r = Reader { buf: data, pos: n, depth: 0, limit: DEPTH_LIMIT };
+    r.skip_ws();
+    if r.pos != data.len() {
+        return r.refuse("trailing_bytes");
+    }
+    Ok(v)
+}
+
+fn named_encode_policy_edit(v: &PolicyEdit, depth: i32) -> Result<Vec<u8>, Refusal> {
+    match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        let mut out = Vec::new();
+        enc_policy_edit(&mut out, v, depth);
+        out
+    })) {
+        Ok(out) => Ok(out),
+        Err(p) => match p.downcast::<Refusal>() {
+            Ok(e) => Err(*e),
+            Err(p) => std::panic::resume_unwind(p),
+        },
+    }
+}
+
+fn decode_policy_edit_at(data: &[u8], depth: i32, limit: i32) -> Result<(PolicyEdit, usize), Refusal> {
+    let mut r = Reader { buf: data, pos: 0, depth, limit: if limit < DEPTH_LIMIT { limit } else { DEPTH_LIMIT } };
+    if depth < 0 || limit < 1 {
+        return r.refuse("depth_exceeded");
+    }
+    r.skip_ws();
+    let v = decode_policy_edit(&mut r)?;
+    Ok((v, r.pos))
+}
+
+fn check_policy_edit(v: &PolicyEdit, depth: i32, limit: i32) -> Result<(), Refusal> {
+    if depth < 0 || limit < 1 {
+        return Err(Refusal { word: "depth_exceeded", offset: 0 });
+    }
+    let out = named_encode_policy_edit(v, depth)?;
+    decode_policy_edit_at(&out, depth, limit).map(|_| ())
+}
+
+fn encode_policy_edit_at(v: &PolicyEdit, depth: i32) -> Result<Vec<u8>, Refusal> {
+    if !(0..DEPTH_LIMIT).contains(&depth) {
+        return Err(Refusal { word: "depth_exceeded", offset: 0 });
+    }
+    let out = named_encode_policy_edit(v, depth)?;
+    decode_policy_edit_at(&out, depth, DEPTH_LIMIT)?;
+    Ok(out)
+}
+
+pub fn encode_policy_edit_document(v: &PolicyEdit) -> Result<Vec<u8>, Refusal> {
+    let mut out = encode_policy_edit_at(v, 0)?;
+    out.push(b'\n');
+    Ok(out)
+}
+
+pub fn decode_policy_edit_document(data: &[u8]) -> Result<PolicyEdit, Refusal> {
+    let (v, n) = decode_policy_edit_at(data, 0, DEPTH_LIMIT)?;
+    let mut r = Reader { buf: data, pos: n, depth: 0, limit: DEPTH_LIMIT };
+    r.skip_ws();
+    if r.pos != data.len() {
+        return r.refuse("trailing_bytes");
+    }
+    Ok(v)
+}
+
+fn named_encode_rule_record(v: &RuleRecord, depth: i32) -> Result<Vec<u8>, Refusal> {
+    match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        let mut out = Vec::new();
+        enc_rule_record(&mut out, v, depth);
+        out
+    })) {
+        Ok(out) => Ok(out),
+        Err(p) => match p.downcast::<Refusal>() {
+            Ok(e) => Err(*e),
+            Err(p) => std::panic::resume_unwind(p),
+        },
+    }
+}
+
+fn decode_rule_record_at(data: &[u8], depth: i32, limit: i32) -> Result<(RuleRecord, usize), Refusal> {
+    let mut r = Reader { buf: data, pos: 0, depth, limit: if limit < DEPTH_LIMIT { limit } else { DEPTH_LIMIT } };
+    if depth < 0 || limit < 1 {
+        return r.refuse("depth_exceeded");
+    }
+    r.skip_ws();
+    let v = decode_rule_record(&mut r)?;
+    Ok((v, r.pos))
+}
+
+fn check_rule_record(v: &RuleRecord, depth: i32, limit: i32) -> Result<(), Refusal> {
+    if depth < 0 || limit < 1 {
+        return Err(Refusal { word: "depth_exceeded", offset: 0 });
+    }
+    let out = named_encode_rule_record(v, depth)?;
+    decode_rule_record_at(&out, depth, limit).map(|_| ())
+}
+
+fn encode_rule_record_at(v: &RuleRecord, depth: i32) -> Result<Vec<u8>, Refusal> {
+    if !(0..DEPTH_LIMIT).contains(&depth) {
+        return Err(Refusal { word: "depth_exceeded", offset: 0 });
+    }
+    let out = named_encode_rule_record(v, depth)?;
+    decode_rule_record_at(&out, depth, DEPTH_LIMIT)?;
+    Ok(out)
+}
+
+pub fn encode_rule_record_document(v: &RuleRecord) -> Result<Vec<u8>, Refusal> {
+    let mut out = encode_rule_record_at(v, 0)?;
+    out.push(b'\n');
+    Ok(out)
+}
+
+pub fn decode_rule_record_document(data: &[u8]) -> Result<RuleRecord, Refusal> {
+    let (v, n) = decode_rule_record_at(data, 0, DEPTH_LIMIT)?;
+    let mut r = Reader { buf: data, pos: n, depth: 0, limit: DEPTH_LIMIT };
+    r.skip_ws();
+    if r.pos != data.len() {
+        return r.refuse("trailing_bytes");
+    }
+    Ok(v)
+}
+
+fn named_encode_rule_read(v: &RuleRead, depth: i32) -> Result<Vec<u8>, Refusal> {
+    match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        let mut out = Vec::new();
+        enc_rule_read(&mut out, v, depth);
+        out
+    })) {
+        Ok(out) => Ok(out),
+        Err(p) => match p.downcast::<Refusal>() {
+            Ok(e) => Err(*e),
+            Err(p) => std::panic::resume_unwind(p),
+        },
+    }
+}
+
+fn decode_rule_read_at(data: &[u8], depth: i32, limit: i32) -> Result<(RuleRead, usize), Refusal> {
+    let mut r = Reader { buf: data, pos: 0, depth, limit: if limit < DEPTH_LIMIT { limit } else { DEPTH_LIMIT } };
+    if depth < 0 || limit < 1 {
+        return r.refuse("depth_exceeded");
+    }
+    r.skip_ws();
+    let v = decode_rule_read(&mut r)?;
+    Ok((v, r.pos))
+}
+
+fn check_rule_read(v: &RuleRead, depth: i32, limit: i32) -> Result<(), Refusal> {
+    if depth < 0 || limit < 1 {
+        return Err(Refusal { word: "depth_exceeded", offset: 0 });
+    }
+    let out = named_encode_rule_read(v, depth)?;
+    decode_rule_read_at(&out, depth, limit).map(|_| ())
+}
+
+fn encode_rule_read_at(v: &RuleRead, depth: i32) -> Result<Vec<u8>, Refusal> {
+    if !(0..DEPTH_LIMIT).contains(&depth) {
+        return Err(Refusal { word: "depth_exceeded", offset: 0 });
+    }
+    let out = named_encode_rule_read(v, depth)?;
+    decode_rule_read_at(&out, depth, DEPTH_LIMIT)?;
+    Ok(out)
+}
+
+pub fn encode_rule_read_document(v: &RuleRead) -> Result<Vec<u8>, Refusal> {
+    let mut out = encode_rule_read_at(v, 0)?;
+    out.push(b'\n');
+    Ok(out)
+}
+
+pub fn decode_rule_read_document(data: &[u8]) -> Result<RuleRead, Refusal> {
+    let (v, n) = decode_rule_read_at(data, 0, DEPTH_LIMIT)?;
+    let mut r = Reader { buf: data, pos: n, depth: 0, limit: DEPTH_LIMIT };
+    r.skip_ws();
+    if r.pos != data.len() {
+        return r.refuse("trailing_bytes");
+    }
+    Ok(v)
+}
+
+fn named_encode_catalog_entry(v: &CatalogEntry, depth: i32) -> Result<Vec<u8>, Refusal> {
+    match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        let mut out = Vec::new();
+        enc_catalog_entry(&mut out, v, depth);
+        out
+    })) {
+        Ok(out) => Ok(out),
+        Err(p) => match p.downcast::<Refusal>() {
+            Ok(e) => Err(*e),
+            Err(p) => std::panic::resume_unwind(p),
+        },
+    }
+}
+
+fn decode_catalog_entry_at(data: &[u8], depth: i32, limit: i32) -> Result<(CatalogEntry, usize), Refusal> {
+    let mut r = Reader { buf: data, pos: 0, depth, limit: if limit < DEPTH_LIMIT { limit } else { DEPTH_LIMIT } };
+    if depth < 0 || limit < 1 {
+        return r.refuse("depth_exceeded");
+    }
+    r.skip_ws();
+    let v = decode_catalog_entry(&mut r)?;
+    Ok((v, r.pos))
+}
+
+fn check_catalog_entry(v: &CatalogEntry, depth: i32, limit: i32) -> Result<(), Refusal> {
+    if depth < 0 || limit < 1 {
+        return Err(Refusal { word: "depth_exceeded", offset: 0 });
+    }
+    let out = named_encode_catalog_entry(v, depth)?;
+    decode_catalog_entry_at(&out, depth, limit).map(|_| ())
+}
+
+fn encode_catalog_entry_at(v: &CatalogEntry, depth: i32) -> Result<Vec<u8>, Refusal> {
+    if !(0..DEPTH_LIMIT).contains(&depth) {
+        return Err(Refusal { word: "depth_exceeded", offset: 0 });
+    }
+    let out = named_encode_catalog_entry(v, depth)?;
+    decode_catalog_entry_at(&out, depth, DEPTH_LIMIT)?;
+    Ok(out)
+}
+
+pub fn encode_catalog_entry_document(v: &CatalogEntry) -> Result<Vec<u8>, Refusal> {
+    let mut out = encode_catalog_entry_at(v, 0)?;
+    out.push(b'\n');
+    Ok(out)
+}
+
+pub fn decode_catalog_entry_document(data: &[u8]) -> Result<CatalogEntry, Refusal> {
+    let (v, n) = decode_catalog_entry_at(data, 0, DEPTH_LIMIT)?;
+    let mut r = Reader { buf: data, pos: n, depth: 0, limit: DEPTH_LIMIT };
+    r.skip_ws();
+    if r.pos != data.len() {
+        return r.refuse("trailing_bytes");
+    }
+    Ok(v)
+}
+
+fn named_encode_action_description(v: &ActionDescription, depth: i32) -> Result<Vec<u8>, Refusal> {
+    match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        let mut out = Vec::new();
+        enc_action_description(&mut out, v, depth);
+        out
+    })) {
+        Ok(out) => Ok(out),
+        Err(p) => match p.downcast::<Refusal>() {
+            Ok(e) => Err(*e),
+            Err(p) => std::panic::resume_unwind(p),
+        },
+    }
+}
+
+fn decode_action_description_at(data: &[u8], depth: i32, limit: i32) -> Result<(ActionDescription, usize), Refusal> {
+    let mut r = Reader { buf: data, pos: 0, depth, limit: if limit < DEPTH_LIMIT { limit } else { DEPTH_LIMIT } };
+    if depth < 0 || limit < 1 {
+        return r.refuse("depth_exceeded");
+    }
+    r.skip_ws();
+    let v = decode_action_description(&mut r)?;
+    Ok((v, r.pos))
+}
+
+fn check_action_description(v: &ActionDescription, depth: i32, limit: i32) -> Result<(), Refusal> {
+    if depth < 0 || limit < 1 {
+        return Err(Refusal { word: "depth_exceeded", offset: 0 });
+    }
+    let out = named_encode_action_description(v, depth)?;
+    decode_action_description_at(&out, depth, limit).map(|_| ())
+}
+
+fn encode_action_description_at(v: &ActionDescription, depth: i32) -> Result<Vec<u8>, Refusal> {
+    if !(0..DEPTH_LIMIT).contains(&depth) {
+        return Err(Refusal { word: "depth_exceeded", offset: 0 });
+    }
+    let out = named_encode_action_description(v, depth)?;
+    decode_action_description_at(&out, depth, DEPTH_LIMIT)?;
+    Ok(out)
+}
+
+pub fn encode_action_description_document(v: &ActionDescription) -> Result<Vec<u8>, Refusal> {
+    let mut out = encode_action_description_at(v, 0)?;
+    out.push(b'\n');
+    Ok(out)
+}
+
+pub fn decode_action_description_document(data: &[u8]) -> Result<ActionDescription, Refusal> {
+    let (v, n) = decode_action_description_at(data, 0, DEPTH_LIMIT)?;
+    let mut r = Reader { buf: data, pos: n, depth: 0, limit: DEPTH_LIMIT };
+    r.skip_ws();
+    if r.pos != data.len() {
+        return r.refuse("trailing_bytes");
+    }
+    Ok(v)
+}
+
+fn named_encode_permission_definition(v: &PermissionDefinition, depth: i32) -> Result<Vec<u8>, Refusal> {
+    match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        let mut out = Vec::new();
+        enc_permission_definition(&mut out, v, depth);
+        out
+    })) {
+        Ok(out) => Ok(out),
+        Err(p) => match p.downcast::<Refusal>() {
+            Ok(e) => Err(*e),
+            Err(p) => std::panic::resume_unwind(p),
+        },
+    }
+}
+
+fn decode_permission_definition_at(data: &[u8], depth: i32, limit: i32) -> Result<(PermissionDefinition, usize), Refusal> {
+    let mut r = Reader { buf: data, pos: 0, depth, limit: if limit < DEPTH_LIMIT { limit } else { DEPTH_LIMIT } };
+    if depth < 0 || limit < 1 {
+        return r.refuse("depth_exceeded");
+    }
+    r.skip_ws();
+    let v = decode_permission_definition(&mut r)?;
+    Ok((v, r.pos))
+}
+
+fn check_permission_definition(v: &PermissionDefinition, depth: i32, limit: i32) -> Result<(), Refusal> {
+    if depth < 0 || limit < 1 {
+        return Err(Refusal { word: "depth_exceeded", offset: 0 });
+    }
+    let out = named_encode_permission_definition(v, depth)?;
+    decode_permission_definition_at(&out, depth, limit).map(|_| ())
+}
+
+fn encode_permission_definition_at(v: &PermissionDefinition, depth: i32) -> Result<Vec<u8>, Refusal> {
+    if !(0..DEPTH_LIMIT).contains(&depth) {
+        return Err(Refusal { word: "depth_exceeded", offset: 0 });
+    }
+    let out = named_encode_permission_definition(v, depth)?;
+    decode_permission_definition_at(&out, depth, DEPTH_LIMIT)?;
+    Ok(out)
+}
+
+pub fn encode_permission_definition_document(v: &PermissionDefinition) -> Result<Vec<u8>, Refusal> {
+    let mut out = encode_permission_definition_at(v, 0)?;
+    out.push(b'\n');
+    Ok(out)
+}
+
+pub fn decode_permission_definition_document(data: &[u8]) -> Result<PermissionDefinition, Refusal> {
+    let (v, n) = decode_permission_definition_at(data, 0, DEPTH_LIMIT)?;
+    let mut r = Reader { buf: data, pos: n, depth: 0, limit: DEPTH_LIMIT };
+    r.skip_ws();
+    if r.pos != data.len() {
+        return r.refuse("trailing_bytes");
+    }
+    Ok(v)
+}
+
+fn named_encode_described_action(v: &DescribedAction, depth: i32) -> Result<Vec<u8>, Refusal> {
+    match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        let mut out = Vec::new();
+        enc_described_action(&mut out, v, depth);
+        out
+    })) {
+        Ok(out) => Ok(out),
+        Err(p) => match p.downcast::<Refusal>() {
+            Ok(e) => Err(*e),
+            Err(p) => std::panic::resume_unwind(p),
+        },
+    }
+}
+
+fn decode_described_action_at(data: &[u8], depth: i32, limit: i32) -> Result<(DescribedAction, usize), Refusal> {
+    let mut r = Reader { buf: data, pos: 0, depth, limit: if limit < DEPTH_LIMIT { limit } else { DEPTH_LIMIT } };
+    if depth < 0 || limit < 1 {
+        return r.refuse("depth_exceeded");
+    }
+    r.skip_ws();
+    let v = decode_described_action(&mut r)?;
+    Ok((v, r.pos))
+}
+
+fn check_described_action(v: &DescribedAction, depth: i32, limit: i32) -> Result<(), Refusal> {
+    if depth < 0 || limit < 1 {
+        return Err(Refusal { word: "depth_exceeded", offset: 0 });
+    }
+    let out = named_encode_described_action(v, depth)?;
+    decode_described_action_at(&out, depth, limit).map(|_| ())
+}
+
+fn encode_described_action_at(v: &DescribedAction, depth: i32) -> Result<Vec<u8>, Refusal> {
+    if !(0..DEPTH_LIMIT).contains(&depth) {
+        return Err(Refusal { word: "depth_exceeded", offset: 0 });
+    }
+    let out = named_encode_described_action(v, depth)?;
+    decode_described_action_at(&out, depth, DEPTH_LIMIT)?;
+    Ok(out)
+}
+
+pub fn encode_described_action_document(v: &DescribedAction) -> Result<Vec<u8>, Refusal> {
+    let mut out = encode_described_action_at(v, 0)?;
+    out.push(b'\n');
+    Ok(out)
+}
+
+pub fn decode_described_action_document(data: &[u8]) -> Result<DescribedAction, Refusal> {
+    let (v, n) = decode_described_action_at(data, 0, DEPTH_LIMIT)?;
+    let mut r = Reader { buf: data, pos: n, depth: 0, limit: DEPTH_LIMIT };
+    r.skip_ws();
+    if r.pos != data.len() {
+        return r.refuse("trailing_bytes");
+    }
+    Ok(v)
+}
+
+fn named_encode_action_edit(v: &ActionEdit, depth: i32) -> Result<Vec<u8>, Refusal> {
+    match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        let mut out = Vec::new();
+        enc_action_edit(&mut out, v, depth);
+        out
+    })) {
+        Ok(out) => Ok(out),
+        Err(p) => match p.downcast::<Refusal>() {
+            Ok(e) => Err(*e),
+            Err(p) => std::panic::resume_unwind(p),
+        },
+    }
+}
+
+fn decode_action_edit_at(data: &[u8], depth: i32, limit: i32) -> Result<(ActionEdit, usize), Refusal> {
+    let mut r = Reader { buf: data, pos: 0, depth, limit: if limit < DEPTH_LIMIT { limit } else { DEPTH_LIMIT } };
+    if depth < 0 || limit < 1 {
+        return r.refuse("depth_exceeded");
+    }
+    r.skip_ws();
+    let v = decode_action_edit(&mut r)?;
+    Ok((v, r.pos))
+}
+
+fn check_action_edit(v: &ActionEdit, depth: i32, limit: i32) -> Result<(), Refusal> {
+    if depth < 0 || limit < 1 {
+        return Err(Refusal { word: "depth_exceeded", offset: 0 });
+    }
+    let out = named_encode_action_edit(v, depth)?;
+    decode_action_edit_at(&out, depth, limit).map(|_| ())
+}
+
+fn encode_action_edit_at(v: &ActionEdit, depth: i32) -> Result<Vec<u8>, Refusal> {
+    if !(0..DEPTH_LIMIT).contains(&depth) {
+        return Err(Refusal { word: "depth_exceeded", offset: 0 });
+    }
+    let out = named_encode_action_edit(v, depth)?;
+    decode_action_edit_at(&out, depth, DEPTH_LIMIT)?;
+    Ok(out)
+}
+
+pub fn encode_action_edit_document(v: &ActionEdit) -> Result<Vec<u8>, Refusal> {
+    let mut out = encode_action_edit_at(v, 0)?;
+    out.push(b'\n');
+    Ok(out)
+}
+
+pub fn decode_action_edit_document(data: &[u8]) -> Result<ActionEdit, Refusal> {
+    let (v, n) = decode_action_edit_at(data, 0, DEPTH_LIMIT)?;
+    let mut r = Reader { buf: data, pos: n, depth: 0, limit: DEPTH_LIMIT };
+    r.skip_ws();
+    if r.pos != data.len() {
+        return r.refuse("trailing_bytes");
+    }
+    Ok(v)
+}
+
+fn named_encode_description_edit(v: &DescriptionEdit, depth: i32) -> Result<Vec<u8>, Refusal> {
+    match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        let mut out = Vec::new();
+        enc_description_edit(&mut out, v, depth);
+        out
+    })) {
+        Ok(out) => Ok(out),
+        Err(p) => match p.downcast::<Refusal>() {
+            Ok(e) => Err(*e),
+            Err(p) => std::panic::resume_unwind(p),
+        },
+    }
+}
+
+fn decode_description_edit_at(data: &[u8], depth: i32, limit: i32) -> Result<(DescriptionEdit, usize), Refusal> {
+    let mut r = Reader { buf: data, pos: 0, depth, limit: if limit < DEPTH_LIMIT { limit } else { DEPTH_LIMIT } };
+    if depth < 0 || limit < 1 {
+        return r.refuse("depth_exceeded");
+    }
+    r.skip_ws();
+    let v = decode_description_edit(&mut r)?;
+    Ok((v, r.pos))
+}
+
+fn check_description_edit(v: &DescriptionEdit, depth: i32, limit: i32) -> Result<(), Refusal> {
+    if depth < 0 || limit < 1 {
+        return Err(Refusal { word: "depth_exceeded", offset: 0 });
+    }
+    let out = named_encode_description_edit(v, depth)?;
+    decode_description_edit_at(&out, depth, limit).map(|_| ())
+}
+
+fn encode_description_edit_at(v: &DescriptionEdit, depth: i32) -> Result<Vec<u8>, Refusal> {
+    if !(0..DEPTH_LIMIT).contains(&depth) {
+        return Err(Refusal { word: "depth_exceeded", offset: 0 });
+    }
+    let out = named_encode_description_edit(v, depth)?;
+    decode_description_edit_at(&out, depth, DEPTH_LIMIT)?;
+    Ok(out)
+}
+
+pub fn encode_description_edit_document(v: &DescriptionEdit) -> Result<Vec<u8>, Refusal> {
+    let mut out = encode_description_edit_at(v, 0)?;
+    out.push(b'\n');
+    Ok(out)
+}
+
+pub fn decode_description_edit_document(data: &[u8]) -> Result<DescriptionEdit, Refusal> {
+    let (v, n) = decode_description_edit_at(data, 0, DEPTH_LIMIT)?;
+    let mut r = Reader { buf: data, pos: n, depth: 0, limit: DEPTH_LIMIT };
+    r.skip_ws();
+    if r.pos != data.len() {
+        return r.refuse("trailing_bytes");
+    }
+    Ok(v)
+}
+
+fn named_encode_description_page(v: &DescriptionPage, depth: i32) -> Result<Vec<u8>, Refusal> {
+    match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        let mut out = Vec::new();
+        enc_description_page(&mut out, v, depth);
+        out
+    })) {
+        Ok(out) => Ok(out),
+        Err(p) => match p.downcast::<Refusal>() {
+            Ok(e) => Err(*e),
+            Err(p) => std::panic::resume_unwind(p),
+        },
+    }
+}
+
+fn decode_description_page_at(data: &[u8], depth: i32, limit: i32) -> Result<(DescriptionPage, usize), Refusal> {
+    let mut r = Reader { buf: data, pos: 0, depth, limit: if limit < DEPTH_LIMIT { limit } else { DEPTH_LIMIT } };
+    if depth < 0 || limit < 1 {
+        return r.refuse("depth_exceeded");
+    }
+    r.skip_ws();
+    let v = decode_description_page(&mut r)?;
+    Ok((v, r.pos))
+}
+
+fn check_description_page(v: &DescriptionPage, depth: i32, limit: i32) -> Result<(), Refusal> {
+    if depth < 0 || limit < 1 {
+        return Err(Refusal { word: "depth_exceeded", offset: 0 });
+    }
+    let out = named_encode_description_page(v, depth)?;
+    decode_description_page_at(&out, depth, limit).map(|_| ())
+}
+
+fn encode_description_page_at(v: &DescriptionPage, depth: i32) -> Result<Vec<u8>, Refusal> {
+    if !(0..DEPTH_LIMIT).contains(&depth) {
+        return Err(Refusal { word: "depth_exceeded", offset: 0 });
+    }
+    let out = named_encode_description_page(v, depth)?;
+    decode_description_page_at(&out, depth, DEPTH_LIMIT)?;
+    Ok(out)
+}
+
+pub fn encode_description_page_document(v: &DescriptionPage) -> Result<Vec<u8>, Refusal> {
+    let mut out = encode_description_page_at(v, 0)?;
+    out.push(b'\n');
+    Ok(out)
+}
+
+pub fn decode_description_page_document(data: &[u8]) -> Result<DescriptionPage, Refusal> {
+    let (v, n) = decode_description_page_at(data, 0, DEPTH_LIMIT)?;
+    let mut r = Reader { buf: data, pos: n, depth: 0, limit: DEPTH_LIMIT };
+    r.skip_ws();
+    if r.pos != data.len() {
+        return r.refuse("trailing_bytes");
+    }
+    Ok(v)
+}
+
+fn named_encode_account_default(v: &AccountDefault, depth: i32) -> Result<Vec<u8>, Refusal> {
+    match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        let mut out = Vec::new();
+        enc_account_default(&mut out, v, depth);
+        out
+    })) {
+        Ok(out) => Ok(out),
+        Err(p) => match p.downcast::<Refusal>() {
+            Ok(e) => Err(*e),
+            Err(p) => std::panic::resume_unwind(p),
+        },
+    }
+}
+
+fn decode_account_default_at(data: &[u8], depth: i32, limit: i32) -> Result<(AccountDefault, usize), Refusal> {
+    let mut r = Reader { buf: data, pos: 0, depth, limit: if limit < DEPTH_LIMIT { limit } else { DEPTH_LIMIT } };
+    if depth < 0 || limit < 1 {
+        return r.refuse("depth_exceeded");
+    }
+    r.skip_ws();
+    let v = decode_account_default(&mut r)?;
+    Ok((v, r.pos))
+}
+
+fn check_account_default(v: &AccountDefault, depth: i32, limit: i32) -> Result<(), Refusal> {
+    if depth < 0 || limit < 1 {
+        return Err(Refusal { word: "depth_exceeded", offset: 0 });
+    }
+    let out = named_encode_account_default(v, depth)?;
+    decode_account_default_at(&out, depth, limit).map(|_| ())
+}
+
+fn encode_account_default_at(v: &AccountDefault, depth: i32) -> Result<Vec<u8>, Refusal> {
+    if !(0..DEPTH_LIMIT).contains(&depth) {
+        return Err(Refusal { word: "depth_exceeded", offset: 0 });
+    }
+    let out = named_encode_account_default(v, depth)?;
+    decode_account_default_at(&out, depth, DEPTH_LIMIT)?;
+    Ok(out)
+}
+
+pub fn encode_account_default_document(v: &AccountDefault) -> Result<Vec<u8>, Refusal> {
+    let mut out = encode_account_default_at(v, 0)?;
+    out.push(b'\n');
+    Ok(out)
+}
+
+pub fn decode_account_default_document(data: &[u8]) -> Result<AccountDefault, Refusal> {
+    let (v, n) = decode_account_default_at(data, 0, DEPTH_LIMIT)?;
+    let mut r = Reader { buf: data, pos: n, depth: 0, limit: DEPTH_LIMIT };
+    r.skip_ws();
+    if r.pos != data.len() {
+        return r.refuse("trailing_bytes");
+    }
+    Ok(v)
+}
+
+fn named_encode_default_page(v: &DefaultPage, depth: i32) -> Result<Vec<u8>, Refusal> {
+    match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        let mut out = Vec::new();
+        enc_default_page(&mut out, v, depth);
+        out
+    })) {
+        Ok(out) => Ok(out),
+        Err(p) => match p.downcast::<Refusal>() {
+            Ok(e) => Err(*e),
+            Err(p) => std::panic::resume_unwind(p),
+        },
+    }
+}
+
+fn decode_default_page_at(data: &[u8], depth: i32, limit: i32) -> Result<(DefaultPage, usize), Refusal> {
+    let mut r = Reader { buf: data, pos: 0, depth, limit: if limit < DEPTH_LIMIT { limit } else { DEPTH_LIMIT } };
+    if depth < 0 || limit < 1 {
+        return r.refuse("depth_exceeded");
+    }
+    r.skip_ws();
+    let v = decode_default_page(&mut r)?;
+    Ok((v, r.pos))
+}
+
+fn check_default_page(v: &DefaultPage, depth: i32, limit: i32) -> Result<(), Refusal> {
+    if depth < 0 || limit < 1 {
+        return Err(Refusal { word: "depth_exceeded", offset: 0 });
+    }
+    let out = named_encode_default_page(v, depth)?;
+    decode_default_page_at(&out, depth, limit).map(|_| ())
+}
+
+fn encode_default_page_at(v: &DefaultPage, depth: i32) -> Result<Vec<u8>, Refusal> {
+    if !(0..DEPTH_LIMIT).contains(&depth) {
+        return Err(Refusal { word: "depth_exceeded", offset: 0 });
+    }
+    let out = named_encode_default_page(v, depth)?;
+    decode_default_page_at(&out, depth, DEPTH_LIMIT)?;
+    Ok(out)
+}
+
+pub fn encode_default_page_document(v: &DefaultPage) -> Result<Vec<u8>, Refusal> {
+    let mut out = encode_default_page_at(v, 0)?;
+    out.push(b'\n');
+    Ok(out)
+}
+
+pub fn decode_default_page_document(data: &[u8]) -> Result<DefaultPage, Refusal> {
+    let (v, n) = decode_default_page_at(data, 0, DEPTH_LIMIT)?;
+    let mut r = Reader { buf: data, pos: n, depth: 0, limit: DEPTH_LIMIT };
+    r.skip_ws();
+    if r.pos != data.len() {
+        return r.refuse("trailing_bytes");
+    }
+    Ok(v)
+}
+
+fn named_encode_default_edit(v: &DefaultEdit, depth: i32) -> Result<Vec<u8>, Refusal> {
+    match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        let mut out = Vec::new();
+        enc_default_edit(&mut out, v, depth);
+        out
+    })) {
+        Ok(out) => Ok(out),
+        Err(p) => match p.downcast::<Refusal>() {
+            Ok(e) => Err(*e),
+            Err(p) => std::panic::resume_unwind(p),
+        },
+    }
+}
+
+fn decode_default_edit_at(data: &[u8], depth: i32, limit: i32) -> Result<(DefaultEdit, usize), Refusal> {
+    let mut r = Reader { buf: data, pos: 0, depth, limit: if limit < DEPTH_LIMIT { limit } else { DEPTH_LIMIT } };
+    if depth < 0 || limit < 1 {
+        return r.refuse("depth_exceeded");
+    }
+    r.skip_ws();
+    let v = decode_default_edit(&mut r)?;
+    Ok((v, r.pos))
+}
+
+fn check_default_edit(v: &DefaultEdit, depth: i32, limit: i32) -> Result<(), Refusal> {
+    if depth < 0 || limit < 1 {
+        return Err(Refusal { word: "depth_exceeded", offset: 0 });
+    }
+    let out = named_encode_default_edit(v, depth)?;
+    decode_default_edit_at(&out, depth, limit).map(|_| ())
+}
+
+fn encode_default_edit_at(v: &DefaultEdit, depth: i32) -> Result<Vec<u8>, Refusal> {
+    if !(0..DEPTH_LIMIT).contains(&depth) {
+        return Err(Refusal { word: "depth_exceeded", offset: 0 });
+    }
+    let out = named_encode_default_edit(v, depth)?;
+    decode_default_edit_at(&out, depth, DEPTH_LIMIT)?;
+    Ok(out)
+}
+
+pub fn encode_default_edit_document(v: &DefaultEdit) -> Result<Vec<u8>, Refusal> {
+    let mut out = encode_default_edit_at(v, 0)?;
+    out.push(b'\n');
+    Ok(out)
+}
+
+pub fn decode_default_edit_document(data: &[u8]) -> Result<DefaultEdit, Refusal> {
+    let (v, n) = decode_default_edit_at(data, 0, DEPTH_LIMIT)?;
+    let mut r = Reader { buf: data, pos: n, depth: 0, limit: DEPTH_LIMIT };
+    r.skip_ws();
+    if r.pos != data.len() {
+        return r.refuse("trailing_bytes");
+    }
+    Ok(v)
+}
+
+fn named_encode_decision_explanation(v: &DecisionExplanation, depth: i32) -> Result<Vec<u8>, Refusal> {
+    match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        let mut out = Vec::new();
+        enc_decision_explanation(&mut out, v, depth);
+        out
+    })) {
+        Ok(out) => Ok(out),
+        Err(p) => match p.downcast::<Refusal>() {
+            Ok(e) => Err(*e),
+            Err(p) => std::panic::resume_unwind(p),
+        },
+    }
+}
+
+fn decode_decision_explanation_at(data: &[u8], depth: i32, limit: i32) -> Result<(DecisionExplanation, usize), Refusal> {
+    let mut r = Reader { buf: data, pos: 0, depth, limit: if limit < DEPTH_LIMIT { limit } else { DEPTH_LIMIT } };
+    if depth < 0 || limit < 1 {
+        return r.refuse("depth_exceeded");
+    }
+    r.skip_ws();
+    let v = decode_decision_explanation(&mut r)?;
+    Ok((v, r.pos))
+}
+
+fn check_decision_explanation(v: &DecisionExplanation, depth: i32, limit: i32) -> Result<(), Refusal> {
+    if depth < 0 || limit < 1 {
+        return Err(Refusal { word: "depth_exceeded", offset: 0 });
+    }
+    let out = named_encode_decision_explanation(v, depth)?;
+    decode_decision_explanation_at(&out, depth, limit).map(|_| ())
+}
+
+fn encode_decision_explanation_at(v: &DecisionExplanation, depth: i32) -> Result<Vec<u8>, Refusal> {
+    if !(0..DEPTH_LIMIT).contains(&depth) {
+        return Err(Refusal { word: "depth_exceeded", offset: 0 });
+    }
+    let out = named_encode_decision_explanation(v, depth)?;
+    decode_decision_explanation_at(&out, depth, DEPTH_LIMIT)?;
+    Ok(out)
+}
+
+pub fn encode_decision_explanation_document(v: &DecisionExplanation) -> Result<Vec<u8>, Refusal> {
+    let mut out = encode_decision_explanation_at(v, 0)?;
+    out.push(b'\n');
+    Ok(out)
+}
+
+pub fn decode_decision_explanation_document(data: &[u8]) -> Result<DecisionExplanation, Refusal> {
+    let (v, n) = decode_decision_explanation_at(data, 0, DEPTH_LIMIT)?;
+    let mut r = Reader { buf: data, pos: n, depth: 0, limit: DEPTH_LIMIT };
+    r.skip_ws();
+    if r.pos != data.len() {
+        return r.refuse("trailing_bytes");
+    }
+    Ok(v)
+}
+
+fn named_encode_permission_key(v: &PermissionKey, depth: i32) -> Result<Vec<u8>, Refusal> {
+    match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        let mut out = Vec::new();
+        enc_permission_key(&mut out, v, depth);
+        out
+    })) {
+        Ok(out) => Ok(out),
+        Err(p) => match p.downcast::<Refusal>() {
+            Ok(e) => Err(*e),
+            Err(p) => std::panic::resume_unwind(p),
+        },
+    }
+}
+
+fn decode_permission_key_at(data: &[u8], depth: i32, limit: i32) -> Result<(PermissionKey, usize), Refusal> {
+    let mut r = Reader { buf: data, pos: 0, depth, limit: if limit < DEPTH_LIMIT { limit } else { DEPTH_LIMIT } };
+    if depth < 0 || limit < 1 {
+        return r.refuse("depth_exceeded");
+    }
+    r.skip_ws();
+    let v = decode_permission_key(&mut r)?;
+    Ok((v, r.pos))
+}
+
+fn check_permission_key(v: &PermissionKey, depth: i32, limit: i32) -> Result<(), Refusal> {
+    if depth < 0 || limit < 1 {
+        return Err(Refusal { word: "depth_exceeded", offset: 0 });
+    }
+    let out = named_encode_permission_key(v, depth)?;
+    decode_permission_key_at(&out, depth, limit).map(|_| ())
+}
+
+fn encode_permission_key_at(v: &PermissionKey, depth: i32) -> Result<Vec<u8>, Refusal> {
+    if !(0..DEPTH_LIMIT).contains(&depth) {
+        return Err(Refusal { word: "depth_exceeded", offset: 0 });
+    }
+    let out = named_encode_permission_key(v, depth)?;
+    decode_permission_key_at(&out, depth, DEPTH_LIMIT)?;
+    Ok(out)
+}
+
+pub fn encode_permission_key_document(v: &PermissionKey) -> Result<Vec<u8>, Refusal> {
+    let mut out = encode_permission_key_at(v, 0)?;
+    out.push(b'\n');
+    Ok(out)
+}
+
+pub fn decode_permission_key_document(data: &[u8]) -> Result<PermissionKey, Refusal> {
+    let (v, n) = decode_permission_key_at(data, 0, DEPTH_LIMIT)?;
+    let mut r = Reader { buf: data, pos: n, depth: 0, limit: DEPTH_LIMIT };
+    r.skip_ws();
+    if r.pos != data.len() {
+        return r.refuse("trailing_bytes");
+    }
+    Ok(v)
+}
+
+fn named_encode_resource_selector(v: &ResourceSelector, depth: i32) -> Result<Vec<u8>, Refusal> {
+    match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        let mut out = Vec::new();
+        enc_resource_selector(&mut out, v, depth);
+        out
+    })) {
+        Ok(out) => Ok(out),
+        Err(p) => match p.downcast::<Refusal>() {
+            Ok(e) => Err(*e),
+            Err(p) => std::panic::resume_unwind(p),
+        },
+    }
+}
+
+fn decode_resource_selector_at(data: &[u8], depth: i32, limit: i32) -> Result<(ResourceSelector, usize), Refusal> {
+    let mut r = Reader { buf: data, pos: 0, depth, limit: if limit < DEPTH_LIMIT { limit } else { DEPTH_LIMIT } };
+    if depth < 0 || limit < 1 {
+        return r.refuse("depth_exceeded");
+    }
+    r.skip_ws();
+    let v = decode_resource_selector(&mut r)?;
+    Ok((v, r.pos))
+}
+
+fn check_resource_selector(v: &ResourceSelector, depth: i32, limit: i32) -> Result<(), Refusal> {
+    if depth < 0 || limit < 1 {
+        return Err(Refusal { word: "depth_exceeded", offset: 0 });
+    }
+    let out = named_encode_resource_selector(v, depth)?;
+    decode_resource_selector_at(&out, depth, limit).map(|_| ())
+}
+
+fn encode_resource_selector_at(v: &ResourceSelector, depth: i32) -> Result<Vec<u8>, Refusal> {
+    if !(0..DEPTH_LIMIT).contains(&depth) {
+        return Err(Refusal { word: "depth_exceeded", offset: 0 });
+    }
+    let out = named_encode_resource_selector(v, depth)?;
+    decode_resource_selector_at(&out, depth, DEPTH_LIMIT)?;
+    Ok(out)
+}
+
+pub fn encode_resource_selector_document(v: &ResourceSelector) -> Result<Vec<u8>, Refusal> {
+    let mut out = encode_resource_selector_at(v, 0)?;
+    out.push(b'\n');
+    Ok(out)
+}
+
+pub fn decode_resource_selector_document(data: &[u8]) -> Result<ResourceSelector, Refusal> {
+    let (v, n) = decode_resource_selector_at(data, 0, DEPTH_LIMIT)?;
+    let mut r = Reader { buf: data, pos: n, depth: 0, limit: DEPTH_LIMIT };
+    r.skip_ws();
+    if r.pos != data.len() {
+        return r.refuse("trailing_bytes");
+    }
+    Ok(v)
+}
+
+fn named_encode_permission_selection(v: &PermissionSelection, depth: i32) -> Result<Vec<u8>, Refusal> {
+    match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        let mut out = Vec::new();
+        enc_permission_selection(&mut out, v, depth);
+        out
+    })) {
+        Ok(out) => Ok(out),
+        Err(p) => match p.downcast::<Refusal>() {
+            Ok(e) => Err(*e),
+            Err(p) => std::panic::resume_unwind(p),
+        },
+    }
+}
+
+fn decode_permission_selection_at(data: &[u8], depth: i32, limit: i32) -> Result<(PermissionSelection, usize), Refusal> {
+    let mut r = Reader { buf: data, pos: 0, depth, limit: if limit < DEPTH_LIMIT { limit } else { DEPTH_LIMIT } };
+    if depth < 0 || limit < 1 {
+        return r.refuse("depth_exceeded");
+    }
+    r.skip_ws();
+    let v = decode_permission_selection(&mut r)?;
+    Ok((v, r.pos))
+}
+
+fn check_permission_selection(v: &PermissionSelection, depth: i32, limit: i32) -> Result<(), Refusal> {
+    if depth < 0 || limit < 1 {
+        return Err(Refusal { word: "depth_exceeded", offset: 0 });
+    }
+    let out = named_encode_permission_selection(v, depth)?;
+    decode_permission_selection_at(&out, depth, limit).map(|_| ())
+}
+
+fn encode_permission_selection_at(v: &PermissionSelection, depth: i32) -> Result<Vec<u8>, Refusal> {
+    if !(0..DEPTH_LIMIT).contains(&depth) {
+        return Err(Refusal { word: "depth_exceeded", offset: 0 });
+    }
+    let out = named_encode_permission_selection(v, depth)?;
+    decode_permission_selection_at(&out, depth, DEPTH_LIMIT)?;
+    Ok(out)
+}
+
+pub fn encode_permission_selection_document(v: &PermissionSelection) -> Result<Vec<u8>, Refusal> {
+    let mut out = encode_permission_selection_at(v, 0)?;
+    out.push(b'\n');
+    Ok(out)
+}
+
+pub fn decode_permission_selection_document(data: &[u8]) -> Result<PermissionSelection, Refusal> {
+    let (v, n) = decode_permission_selection_at(data, 0, DEPTH_LIMIT)?;
+    let mut r = Reader { buf: data, pos: n, depth: 0, limit: DEPTH_LIMIT };
+    r.skip_ws();
+    if r.pos != data.len() {
+        return r.refuse("trailing_bytes");
+    }
+    Ok(v)
+}
+
+fn named_encode_concrete_resource(v: &ConcreteResource, depth: i32) -> Result<Vec<u8>, Refusal> {
+    match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        let mut out = Vec::new();
+        enc_concrete_resource(&mut out, v, depth);
+        out
+    })) {
+        Ok(out) => Ok(out),
+        Err(p) => match p.downcast::<Refusal>() {
+            Ok(e) => Err(*e),
+            Err(p) => std::panic::resume_unwind(p),
+        },
+    }
+}
+
+fn decode_concrete_resource_at(data: &[u8], depth: i32, limit: i32) -> Result<(ConcreteResource, usize), Refusal> {
+    let mut r = Reader { buf: data, pos: 0, depth, limit: if limit < DEPTH_LIMIT { limit } else { DEPTH_LIMIT } };
+    if depth < 0 || limit < 1 {
+        return r.refuse("depth_exceeded");
+    }
+    r.skip_ws();
+    let v = decode_concrete_resource(&mut r)?;
+    Ok((v, r.pos))
+}
+
+fn check_concrete_resource(v: &ConcreteResource, depth: i32, limit: i32) -> Result<(), Refusal> {
+    if depth < 0 || limit < 1 {
+        return Err(Refusal { word: "depth_exceeded", offset: 0 });
+    }
+    let out = named_encode_concrete_resource(v, depth)?;
+    decode_concrete_resource_at(&out, depth, limit).map(|_| ())
+}
+
+fn encode_concrete_resource_at(v: &ConcreteResource, depth: i32) -> Result<Vec<u8>, Refusal> {
+    if !(0..DEPTH_LIMIT).contains(&depth) {
+        return Err(Refusal { word: "depth_exceeded", offset: 0 });
+    }
+    let out = named_encode_concrete_resource(v, depth)?;
+    decode_concrete_resource_at(&out, depth, DEPTH_LIMIT)?;
+    Ok(out)
+}
+
+pub fn encode_concrete_resource_document(v: &ConcreteResource) -> Result<Vec<u8>, Refusal> {
+    let mut out = encode_concrete_resource_at(v, 0)?;
+    out.push(b'\n');
+    Ok(out)
+}
+
+pub fn decode_concrete_resource_document(data: &[u8]) -> Result<ConcreteResource, Refusal> {
+    let (v, n) = decode_concrete_resource_at(data, 0, DEPTH_LIMIT)?;
+    let mut r = Reader { buf: data, pos: n, depth: 0, limit: DEPTH_LIMIT };
+    r.skip_ws();
+    if r.pos != data.len() {
+        return r.refuse("trailing_bytes");
+    }
+    Ok(v)
+}
+
+fn named_encode_check_batch_request(v: &CheckBatchRequest, depth: i32) -> Result<Vec<u8>, Refusal> {
+    match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        let mut out = Vec::new();
+        enc_check_batch_request(&mut out, v, depth);
+        out
+    })) {
+        Ok(out) => Ok(out),
+        Err(p) => match p.downcast::<Refusal>() {
+            Ok(e) => Err(*e),
+            Err(p) => std::panic::resume_unwind(p),
+        },
+    }
+}
+
+fn decode_check_batch_request_at(data: &[u8], depth: i32, limit: i32) -> Result<(CheckBatchRequest, usize), Refusal> {
+    let mut r = Reader { buf: data, pos: 0, depth, limit: if limit < DEPTH_LIMIT { limit } else { DEPTH_LIMIT } };
+    if depth < 0 || limit < 1 {
+        return r.refuse("depth_exceeded");
+    }
+    r.skip_ws();
+    let v = decode_check_batch_request(&mut r)?;
+    Ok((v, r.pos))
+}
+
+fn check_check_batch_request(v: &CheckBatchRequest, depth: i32, limit: i32) -> Result<(), Refusal> {
+    if depth < 0 || limit < 1 {
+        return Err(Refusal { word: "depth_exceeded", offset: 0 });
+    }
+    let out = named_encode_check_batch_request(v, depth)?;
+    decode_check_batch_request_at(&out, depth, limit).map(|_| ())
+}
+
+fn encode_check_batch_request_at(v: &CheckBatchRequest, depth: i32) -> Result<Vec<u8>, Refusal> {
+    if !(0..DEPTH_LIMIT).contains(&depth) {
+        return Err(Refusal { word: "depth_exceeded", offset: 0 });
+    }
+    let out = named_encode_check_batch_request(v, depth)?;
+    decode_check_batch_request_at(&out, depth, DEPTH_LIMIT)?;
+    Ok(out)
+}
+
+pub fn encode_check_batch_request_document(v: &CheckBatchRequest) -> Result<Vec<u8>, Refusal> {
+    let mut out = encode_check_batch_request_at(v, 0)?;
+    out.push(b'\n');
+    Ok(out)
+}
+
+pub fn decode_check_batch_request_document(data: &[u8]) -> Result<CheckBatchRequest, Refusal> {
+    let (v, n) = decode_check_batch_request_at(data, 0, DEPTH_LIMIT)?;
+    let mut r = Reader { buf: data, pos: n, depth: 0, limit: DEPTH_LIMIT };
+    r.skip_ws();
+    if r.pos != data.len() {
+        return r.refuse("trailing_bytes");
+    }
+    Ok(v)
+}
+
+fn named_encode_batch_decision(v: &BatchDecision, depth: i32) -> Result<Vec<u8>, Refusal> {
+    match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        let mut out = Vec::new();
+        enc_batch_decision(&mut out, v, depth);
+        out
+    })) {
+        Ok(out) => Ok(out),
+        Err(p) => match p.downcast::<Refusal>() {
+            Ok(e) => Err(*e),
+            Err(p) => std::panic::resume_unwind(p),
+        },
+    }
+}
+
+fn decode_batch_decision_at(data: &[u8], depth: i32, limit: i32) -> Result<(BatchDecision, usize), Refusal> {
+    let mut r = Reader { buf: data, pos: 0, depth, limit: if limit < DEPTH_LIMIT { limit } else { DEPTH_LIMIT } };
+    if depth < 0 || limit < 1 {
+        return r.refuse("depth_exceeded");
+    }
+    r.skip_ws();
+    let v = decode_batch_decision(&mut r)?;
+    Ok((v, r.pos))
+}
+
+fn check_batch_decision(v: &BatchDecision, depth: i32, limit: i32) -> Result<(), Refusal> {
+    if depth < 0 || limit < 1 {
+        return Err(Refusal { word: "depth_exceeded", offset: 0 });
+    }
+    let out = named_encode_batch_decision(v, depth)?;
+    decode_batch_decision_at(&out, depth, limit).map(|_| ())
+}
+
+fn encode_batch_decision_at(v: &BatchDecision, depth: i32) -> Result<Vec<u8>, Refusal> {
+    if !(0..DEPTH_LIMIT).contains(&depth) {
+        return Err(Refusal { word: "depth_exceeded", offset: 0 });
+    }
+    let out = named_encode_batch_decision(v, depth)?;
+    decode_batch_decision_at(&out, depth, DEPTH_LIMIT)?;
+    Ok(out)
+}
+
+pub fn encode_batch_decision_document(v: &BatchDecision) -> Result<Vec<u8>, Refusal> {
+    let mut out = encode_batch_decision_at(v, 0)?;
+    out.push(b'\n');
+    Ok(out)
+}
+
+pub fn decode_batch_decision_document(data: &[u8]) -> Result<BatchDecision, Refusal> {
+    let (v, n) = decode_batch_decision_at(data, 0, DEPTH_LIMIT)?;
+    let mut r = Reader { buf: data, pos: n, depth: 0, limit: DEPTH_LIMIT };
+    r.skip_ws();
+    if r.pos != data.len() {
+        return r.refuse("trailing_bytes");
+    }
+    Ok(v)
+}
+
+fn named_encode_selector_permission_definition(v: &SelectorPermissionDefinition, depth: i32) -> Result<Vec<u8>, Refusal> {
+    match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        let mut out = Vec::new();
+        enc_selector_permission_definition(&mut out, v, depth);
+        out
+    })) {
+        Ok(out) => Ok(out),
+        Err(p) => match p.downcast::<Refusal>() {
+            Ok(e) => Err(*e),
+            Err(p) => std::panic::resume_unwind(p),
+        },
+    }
+}
+
+fn decode_selector_permission_definition_at(data: &[u8], depth: i32, limit: i32) -> Result<(SelectorPermissionDefinition, usize), Refusal> {
+    let mut r = Reader { buf: data, pos: 0, depth, limit: if limit < DEPTH_LIMIT { limit } else { DEPTH_LIMIT } };
+    if depth < 0 || limit < 1 {
+        return r.refuse("depth_exceeded");
+    }
+    r.skip_ws();
+    let v = decode_selector_permission_definition(&mut r)?;
+    Ok((v, r.pos))
+}
+
+fn check_selector_permission_definition(v: &SelectorPermissionDefinition, depth: i32, limit: i32) -> Result<(), Refusal> {
+    if depth < 0 || limit < 1 {
+        return Err(Refusal { word: "depth_exceeded", offset: 0 });
+    }
+    let out = named_encode_selector_permission_definition(v, depth)?;
+    decode_selector_permission_definition_at(&out, depth, limit).map(|_| ())
+}
+
+fn encode_selector_permission_definition_at(v: &SelectorPermissionDefinition, depth: i32) -> Result<Vec<u8>, Refusal> {
+    if !(0..DEPTH_LIMIT).contains(&depth) {
+        return Err(Refusal { word: "depth_exceeded", offset: 0 });
+    }
+    let out = named_encode_selector_permission_definition(v, depth)?;
+    decode_selector_permission_definition_at(&out, depth, DEPTH_LIMIT)?;
+    Ok(out)
+}
+
+pub fn encode_selector_permission_definition_document(v: &SelectorPermissionDefinition) -> Result<Vec<u8>, Refusal> {
+    let mut out = encode_selector_permission_definition_at(v, 0)?;
+    out.push(b'\n');
+    Ok(out)
+}
+
+pub fn decode_selector_permission_definition_document(data: &[u8]) -> Result<SelectorPermissionDefinition, Refusal> {
+    let (v, n) = decode_selector_permission_definition_at(data, 0, DEPTH_LIMIT)?;
+    let mut r = Reader { buf: data, pos: n, depth: 0, limit: DEPTH_LIMIT };
+    r.skip_ws();
+    if r.pos != data.len() {
+        return r.refuse("trailing_bytes");
+    }
+    Ok(v)
+}
+
+fn named_encode_permission_definition_page(v: &PermissionDefinitionPage, depth: i32) -> Result<Vec<u8>, Refusal> {
+    match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        let mut out = Vec::new();
+        enc_permission_definition_page(&mut out, v, depth);
+        out
+    })) {
+        Ok(out) => Ok(out),
+        Err(p) => match p.downcast::<Refusal>() {
+            Ok(e) => Err(*e),
+            Err(p) => std::panic::resume_unwind(p),
+        },
+    }
+}
+
+fn decode_permission_definition_page_at(data: &[u8], depth: i32, limit: i32) -> Result<(PermissionDefinitionPage, usize), Refusal> {
+    let mut r = Reader { buf: data, pos: 0, depth, limit: if limit < DEPTH_LIMIT { limit } else { DEPTH_LIMIT } };
+    if depth < 0 || limit < 1 {
+        return r.refuse("depth_exceeded");
+    }
+    r.skip_ws();
+    let v = decode_permission_definition_page(&mut r)?;
+    Ok((v, r.pos))
+}
+
+fn check_permission_definition_page(v: &PermissionDefinitionPage, depth: i32, limit: i32) -> Result<(), Refusal> {
+    if depth < 0 || limit < 1 {
+        return Err(Refusal { word: "depth_exceeded", offset: 0 });
+    }
+    let out = named_encode_permission_definition_page(v, depth)?;
+    decode_permission_definition_page_at(&out, depth, limit).map(|_| ())
+}
+
+fn encode_permission_definition_page_at(v: &PermissionDefinitionPage, depth: i32) -> Result<Vec<u8>, Refusal> {
+    if !(0..DEPTH_LIMIT).contains(&depth) {
+        return Err(Refusal { word: "depth_exceeded", offset: 0 });
+    }
+    let out = named_encode_permission_definition_page(v, depth)?;
+    decode_permission_definition_page_at(&out, depth, DEPTH_LIMIT)?;
+    Ok(out)
+}
+
+pub fn encode_permission_definition_page_document(v: &PermissionDefinitionPage) -> Result<Vec<u8>, Refusal> {
+    let mut out = encode_permission_definition_page_at(v, 0)?;
+    out.push(b'\n');
+    Ok(out)
+}
+
+pub fn decode_permission_definition_page_document(data: &[u8]) -> Result<PermissionDefinitionPage, Refusal> {
+    let (v, n) = decode_permission_definition_page_at(data, 0, DEPTH_LIMIT)?;
+    let mut r = Reader { buf: data, pos: n, depth: 0, limit: DEPTH_LIMIT };
+    r.skip_ws();
+    if r.pos != data.len() {
+        return r.refuse("trailing_bytes");
+    }
+    Ok(v)
+}
+
+fn named_encode_permission_bundle_definition(v: &PermissionBundleDefinition, depth: i32) -> Result<Vec<u8>, Refusal> {
+    match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        let mut out = Vec::new();
+        enc_permission_bundle_definition(&mut out, v, depth);
+        out
+    })) {
+        Ok(out) => Ok(out),
+        Err(p) => match p.downcast::<Refusal>() {
+            Ok(e) => Err(*e),
+            Err(p) => std::panic::resume_unwind(p),
+        },
+    }
+}
+
+fn decode_permission_bundle_definition_at(data: &[u8], depth: i32, limit: i32) -> Result<(PermissionBundleDefinition, usize), Refusal> {
+    let mut r = Reader { buf: data, pos: 0, depth, limit: if limit < DEPTH_LIMIT { limit } else { DEPTH_LIMIT } };
+    if depth < 0 || limit < 1 {
+        return r.refuse("depth_exceeded");
+    }
+    r.skip_ws();
+    let v = decode_permission_bundle_definition(&mut r)?;
+    Ok((v, r.pos))
+}
+
+fn check_permission_bundle_definition(v: &PermissionBundleDefinition, depth: i32, limit: i32) -> Result<(), Refusal> {
+    if depth < 0 || limit < 1 {
+        return Err(Refusal { word: "depth_exceeded", offset: 0 });
+    }
+    let out = named_encode_permission_bundle_definition(v, depth)?;
+    decode_permission_bundle_definition_at(&out, depth, limit).map(|_| ())
+}
+
+fn encode_permission_bundle_definition_at(v: &PermissionBundleDefinition, depth: i32) -> Result<Vec<u8>, Refusal> {
+    if !(0..DEPTH_LIMIT).contains(&depth) {
+        return Err(Refusal { word: "depth_exceeded", offset: 0 });
+    }
+    let out = named_encode_permission_bundle_definition(v, depth)?;
+    decode_permission_bundle_definition_at(&out, depth, DEPTH_LIMIT)?;
+    Ok(out)
+}
+
+pub fn encode_permission_bundle_definition_document(v: &PermissionBundleDefinition) -> Result<Vec<u8>, Refusal> {
+    let mut out = encode_permission_bundle_definition_at(v, 0)?;
+    out.push(b'\n');
+    Ok(out)
+}
+
+pub fn decode_permission_bundle_definition_document(data: &[u8]) -> Result<PermissionBundleDefinition, Refusal> {
+    let (v, n) = decode_permission_bundle_definition_at(data, 0, DEPTH_LIMIT)?;
+    let mut r = Reader { buf: data, pos: n, depth: 0, limit: DEPTH_LIMIT };
+    r.skip_ws();
+    if r.pos != data.len() {
+        return r.refuse("trailing_bytes");
+    }
+    Ok(v)
+}
+
+fn named_encode_permission_bundle_page(v: &PermissionBundlePage, depth: i32) -> Result<Vec<u8>, Refusal> {
+    match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        let mut out = Vec::new();
+        enc_permission_bundle_page(&mut out, v, depth);
+        out
+    })) {
+        Ok(out) => Ok(out),
+        Err(p) => match p.downcast::<Refusal>() {
+            Ok(e) => Err(*e),
+            Err(p) => std::panic::resume_unwind(p),
+        },
+    }
+}
+
+fn decode_permission_bundle_page_at(data: &[u8], depth: i32, limit: i32) -> Result<(PermissionBundlePage, usize), Refusal> {
+    let mut r = Reader { buf: data, pos: 0, depth, limit: if limit < DEPTH_LIMIT { limit } else { DEPTH_LIMIT } };
+    if depth < 0 || limit < 1 {
+        return r.refuse("depth_exceeded");
+    }
+    r.skip_ws();
+    let v = decode_permission_bundle_page(&mut r)?;
+    Ok((v, r.pos))
+}
+
+fn check_permission_bundle_page(v: &PermissionBundlePage, depth: i32, limit: i32) -> Result<(), Refusal> {
+    if depth < 0 || limit < 1 {
+        return Err(Refusal { word: "depth_exceeded", offset: 0 });
+    }
+    let out = named_encode_permission_bundle_page(v, depth)?;
+    decode_permission_bundle_page_at(&out, depth, limit).map(|_| ())
+}
+
+fn encode_permission_bundle_page_at(v: &PermissionBundlePage, depth: i32) -> Result<Vec<u8>, Refusal> {
+    if !(0..DEPTH_LIMIT).contains(&depth) {
+        return Err(Refusal { word: "depth_exceeded", offset: 0 });
+    }
+    let out = named_encode_permission_bundle_page(v, depth)?;
+    decode_permission_bundle_page_at(&out, depth, DEPTH_LIMIT)?;
+    Ok(out)
+}
+
+pub fn encode_permission_bundle_page_document(v: &PermissionBundlePage) -> Result<Vec<u8>, Refusal> {
+    let mut out = encode_permission_bundle_page_at(v, 0)?;
+    out.push(b'\n');
+    Ok(out)
+}
+
+pub fn decode_permission_bundle_page_document(data: &[u8]) -> Result<PermissionBundlePage, Refusal> {
+    let (v, n) = decode_permission_bundle_page_at(data, 0, DEPTH_LIMIT)?;
+    let mut r = Reader { buf: data, pos: n, depth: 0, limit: DEPTH_LIMIT };
+    r.skip_ws();
+    if r.pos != data.len() {
+        return r.refuse("trailing_bytes");
+    }
+    Ok(v)
+}
+
+fn named_encode_bundle_expansion(v: &BundleExpansion, depth: i32) -> Result<Vec<u8>, Refusal> {
+    match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        let mut out = Vec::new();
+        enc_bundle_expansion(&mut out, v, depth);
+        out
+    })) {
+        Ok(out) => Ok(out),
+        Err(p) => match p.downcast::<Refusal>() {
+            Ok(e) => Err(*e),
+            Err(p) => std::panic::resume_unwind(p),
+        },
+    }
+}
+
+fn decode_bundle_expansion_at(data: &[u8], depth: i32, limit: i32) -> Result<(BundleExpansion, usize), Refusal> {
+    let mut r = Reader { buf: data, pos: 0, depth, limit: if limit < DEPTH_LIMIT { limit } else { DEPTH_LIMIT } };
+    if depth < 0 || limit < 1 {
+        return r.refuse("depth_exceeded");
+    }
+    r.skip_ws();
+    let v = decode_bundle_expansion(&mut r)?;
+    Ok((v, r.pos))
+}
+
+fn check_bundle_expansion(v: &BundleExpansion, depth: i32, limit: i32) -> Result<(), Refusal> {
+    if depth < 0 || limit < 1 {
+        return Err(Refusal { word: "depth_exceeded", offset: 0 });
+    }
+    let out = named_encode_bundle_expansion(v, depth)?;
+    decode_bundle_expansion_at(&out, depth, limit).map(|_| ())
+}
+
+fn encode_bundle_expansion_at(v: &BundleExpansion, depth: i32) -> Result<Vec<u8>, Refusal> {
+    if !(0..DEPTH_LIMIT).contains(&depth) {
+        return Err(Refusal { word: "depth_exceeded", offset: 0 });
+    }
+    let out = named_encode_bundle_expansion(v, depth)?;
+    decode_bundle_expansion_at(&out, depth, DEPTH_LIMIT)?;
+    Ok(out)
+}
+
+pub fn encode_bundle_expansion_document(v: &BundleExpansion) -> Result<Vec<u8>, Refusal> {
+    let mut out = encode_bundle_expansion_at(v, 0)?;
+    out.push(b'\n');
+    Ok(out)
+}
+
+pub fn decode_bundle_expansion_document(data: &[u8]) -> Result<BundleExpansion, Refusal> {
+    let (v, n) = decode_bundle_expansion_at(data, 0, DEPTH_LIMIT)?;
+    let mut r = Reader { buf: data, pos: n, depth: 0, limit: DEPTH_LIMIT };
+    r.skip_ws();
+    if r.pos != data.len() {
+        return r.refuse("trailing_bytes");
+    }
+    Ok(v)
+}
+
+fn named_encode_permission_effect(v: &PermissionEffect, depth: i32) -> Result<Vec<u8>, Refusal> {
+    match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        let mut out = Vec::new();
+        enc_permission_effect(&mut out, v, depth);
+        out
+    })) {
+        Ok(out) => Ok(out),
+        Err(p) => match p.downcast::<Refusal>() {
+            Ok(e) => Err(*e),
+            Err(p) => std::panic::resume_unwind(p),
+        },
+    }
+}
+
+fn decode_permission_effect_at(data: &[u8], depth: i32, limit: i32) -> Result<(PermissionEffect, usize), Refusal> {
+    let mut r = Reader { buf: data, pos: 0, depth, limit: if limit < DEPTH_LIMIT { limit } else { DEPTH_LIMIT } };
+    if depth < 0 || limit < 1 {
+        return r.refuse("depth_exceeded");
+    }
+    r.skip_ws();
+    let v = decode_permission_effect(&mut r)?;
+    Ok((v, r.pos))
+}
+
+fn check_permission_effect(v: &PermissionEffect, depth: i32, limit: i32) -> Result<(), Refusal> {
+    if depth < 0 || limit < 1 {
+        return Err(Refusal { word: "depth_exceeded", offset: 0 });
+    }
+    let out = named_encode_permission_effect(v, depth)?;
+    decode_permission_effect_at(&out, depth, limit).map(|_| ())
+}
+
+fn encode_permission_effect_at(v: &PermissionEffect, depth: i32) -> Result<Vec<u8>, Refusal> {
+    if !(0..DEPTH_LIMIT).contains(&depth) {
+        return Err(Refusal { word: "depth_exceeded", offset: 0 });
+    }
+    let out = named_encode_permission_effect(v, depth)?;
+    decode_permission_effect_at(&out, depth, DEPTH_LIMIT)?;
+    Ok(out)
+}
+
+pub fn encode_permission_effect_document(v: &PermissionEffect) -> Result<Vec<u8>, Refusal> {
+    let mut out = encode_permission_effect_at(v, 0)?;
+    out.push(b'\n');
+    Ok(out)
+}
+
+pub fn decode_permission_effect_document(data: &[u8]) -> Result<PermissionEffect, Refusal> {
+    let (v, n) = decode_permission_effect_at(data, 0, DEPTH_LIMIT)?;
+    let mut r = Reader { buf: data, pos: n, depth: 0, limit: DEPTH_LIMIT };
+    r.skip_ws();
+    if r.pos != data.len() {
+        return r.refuse("trailing_bytes");
+    }
+    Ok(v)
+}
+
+fn named_encode_selector_rule(v: &SelectorRule, depth: i32) -> Result<Vec<u8>, Refusal> {
+    match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        let mut out = Vec::new();
+        enc_selector_rule(&mut out, v, depth);
+        out
+    })) {
+        Ok(out) => Ok(out),
+        Err(p) => match p.downcast::<Refusal>() {
+            Ok(e) => Err(*e),
+            Err(p) => std::panic::resume_unwind(p),
+        },
+    }
+}
+
+fn decode_selector_rule_at(data: &[u8], depth: i32, limit: i32) -> Result<(SelectorRule, usize), Refusal> {
+    let mut r = Reader { buf: data, pos: 0, depth, limit: if limit < DEPTH_LIMIT { limit } else { DEPTH_LIMIT } };
+    if depth < 0 || limit < 1 {
+        return r.refuse("depth_exceeded");
+    }
+    r.skip_ws();
+    let v = decode_selector_rule(&mut r)?;
+    Ok((v, r.pos))
+}
+
+fn check_selector_rule(v: &SelectorRule, depth: i32, limit: i32) -> Result<(), Refusal> {
+    if depth < 0 || limit < 1 {
+        return Err(Refusal { word: "depth_exceeded", offset: 0 });
+    }
+    let out = named_encode_selector_rule(v, depth)?;
+    decode_selector_rule_at(&out, depth, limit).map(|_| ())
+}
+
+fn encode_selector_rule_at(v: &SelectorRule, depth: i32) -> Result<Vec<u8>, Refusal> {
+    if !(0..DEPTH_LIMIT).contains(&depth) {
+        return Err(Refusal { word: "depth_exceeded", offset: 0 });
+    }
+    let out = named_encode_selector_rule(v, depth)?;
+    decode_selector_rule_at(&out, depth, DEPTH_LIMIT)?;
+    Ok(out)
+}
+
+pub fn encode_selector_rule_document(v: &SelectorRule) -> Result<Vec<u8>, Refusal> {
+    let mut out = encode_selector_rule_at(v, 0)?;
+    out.push(b'\n');
+    Ok(out)
+}
+
+pub fn decode_selector_rule_document(data: &[u8]) -> Result<SelectorRule, Refusal> {
+    let (v, n) = decode_selector_rule_at(data, 0, DEPTH_LIMIT)?;
+    let mut r = Reader { buf: data, pos: n, depth: 0, limit: DEPTH_LIMIT };
+    r.skip_ws();
+    if r.pos != data.len() {
+        return r.refuse("trailing_bytes");
+    }
+    Ok(v)
+}
+
+fn named_encode_bundle_origin(v: &BundleOrigin, depth: i32) -> Result<Vec<u8>, Refusal> {
+    match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        let mut out = Vec::new();
+        enc_bundle_origin(&mut out, v, depth);
+        out
+    })) {
+        Ok(out) => Ok(out),
+        Err(p) => match p.downcast::<Refusal>() {
+            Ok(e) => Err(*e),
+            Err(p) => std::panic::resume_unwind(p),
+        },
+    }
+}
+
+fn decode_bundle_origin_at(data: &[u8], depth: i32, limit: i32) -> Result<(BundleOrigin, usize), Refusal> {
+    let mut r = Reader { buf: data, pos: 0, depth, limit: if limit < DEPTH_LIMIT { limit } else { DEPTH_LIMIT } };
+    if depth < 0 || limit < 1 {
+        return r.refuse("depth_exceeded");
+    }
+    r.skip_ws();
+    let v = decode_bundle_origin(&mut r)?;
+    Ok((v, r.pos))
+}
+
+fn check_bundle_origin(v: &BundleOrigin, depth: i32, limit: i32) -> Result<(), Refusal> {
+    if depth < 0 || limit < 1 {
+        return Err(Refusal { word: "depth_exceeded", offset: 0 });
+    }
+    let out = named_encode_bundle_origin(v, depth)?;
+    decode_bundle_origin_at(&out, depth, limit).map(|_| ())
+}
+
+fn encode_bundle_origin_at(v: &BundleOrigin, depth: i32) -> Result<Vec<u8>, Refusal> {
+    if !(0..DEPTH_LIMIT).contains(&depth) {
+        return Err(Refusal { word: "depth_exceeded", offset: 0 });
+    }
+    let out = named_encode_bundle_origin(v, depth)?;
+    decode_bundle_origin_at(&out, depth, DEPTH_LIMIT)?;
+    Ok(out)
+}
+
+pub fn encode_bundle_origin_document(v: &BundleOrigin) -> Result<Vec<u8>, Refusal> {
+    let mut out = encode_bundle_origin_at(v, 0)?;
+    out.push(b'\n');
+    Ok(out)
+}
+
+pub fn decode_bundle_origin_document(data: &[u8]) -> Result<BundleOrigin, Refusal> {
+    let (v, n) = decode_bundle_origin_at(data, 0, DEPTH_LIMIT)?;
+    let mut r = Reader { buf: data, pos: n, depth: 0, limit: DEPTH_LIMIT };
+    r.skip_ws();
+    if r.pos != data.len() {
+        return r.refuse("trailing_bytes");
+    }
+    Ok(v)
+}
+
+fn named_encode_selector_rule_record(v: &SelectorRuleRecord, depth: i32) -> Result<Vec<u8>, Refusal> {
+    match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        let mut out = Vec::new();
+        enc_selector_rule_record(&mut out, v, depth);
+        out
+    })) {
+        Ok(out) => Ok(out),
+        Err(p) => match p.downcast::<Refusal>() {
+            Ok(e) => Err(*e),
+            Err(p) => std::panic::resume_unwind(p),
+        },
+    }
+}
+
+fn decode_selector_rule_record_at(data: &[u8], depth: i32, limit: i32) -> Result<(SelectorRuleRecord, usize), Refusal> {
+    let mut r = Reader { buf: data, pos: 0, depth, limit: if limit < DEPTH_LIMIT { limit } else { DEPTH_LIMIT } };
+    if depth < 0 || limit < 1 {
+        return r.refuse("depth_exceeded");
+    }
+    r.skip_ws();
+    let v = decode_selector_rule_record(&mut r)?;
+    Ok((v, r.pos))
+}
+
+fn check_selector_rule_record(v: &SelectorRuleRecord, depth: i32, limit: i32) -> Result<(), Refusal> {
+    if depth < 0 || limit < 1 {
+        return Err(Refusal { word: "depth_exceeded", offset: 0 });
+    }
+    let out = named_encode_selector_rule_record(v, depth)?;
+    decode_selector_rule_record_at(&out, depth, limit).map(|_| ())
+}
+
+fn encode_selector_rule_record_at(v: &SelectorRuleRecord, depth: i32) -> Result<Vec<u8>, Refusal> {
+    if !(0..DEPTH_LIMIT).contains(&depth) {
+        return Err(Refusal { word: "depth_exceeded", offset: 0 });
+    }
+    let out = named_encode_selector_rule_record(v, depth)?;
+    decode_selector_rule_record_at(&out, depth, DEPTH_LIMIT)?;
+    Ok(out)
+}
+
+pub fn encode_selector_rule_record_document(v: &SelectorRuleRecord) -> Result<Vec<u8>, Refusal> {
+    let mut out = encode_selector_rule_record_at(v, 0)?;
+    out.push(b'\n');
+    Ok(out)
+}
+
+pub fn decode_selector_rule_record_document(data: &[u8]) -> Result<SelectorRuleRecord, Refusal> {
+    let (v, n) = decode_selector_rule_record_at(data, 0, DEPTH_LIMIT)?;
+    let mut r = Reader { buf: data, pos: n, depth: 0, limit: DEPTH_LIMIT };
+    r.skip_ws();
+    if r.pos != data.len() {
+        return r.refuse("trailing_bytes");
+    }
+    Ok(v)
+}
+
+fn named_encode_selector_rule_page(v: &SelectorRulePage, depth: i32) -> Result<Vec<u8>, Refusal> {
+    match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        let mut out = Vec::new();
+        enc_selector_rule_page(&mut out, v, depth);
+        out
+    })) {
+        Ok(out) => Ok(out),
+        Err(p) => match p.downcast::<Refusal>() {
+            Ok(e) => Err(*e),
+            Err(p) => std::panic::resume_unwind(p),
+        },
+    }
+}
+
+fn decode_selector_rule_page_at(data: &[u8], depth: i32, limit: i32) -> Result<(SelectorRulePage, usize), Refusal> {
+    let mut r = Reader { buf: data, pos: 0, depth, limit: if limit < DEPTH_LIMIT { limit } else { DEPTH_LIMIT } };
+    if depth < 0 || limit < 1 {
+        return r.refuse("depth_exceeded");
+    }
+    r.skip_ws();
+    let v = decode_selector_rule_page(&mut r)?;
+    Ok((v, r.pos))
+}
+
+fn check_selector_rule_page(v: &SelectorRulePage, depth: i32, limit: i32) -> Result<(), Refusal> {
+    if depth < 0 || limit < 1 {
+        return Err(Refusal { word: "depth_exceeded", offset: 0 });
+    }
+    let out = named_encode_selector_rule_page(v, depth)?;
+    decode_selector_rule_page_at(&out, depth, limit).map(|_| ())
+}
+
+fn encode_selector_rule_page_at(v: &SelectorRulePage, depth: i32) -> Result<Vec<u8>, Refusal> {
+    if !(0..DEPTH_LIMIT).contains(&depth) {
+        return Err(Refusal { word: "depth_exceeded", offset: 0 });
+    }
+    let out = named_encode_selector_rule_page(v, depth)?;
+    decode_selector_rule_page_at(&out, depth, DEPTH_LIMIT)?;
+    Ok(out)
+}
+
+pub fn encode_selector_rule_page_document(v: &SelectorRulePage) -> Result<Vec<u8>, Refusal> {
+    let mut out = encode_selector_rule_page_at(v, 0)?;
+    out.push(b'\n');
+    Ok(out)
+}
+
+pub fn decode_selector_rule_page_document(data: &[u8]) -> Result<SelectorRulePage, Refusal> {
+    let (v, n) = decode_selector_rule_page_at(data, 0, DEPTH_LIMIT)?;
+    let mut r = Reader { buf: data, pos: n, depth: 0, limit: DEPTH_LIMIT };
+    r.skip_ws();
+    if r.pos != data.len() {
+        return r.refuse("trailing_bytes");
+    }
+    Ok(v)
+}
+
+fn named_encode_selector_rule_read(v: &SelectorRuleRead, depth: i32) -> Result<Vec<u8>, Refusal> {
+    match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        let mut out = Vec::new();
+        enc_selector_rule_read(&mut out, v, depth);
+        out
+    })) {
+        Ok(out) => Ok(out),
+        Err(p) => match p.downcast::<Refusal>() {
+            Ok(e) => Err(*e),
+            Err(p) => std::panic::resume_unwind(p),
+        },
+    }
+}
+
+fn decode_selector_rule_read_at(data: &[u8], depth: i32, limit: i32) -> Result<(SelectorRuleRead, usize), Refusal> {
+    let mut r = Reader { buf: data, pos: 0, depth, limit: if limit < DEPTH_LIMIT { limit } else { DEPTH_LIMIT } };
+    if depth < 0 || limit < 1 {
+        return r.refuse("depth_exceeded");
+    }
+    r.skip_ws();
+    let v = decode_selector_rule_read(&mut r)?;
+    Ok((v, r.pos))
+}
+
+fn check_selector_rule_read(v: &SelectorRuleRead, depth: i32, limit: i32) -> Result<(), Refusal> {
+    if depth < 0 || limit < 1 {
+        return Err(Refusal { word: "depth_exceeded", offset: 0 });
+    }
+    let out = named_encode_selector_rule_read(v, depth)?;
+    decode_selector_rule_read_at(&out, depth, limit).map(|_| ())
+}
+
+fn encode_selector_rule_read_at(v: &SelectorRuleRead, depth: i32) -> Result<Vec<u8>, Refusal> {
+    if !(0..DEPTH_LIMIT).contains(&depth) {
+        return Err(Refusal { word: "depth_exceeded", offset: 0 });
+    }
+    let out = named_encode_selector_rule_read(v, depth)?;
+    decode_selector_rule_read_at(&out, depth, DEPTH_LIMIT)?;
+    Ok(out)
+}
+
+pub fn encode_selector_rule_read_document(v: &SelectorRuleRead) -> Result<Vec<u8>, Refusal> {
+    let mut out = encode_selector_rule_read_at(v, 0)?;
+    out.push(b'\n');
+    Ok(out)
+}
+
+pub fn decode_selector_rule_read_document(data: &[u8]) -> Result<SelectorRuleRead, Refusal> {
+    let (v, n) = decode_selector_rule_read_at(data, 0, DEPTH_LIMIT)?;
+    let mut r = Reader { buf: data, pos: n, depth: 0, limit: DEPTH_LIMIT };
+    r.skip_ws();
+    if r.pos != data.len() {
+        return r.refuse("trailing_bytes");
+    }
+    Ok(v)
+}
+
+fn named_encode_selector_edit(v: &SelectorEdit, depth: i32) -> Result<Vec<u8>, Refusal> {
+    match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        let mut out = Vec::new();
+        enc_selector_edit(&mut out, v, depth);
+        out
+    })) {
+        Ok(out) => Ok(out),
+        Err(p) => match p.downcast::<Refusal>() {
+            Ok(e) => Err(*e),
+            Err(p) => std::panic::resume_unwind(p),
+        },
+    }
+}
+
+fn decode_selector_edit_at(data: &[u8], depth: i32, limit: i32) -> Result<(SelectorEdit, usize), Refusal> {
+    let mut r = Reader { buf: data, pos: 0, depth, limit: if limit < DEPTH_LIMIT { limit } else { DEPTH_LIMIT } };
+    if depth < 0 || limit < 1 {
+        return r.refuse("depth_exceeded");
+    }
+    r.skip_ws();
+    let v = decode_selector_edit(&mut r)?;
+    Ok((v, r.pos))
+}
+
+fn check_selector_edit(v: &SelectorEdit, depth: i32, limit: i32) -> Result<(), Refusal> {
+    if depth < 0 || limit < 1 {
+        return Err(Refusal { word: "depth_exceeded", offset: 0 });
+    }
+    let out = named_encode_selector_edit(v, depth)?;
+    decode_selector_edit_at(&out, depth, limit).map(|_| ())
+}
+
+fn encode_selector_edit_at(v: &SelectorEdit, depth: i32) -> Result<Vec<u8>, Refusal> {
+    if !(0..DEPTH_LIMIT).contains(&depth) {
+        return Err(Refusal { word: "depth_exceeded", offset: 0 });
+    }
+    let out = named_encode_selector_edit(v, depth)?;
+    decode_selector_edit_at(&out, depth, DEPTH_LIMIT)?;
+    Ok(out)
+}
+
+pub fn encode_selector_edit_document(v: &SelectorEdit) -> Result<Vec<u8>, Refusal> {
+    let mut out = encode_selector_edit_at(v, 0)?;
+    out.push(b'\n');
+    Ok(out)
+}
+
+pub fn decode_selector_edit_document(data: &[u8]) -> Result<SelectorEdit, Refusal> {
+    let (v, n) = decode_selector_edit_at(data, 0, DEPTH_LIMIT)?;
+    let mut r = Reader { buf: data, pos: n, depth: 0, limit: DEPTH_LIMIT };
+    r.skip_ws();
+    if r.pos != data.len() {
+        return r.refuse("trailing_bytes");
+    }
+    Ok(v)
+}
+
+fn named_encode_legacy_operation_request(v: &LegacyOperationRequest, depth: i32) -> Result<Vec<u8>, Refusal> {
+    match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        let mut out = Vec::new();
+        enc_legacy_operation_request(&mut out, v, depth);
+        out
+    })) {
+        Ok(out) => Ok(out),
+        Err(p) => match p.downcast::<Refusal>() {
+            Ok(e) => Err(*e),
+            Err(p) => std::panic::resume_unwind(p),
+        },
+    }
+}
+
+fn decode_legacy_operation_request_at(data: &[u8], depth: i32, limit: i32) -> Result<(LegacyOperationRequest, usize), Refusal> {
+    let mut r = Reader { buf: data, pos: 0, depth, limit: if limit < DEPTH_LIMIT { limit } else { DEPTH_LIMIT } };
+    if depth < 0 || limit < 1 {
+        return r.refuse("depth_exceeded");
+    }
+    r.skip_ws();
+    let v = decode_legacy_operation_request(&mut r)?;
+    Ok((v, r.pos))
+}
+
+fn check_legacy_operation_request(v: &LegacyOperationRequest, depth: i32, limit: i32) -> Result<(), Refusal> {
+    if depth < 0 || limit < 1 {
+        return Err(Refusal { word: "depth_exceeded", offset: 0 });
+    }
+    let out = named_encode_legacy_operation_request(v, depth)?;
+    decode_legacy_operation_request_at(&out, depth, limit).map(|_| ())
+}
+
+fn encode_legacy_operation_request_at(v: &LegacyOperationRequest, depth: i32) -> Result<Vec<u8>, Refusal> {
+    if !(0..DEPTH_LIMIT).contains(&depth) {
+        return Err(Refusal { word: "depth_exceeded", offset: 0 });
+    }
+    let out = named_encode_legacy_operation_request(v, depth)?;
+    decode_legacy_operation_request_at(&out, depth, DEPTH_LIMIT)?;
+    Ok(out)
+}
+
+pub fn encode_legacy_operation_request_document(v: &LegacyOperationRequest) -> Result<Vec<u8>, Refusal> {
+    let mut out = encode_legacy_operation_request_at(v, 0)?;
+    out.push(b'\n');
+    Ok(out)
+}
+
+pub fn decode_legacy_operation_request_document(data: &[u8]) -> Result<LegacyOperationRequest, Refusal> {
+    let (v, n) = decode_legacy_operation_request_at(data, 0, DEPTH_LIMIT)?;
+    let mut r = Reader { buf: data, pos: n, depth: 0, limit: DEPTH_LIMIT };
+    r.skip_ws();
+    if r.pos != data.len() {
+        return r.refuse("trailing_bytes");
+    }
+    Ok(v)
+}
+
+/// Items generated crates that include this one, and conformance drivers,
+/// reach. Nothing here is API; it may change in any release.
+pub mod internal {
+    pub fn decode_request_at(data: &[u8], depth: i32, limit: i32) -> Result<(super::Request, usize), super::Refusal> {
+        super::decode_request_at(data, depth, limit)
+    }
+
+    pub fn check_request(v: &super::Request, depth: i32, limit: i32) -> Result<(), super::Refusal> {
+        super::check_request(v, depth, limit)
+    }
+
+    pub fn encode_request_at(v: &super::Request, depth: i32) -> Result<Vec<u8>, super::Refusal> {
+        super::encode_request_at(v, depth)
+    }
+
+    pub fn decode_app_metadata_at(data: &[u8], depth: i32, limit: i32) -> Result<(super::AppMetadata, usize), super::Refusal> {
+        super::decode_app_metadata_at(data, depth, limit)
+    }
+
+    pub fn check_app_metadata(v: &super::AppMetadata, depth: i32, limit: i32) -> Result<(), super::Refusal> {
+        super::check_app_metadata(v, depth, limit)
+    }
+
+    pub fn encode_app_metadata_at(v: &super::AppMetadata, depth: i32) -> Result<Vec<u8>, super::Refusal> {
+        super::encode_app_metadata_at(v, depth)
+    }
+
+    pub fn decode_hold_metadata_at(data: &[u8], depth: i32, limit: i32) -> Result<(super::HoldMetadata, usize), super::Refusal> {
+        super::decode_hold_metadata_at(data, depth, limit)
+    }
+
+    pub fn check_hold_metadata(v: &super::HoldMetadata, depth: i32, limit: i32) -> Result<(), super::Refusal> {
+        super::check_hold_metadata(v, depth, limit)
+    }
+
+    pub fn encode_hold_metadata_at(v: &super::HoldMetadata, depth: i32) -> Result<Vec<u8>, super::Refusal> {
+        super::encode_hold_metadata_at(v, depth)
+    }
+
+    pub fn decode_response_metadata_at(data: &[u8], depth: i32, limit: i32) -> Result<(super::ResponseMetadata, usize), super::Refusal> {
+        super::decode_response_metadata_at(data, depth, limit)
+    }
+
+    pub fn check_response_metadata(v: &super::ResponseMetadata, depth: i32, limit: i32) -> Result<(), super::Refusal> {
+        super::check_response_metadata(v, depth, limit)
+    }
+
+    pub fn encode_response_metadata_at(v: &super::ResponseMetadata, depth: i32) -> Result<Vec<u8>, super::Refusal> {
+        super::encode_response_metadata_at(v, depth)
+    }
+
+    pub fn decode_subject_at(data: &[u8], depth: i32, limit: i32) -> Result<(super::Subject, usize), super::Refusal> {
+        super::decode_subject_at(data, depth, limit)
+    }
+
+    pub fn check_subject(v: &super::Subject, depth: i32, limit: i32) -> Result<(), super::Refusal> {
+        super::check_subject(v, depth, limit)
+    }
+
+    pub fn encode_subject_at(v: &super::Subject, depth: i32) -> Result<Vec<u8>, super::Refusal> {
+        super::encode_subject_at(v, depth)
+    }
+
+    pub fn decode_decision_at(data: &[u8], depth: i32, limit: i32) -> Result<(super::Decision, usize), super::Refusal> {
+        super::decode_decision_at(data, depth, limit)
+    }
+
+    pub fn check_decision(v: &super::Decision, depth: i32, limit: i32) -> Result<(), super::Refusal> {
+        super::check_decision(v, depth, limit)
+    }
+
+    pub fn encode_decision_at(v: &super::Decision, depth: i32) -> Result<Vec<u8>, super::Refusal> {
+        super::encode_decision_at(v, depth)
+    }
+
+    pub fn decode_policy_rule_at(data: &[u8], depth: i32, limit: i32) -> Result<(super::PolicyRule, usize), super::Refusal> {
+        super::decode_policy_rule_at(data, depth, limit)
+    }
+
+    pub fn check_policy_rule(v: &super::PolicyRule, depth: i32, limit: i32) -> Result<(), super::Refusal> {
+        super::check_policy_rule(v, depth, limit)
+    }
+
+    pub fn encode_policy_rule_at(v: &super::PolicyRule, depth: i32) -> Result<Vec<u8>, super::Refusal> {
+        super::encode_policy_rule_at(v, depth)
+    }
+
+    pub fn decode_policy_page_at(data: &[u8], depth: i32, limit: i32) -> Result<(super::PolicyPage, usize), super::Refusal> {
+        super::decode_policy_page_at(data, depth, limit)
+    }
+
+    pub fn check_policy_page(v: &super::PolicyPage, depth: i32, limit: i32) -> Result<(), super::Refusal> {
+        super::check_policy_page(v, depth, limit)
+    }
+
+    pub fn encode_policy_page_at(v: &super::PolicyPage, depth: i32) -> Result<Vec<u8>, super::Refusal> {
+        super::encode_policy_page_at(v, depth)
+    }
+
+    pub fn decode_policy_edit_at(data: &[u8], depth: i32, limit: i32) -> Result<(super::PolicyEdit, usize), super::Refusal> {
+        super::decode_policy_edit_at(data, depth, limit)
+    }
+
+    pub fn check_policy_edit(v: &super::PolicyEdit, depth: i32, limit: i32) -> Result<(), super::Refusal> {
+        super::check_policy_edit(v, depth, limit)
+    }
+
+    pub fn encode_policy_edit_at(v: &super::PolicyEdit, depth: i32) -> Result<Vec<u8>, super::Refusal> {
+        super::encode_policy_edit_at(v, depth)
+    }
+
+    pub fn decode_rule_record_at(data: &[u8], depth: i32, limit: i32) -> Result<(super::RuleRecord, usize), super::Refusal> {
+        super::decode_rule_record_at(data, depth, limit)
+    }
+
+    pub fn check_rule_record(v: &super::RuleRecord, depth: i32, limit: i32) -> Result<(), super::Refusal> {
+        super::check_rule_record(v, depth, limit)
+    }
+
+    pub fn encode_rule_record_at(v: &super::RuleRecord, depth: i32) -> Result<Vec<u8>, super::Refusal> {
+        super::encode_rule_record_at(v, depth)
+    }
+
+    pub fn decode_rule_read_at(data: &[u8], depth: i32, limit: i32) -> Result<(super::RuleRead, usize), super::Refusal> {
+        super::decode_rule_read_at(data, depth, limit)
+    }
+
+    pub fn check_rule_read(v: &super::RuleRead, depth: i32, limit: i32) -> Result<(), super::Refusal> {
+        super::check_rule_read(v, depth, limit)
+    }
+
+    pub fn encode_rule_read_at(v: &super::RuleRead, depth: i32) -> Result<Vec<u8>, super::Refusal> {
+        super::encode_rule_read_at(v, depth)
+    }
+
+    pub fn decode_catalog_entry_at(data: &[u8], depth: i32, limit: i32) -> Result<(super::CatalogEntry, usize), super::Refusal> {
+        super::decode_catalog_entry_at(data, depth, limit)
+    }
+
+    pub fn check_catalog_entry(v: &super::CatalogEntry, depth: i32, limit: i32) -> Result<(), super::Refusal> {
+        super::check_catalog_entry(v, depth, limit)
+    }
+
+    pub fn encode_catalog_entry_at(v: &super::CatalogEntry, depth: i32) -> Result<Vec<u8>, super::Refusal> {
+        super::encode_catalog_entry_at(v, depth)
+    }
+
+    pub fn decode_action_description_at(data: &[u8], depth: i32, limit: i32) -> Result<(super::ActionDescription, usize), super::Refusal> {
+        super::decode_action_description_at(data, depth, limit)
+    }
+
+    pub fn check_action_description(v: &super::ActionDescription, depth: i32, limit: i32) -> Result<(), super::Refusal> {
+        super::check_action_description(v, depth, limit)
+    }
+
+    pub fn encode_action_description_at(v: &super::ActionDescription, depth: i32) -> Result<Vec<u8>, super::Refusal> {
+        super::encode_action_description_at(v, depth)
+    }
+
+    pub fn decode_permission_definition_at(data: &[u8], depth: i32, limit: i32) -> Result<(super::PermissionDefinition, usize), super::Refusal> {
+        super::decode_permission_definition_at(data, depth, limit)
+    }
+
+    pub fn check_permission_definition(v: &super::PermissionDefinition, depth: i32, limit: i32) -> Result<(), super::Refusal> {
+        super::check_permission_definition(v, depth, limit)
+    }
+
+    pub fn encode_permission_definition_at(v: &super::PermissionDefinition, depth: i32) -> Result<Vec<u8>, super::Refusal> {
+        super::encode_permission_definition_at(v, depth)
+    }
+
+    pub fn decode_described_action_at(data: &[u8], depth: i32, limit: i32) -> Result<(super::DescribedAction, usize), super::Refusal> {
+        super::decode_described_action_at(data, depth, limit)
+    }
+
+    pub fn check_described_action(v: &super::DescribedAction, depth: i32, limit: i32) -> Result<(), super::Refusal> {
+        super::check_described_action(v, depth, limit)
+    }
+
+    pub fn encode_described_action_at(v: &super::DescribedAction, depth: i32) -> Result<Vec<u8>, super::Refusal> {
+        super::encode_described_action_at(v, depth)
+    }
+
+    pub fn decode_action_edit_at(data: &[u8], depth: i32, limit: i32) -> Result<(super::ActionEdit, usize), super::Refusal> {
+        super::decode_action_edit_at(data, depth, limit)
+    }
+
+    pub fn check_action_edit(v: &super::ActionEdit, depth: i32, limit: i32) -> Result<(), super::Refusal> {
+        super::check_action_edit(v, depth, limit)
+    }
+
+    pub fn encode_action_edit_at(v: &super::ActionEdit, depth: i32) -> Result<Vec<u8>, super::Refusal> {
+        super::encode_action_edit_at(v, depth)
+    }
+
+    pub fn decode_description_edit_at(data: &[u8], depth: i32, limit: i32) -> Result<(super::DescriptionEdit, usize), super::Refusal> {
+        super::decode_description_edit_at(data, depth, limit)
+    }
+
+    pub fn check_description_edit(v: &super::DescriptionEdit, depth: i32, limit: i32) -> Result<(), super::Refusal> {
+        super::check_description_edit(v, depth, limit)
+    }
+
+    pub fn encode_description_edit_at(v: &super::DescriptionEdit, depth: i32) -> Result<Vec<u8>, super::Refusal> {
+        super::encode_description_edit_at(v, depth)
+    }
+
+    pub fn decode_description_page_at(data: &[u8], depth: i32, limit: i32) -> Result<(super::DescriptionPage, usize), super::Refusal> {
+        super::decode_description_page_at(data, depth, limit)
+    }
+
+    pub fn check_description_page(v: &super::DescriptionPage, depth: i32, limit: i32) -> Result<(), super::Refusal> {
+        super::check_description_page(v, depth, limit)
+    }
+
+    pub fn encode_description_page_at(v: &super::DescriptionPage, depth: i32) -> Result<Vec<u8>, super::Refusal> {
+        super::encode_description_page_at(v, depth)
+    }
+
+    pub fn decode_account_default_at(data: &[u8], depth: i32, limit: i32) -> Result<(super::AccountDefault, usize), super::Refusal> {
+        super::decode_account_default_at(data, depth, limit)
+    }
+
+    pub fn check_account_default(v: &super::AccountDefault, depth: i32, limit: i32) -> Result<(), super::Refusal> {
+        super::check_account_default(v, depth, limit)
+    }
+
+    pub fn encode_account_default_at(v: &super::AccountDefault, depth: i32) -> Result<Vec<u8>, super::Refusal> {
+        super::encode_account_default_at(v, depth)
+    }
+
+    pub fn decode_default_page_at(data: &[u8], depth: i32, limit: i32) -> Result<(super::DefaultPage, usize), super::Refusal> {
+        super::decode_default_page_at(data, depth, limit)
+    }
+
+    pub fn check_default_page(v: &super::DefaultPage, depth: i32, limit: i32) -> Result<(), super::Refusal> {
+        super::check_default_page(v, depth, limit)
+    }
+
+    pub fn encode_default_page_at(v: &super::DefaultPage, depth: i32) -> Result<Vec<u8>, super::Refusal> {
+        super::encode_default_page_at(v, depth)
+    }
+
+    pub fn decode_default_edit_at(data: &[u8], depth: i32, limit: i32) -> Result<(super::DefaultEdit, usize), super::Refusal> {
+        super::decode_default_edit_at(data, depth, limit)
+    }
+
+    pub fn check_default_edit(v: &super::DefaultEdit, depth: i32, limit: i32) -> Result<(), super::Refusal> {
+        super::check_default_edit(v, depth, limit)
+    }
+
+    pub fn encode_default_edit_at(v: &super::DefaultEdit, depth: i32) -> Result<Vec<u8>, super::Refusal> {
+        super::encode_default_edit_at(v, depth)
+    }
+
+    pub fn decode_decision_explanation_at(data: &[u8], depth: i32, limit: i32) -> Result<(super::DecisionExplanation, usize), super::Refusal> {
+        super::decode_decision_explanation_at(data, depth, limit)
+    }
+
+    pub fn check_decision_explanation(v: &super::DecisionExplanation, depth: i32, limit: i32) -> Result<(), super::Refusal> {
+        super::check_decision_explanation(v, depth, limit)
+    }
+
+    pub fn encode_decision_explanation_at(v: &super::DecisionExplanation, depth: i32) -> Result<Vec<u8>, super::Refusal> {
+        super::encode_decision_explanation_at(v, depth)
+    }
+
+    pub fn decode_permission_key_at(data: &[u8], depth: i32, limit: i32) -> Result<(super::PermissionKey, usize), super::Refusal> {
+        super::decode_permission_key_at(data, depth, limit)
+    }
+
+    pub fn check_permission_key(v: &super::PermissionKey, depth: i32, limit: i32) -> Result<(), super::Refusal> {
+        super::check_permission_key(v, depth, limit)
+    }
+
+    pub fn encode_permission_key_at(v: &super::PermissionKey, depth: i32) -> Result<Vec<u8>, super::Refusal> {
+        super::encode_permission_key_at(v, depth)
+    }
+
+    pub fn decode_resource_selector_at(data: &[u8], depth: i32, limit: i32) -> Result<(super::ResourceSelector, usize), super::Refusal> {
+        super::decode_resource_selector_at(data, depth, limit)
+    }
+
+    pub fn check_resource_selector(v: &super::ResourceSelector, depth: i32, limit: i32) -> Result<(), super::Refusal> {
+        super::check_resource_selector(v, depth, limit)
+    }
+
+    pub fn encode_resource_selector_at(v: &super::ResourceSelector, depth: i32) -> Result<Vec<u8>, super::Refusal> {
+        super::encode_resource_selector_at(v, depth)
+    }
+
+    pub fn decode_permission_selection_at(data: &[u8], depth: i32, limit: i32) -> Result<(super::PermissionSelection, usize), super::Refusal> {
+        super::decode_permission_selection_at(data, depth, limit)
+    }
+
+    pub fn check_permission_selection(v: &super::PermissionSelection, depth: i32, limit: i32) -> Result<(), super::Refusal> {
+        super::check_permission_selection(v, depth, limit)
+    }
+
+    pub fn encode_permission_selection_at(v: &super::PermissionSelection, depth: i32) -> Result<Vec<u8>, super::Refusal> {
+        super::encode_permission_selection_at(v, depth)
+    }
+
+    pub fn decode_concrete_resource_at(data: &[u8], depth: i32, limit: i32) -> Result<(super::ConcreteResource, usize), super::Refusal> {
+        super::decode_concrete_resource_at(data, depth, limit)
+    }
+
+    pub fn check_concrete_resource(v: &super::ConcreteResource, depth: i32, limit: i32) -> Result<(), super::Refusal> {
+        super::check_concrete_resource(v, depth, limit)
+    }
+
+    pub fn encode_concrete_resource_at(v: &super::ConcreteResource, depth: i32) -> Result<Vec<u8>, super::Refusal> {
+        super::encode_concrete_resource_at(v, depth)
+    }
+
+    pub fn decode_check_batch_request_at(data: &[u8], depth: i32, limit: i32) -> Result<(super::CheckBatchRequest, usize), super::Refusal> {
+        super::decode_check_batch_request_at(data, depth, limit)
+    }
+
+    pub fn check_check_batch_request(v: &super::CheckBatchRequest, depth: i32, limit: i32) -> Result<(), super::Refusal> {
+        super::check_check_batch_request(v, depth, limit)
+    }
+
+    pub fn encode_check_batch_request_at(v: &super::CheckBatchRequest, depth: i32) -> Result<Vec<u8>, super::Refusal> {
+        super::encode_check_batch_request_at(v, depth)
+    }
+
+    pub fn decode_batch_decision_at(data: &[u8], depth: i32, limit: i32) -> Result<(super::BatchDecision, usize), super::Refusal> {
+        super::decode_batch_decision_at(data, depth, limit)
+    }
+
+    pub fn check_batch_decision(v: &super::BatchDecision, depth: i32, limit: i32) -> Result<(), super::Refusal> {
+        super::check_batch_decision(v, depth, limit)
+    }
+
+    pub fn encode_batch_decision_at(v: &super::BatchDecision, depth: i32) -> Result<Vec<u8>, super::Refusal> {
+        super::encode_batch_decision_at(v, depth)
+    }
+
+    pub fn decode_selector_permission_definition_at(data: &[u8], depth: i32, limit: i32) -> Result<(super::SelectorPermissionDefinition, usize), super::Refusal> {
+        super::decode_selector_permission_definition_at(data, depth, limit)
+    }
+
+    pub fn check_selector_permission_definition(v: &super::SelectorPermissionDefinition, depth: i32, limit: i32) -> Result<(), super::Refusal> {
+        super::check_selector_permission_definition(v, depth, limit)
+    }
+
+    pub fn encode_selector_permission_definition_at(v: &super::SelectorPermissionDefinition, depth: i32) -> Result<Vec<u8>, super::Refusal> {
+        super::encode_selector_permission_definition_at(v, depth)
+    }
+
+    pub fn decode_permission_definition_page_at(data: &[u8], depth: i32, limit: i32) -> Result<(super::PermissionDefinitionPage, usize), super::Refusal> {
+        super::decode_permission_definition_page_at(data, depth, limit)
+    }
+
+    pub fn check_permission_definition_page(v: &super::PermissionDefinitionPage, depth: i32, limit: i32) -> Result<(), super::Refusal> {
+        super::check_permission_definition_page(v, depth, limit)
+    }
+
+    pub fn encode_permission_definition_page_at(v: &super::PermissionDefinitionPage, depth: i32) -> Result<Vec<u8>, super::Refusal> {
+        super::encode_permission_definition_page_at(v, depth)
+    }
+
+    pub fn decode_permission_bundle_definition_at(data: &[u8], depth: i32, limit: i32) -> Result<(super::PermissionBundleDefinition, usize), super::Refusal> {
+        super::decode_permission_bundle_definition_at(data, depth, limit)
+    }
+
+    pub fn check_permission_bundle_definition(v: &super::PermissionBundleDefinition, depth: i32, limit: i32) -> Result<(), super::Refusal> {
+        super::check_permission_bundle_definition(v, depth, limit)
+    }
+
+    pub fn encode_permission_bundle_definition_at(v: &super::PermissionBundleDefinition, depth: i32) -> Result<Vec<u8>, super::Refusal> {
+        super::encode_permission_bundle_definition_at(v, depth)
+    }
+
+    pub fn decode_permission_bundle_page_at(data: &[u8], depth: i32, limit: i32) -> Result<(super::PermissionBundlePage, usize), super::Refusal> {
+        super::decode_permission_bundle_page_at(data, depth, limit)
+    }
+
+    pub fn check_permission_bundle_page(v: &super::PermissionBundlePage, depth: i32, limit: i32) -> Result<(), super::Refusal> {
+        super::check_permission_bundle_page(v, depth, limit)
+    }
+
+    pub fn encode_permission_bundle_page_at(v: &super::PermissionBundlePage, depth: i32) -> Result<Vec<u8>, super::Refusal> {
+        super::encode_permission_bundle_page_at(v, depth)
+    }
+
+    pub fn decode_bundle_expansion_at(data: &[u8], depth: i32, limit: i32) -> Result<(super::BundleExpansion, usize), super::Refusal> {
+        super::decode_bundle_expansion_at(data, depth, limit)
+    }
+
+    pub fn check_bundle_expansion(v: &super::BundleExpansion, depth: i32, limit: i32) -> Result<(), super::Refusal> {
+        super::check_bundle_expansion(v, depth, limit)
+    }
+
+    pub fn encode_bundle_expansion_at(v: &super::BundleExpansion, depth: i32) -> Result<Vec<u8>, super::Refusal> {
+        super::encode_bundle_expansion_at(v, depth)
+    }
+
+    pub fn decode_permission_effect_at(data: &[u8], depth: i32, limit: i32) -> Result<(super::PermissionEffect, usize), super::Refusal> {
+        super::decode_permission_effect_at(data, depth, limit)
+    }
+
+    pub fn check_permission_effect(v: &super::PermissionEffect, depth: i32, limit: i32) -> Result<(), super::Refusal> {
+        super::check_permission_effect(v, depth, limit)
+    }
+
+    pub fn encode_permission_effect_at(v: &super::PermissionEffect, depth: i32) -> Result<Vec<u8>, super::Refusal> {
+        super::encode_permission_effect_at(v, depth)
+    }
+
+    pub fn decode_selector_rule_at(data: &[u8], depth: i32, limit: i32) -> Result<(super::SelectorRule, usize), super::Refusal> {
+        super::decode_selector_rule_at(data, depth, limit)
+    }
+
+    pub fn check_selector_rule(v: &super::SelectorRule, depth: i32, limit: i32) -> Result<(), super::Refusal> {
+        super::check_selector_rule(v, depth, limit)
+    }
+
+    pub fn encode_selector_rule_at(v: &super::SelectorRule, depth: i32) -> Result<Vec<u8>, super::Refusal> {
+        super::encode_selector_rule_at(v, depth)
+    }
+
+    pub fn decode_bundle_origin_at(data: &[u8], depth: i32, limit: i32) -> Result<(super::BundleOrigin, usize), super::Refusal> {
+        super::decode_bundle_origin_at(data, depth, limit)
+    }
+
+    pub fn check_bundle_origin(v: &super::BundleOrigin, depth: i32, limit: i32) -> Result<(), super::Refusal> {
+        super::check_bundle_origin(v, depth, limit)
+    }
+
+    pub fn encode_bundle_origin_at(v: &super::BundleOrigin, depth: i32) -> Result<Vec<u8>, super::Refusal> {
+        super::encode_bundle_origin_at(v, depth)
+    }
+
+    pub fn decode_selector_rule_record_at(data: &[u8], depth: i32, limit: i32) -> Result<(super::SelectorRuleRecord, usize), super::Refusal> {
+        super::decode_selector_rule_record_at(data, depth, limit)
+    }
+
+    pub fn check_selector_rule_record(v: &super::SelectorRuleRecord, depth: i32, limit: i32) -> Result<(), super::Refusal> {
+        super::check_selector_rule_record(v, depth, limit)
+    }
+
+    pub fn encode_selector_rule_record_at(v: &super::SelectorRuleRecord, depth: i32) -> Result<Vec<u8>, super::Refusal> {
+        super::encode_selector_rule_record_at(v, depth)
+    }
+
+    pub fn decode_selector_rule_page_at(data: &[u8], depth: i32, limit: i32) -> Result<(super::SelectorRulePage, usize), super::Refusal> {
+        super::decode_selector_rule_page_at(data, depth, limit)
+    }
+
+    pub fn check_selector_rule_page(v: &super::SelectorRulePage, depth: i32, limit: i32) -> Result<(), super::Refusal> {
+        super::check_selector_rule_page(v, depth, limit)
+    }
+
+    pub fn encode_selector_rule_page_at(v: &super::SelectorRulePage, depth: i32) -> Result<Vec<u8>, super::Refusal> {
+        super::encode_selector_rule_page_at(v, depth)
+    }
+
+    pub fn decode_selector_rule_read_at(data: &[u8], depth: i32, limit: i32) -> Result<(super::SelectorRuleRead, usize), super::Refusal> {
+        super::decode_selector_rule_read_at(data, depth, limit)
+    }
+
+    pub fn check_selector_rule_read(v: &super::SelectorRuleRead, depth: i32, limit: i32) -> Result<(), super::Refusal> {
+        super::check_selector_rule_read(v, depth, limit)
+    }
+
+    pub fn encode_selector_rule_read_at(v: &super::SelectorRuleRead, depth: i32) -> Result<Vec<u8>, super::Refusal> {
+        super::encode_selector_rule_read_at(v, depth)
+    }
+
+    pub fn decode_selector_edit_at(data: &[u8], depth: i32, limit: i32) -> Result<(super::SelectorEdit, usize), super::Refusal> {
+        super::decode_selector_edit_at(data, depth, limit)
+    }
+
+    pub fn check_selector_edit(v: &super::SelectorEdit, depth: i32, limit: i32) -> Result<(), super::Refusal> {
+        super::check_selector_edit(v, depth, limit)
+    }
+
+    pub fn encode_selector_edit_at(v: &super::SelectorEdit, depth: i32) -> Result<Vec<u8>, super::Refusal> {
+        super::encode_selector_edit_at(v, depth)
+    }
+
+    pub fn decode_legacy_operation_request_at(data: &[u8], depth: i32, limit: i32) -> Result<(super::LegacyOperationRequest, usize), super::Refusal> {
+        super::decode_legacy_operation_request_at(data, depth, limit)
+    }
+
+    pub fn check_legacy_operation_request(v: &super::LegacyOperationRequest, depth: i32, limit: i32) -> Result<(), super::Refusal> {
+        super::check_legacy_operation_request(v, depth, limit)
+    }
+
+    pub fn encode_legacy_operation_request_at(v: &super::LegacyOperationRequest, depth: i32) -> Result<Vec<u8>, super::Refusal> {
+        super::encode_legacy_operation_request_at(v, depth)
     }
 }

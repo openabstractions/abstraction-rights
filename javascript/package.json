@@ -14,7 +14,7 @@
   },
   "type": "module",
   "types": "./js/abstraction/rights/api/index.d.mts",
-  "exports": {".": {"types": "./js/abstraction/rights/api/index.d.mts", "default": "./js/abstraction/rights/api/index.mjs"}},
+  "exports": {".": {"types": "./js/abstraction/rights/api/index.d.mts", "default": "./js/abstraction/rights/api/index.mjs"}, "./internal": "./js/abstraction/rights/api/internal.mjs"},
   "files": [
     "js"
   ],

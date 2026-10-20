@@ -27,9 +27,11 @@ func stdoutOf(t *testing.T, f func()) string {
 	return string(out)
 }
 
+func nobodyAnswers(string) Asker { return &person{} }
+
 func TestServeHelp(t *testing.T) {
 	out := stdoutOf(t, func() {
-		if err := Serve([]string{"--help"}); err != nil {
+		if err := Serve([]string{"--help"}, nobodyAnswers, "asks-endpoint"); err != nil {
 			t.Fatal(err)
 		}
 	})
@@ -43,7 +45,7 @@ func TestServeHelp(t *testing.T) {
 }
 
 func TestServeBadFlagReturnsErrUsage(t *testing.T) {
-	err := Serve([]string{"--not-a-real-flag"})
+	err := Serve([]string{"--not-a-real-flag"}, nobodyAnswers, "asks-endpoint")
 	if !errors.Is(err, ErrUsage) {
 		t.Fatalf("err = %v, want errors.Is(err, ErrUsage)", err)
 	}

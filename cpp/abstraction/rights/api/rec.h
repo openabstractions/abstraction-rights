@@ -186,6 +186,38 @@ inline constexpr bool operator!=(std::string_view name, RuleReadOutcome value) {
 
 inline const std::vector<std::string> kRuleReadOutcomeNames = {"found", "expired", "unknown", "invalid", "forbidden", "unavailable"};
 
+enum class PermissionFirstUse : std::int32_t {
+    None = 1,
+    Exact = 2,
+    ConsumingPaired = 3,
+};
+
+// The member's name on the wire; empty for a value that names no member.
+inline constexpr std::string_view wire_name(PermissionFirstUse value) {
+    switch (value) {
+        case PermissionFirstUse::None: return "none";
+        case PermissionFirstUse::Exact: return "exact";
+        case PermissionFirstUse::ConsumingPaired: return "consuming_paired";
+    }
+    return {};
+}
+
+// The member a wire name spells; empty for a name this vocabulary refuses.
+inline std::optional<PermissionFirstUse> parse_permission_first_use(std::string_view name) {
+    if (name == "none") return PermissionFirstUse::None;
+    if (name == "exact") return PermissionFirstUse::Exact;
+    if (name == "consuming_paired") return PermissionFirstUse::ConsumingPaired;
+    return std::nullopt;
+}
+
+// A member equals its wire name, so code holding the contract's word compares directly.
+inline constexpr bool operator==(PermissionFirstUse value, std::string_view name) { return wire_name(value) == name; }
+inline constexpr bool operator!=(PermissionFirstUse value, std::string_view name) { return wire_name(value) != name; }
+inline constexpr bool operator==(std::string_view name, PermissionFirstUse value) { return wire_name(value) == name; }
+inline constexpr bool operator!=(std::string_view name, PermissionFirstUse value) { return wire_name(value) != name; }
+
+inline const std::vector<std::string> kPermissionFirstUseNames = {"none", "exact", "consuming_paired"};
+
 enum class ActionEditOutcome : std::int32_t {
     Applied = 1,
     Conflict = 2,
@@ -229,6 +261,111 @@ inline constexpr bool operator==(std::string_view name, ActionEditOutcome value)
 inline constexpr bool operator!=(std::string_view name, ActionEditOutcome value) { return wire_name(value) != name; }
 
 inline const std::vector<std::string> kActionEditOutcomeNames = {"applied", "conflict", "unknown", "invalid", "exhausted", "forbidden", "unavailable"};
+
+enum class DecisionSource : std::int32_t {
+    None = 1,
+    OwnRule = 2,
+    TypedBlock = 3,
+    AccountDefault = 4,
+    DefaultExcluded = 5,
+};
+
+// The member's name on the wire; empty for a value that names no member.
+inline constexpr std::string_view wire_name(DecisionSource value) {
+    switch (value) {
+        case DecisionSource::None: return "none";
+        case DecisionSource::OwnRule: return "own_rule";
+        case DecisionSource::TypedBlock: return "typed_block";
+        case DecisionSource::AccountDefault: return "account_default";
+        case DecisionSource::DefaultExcluded: return "default_excluded";
+    }
+    return {};
+}
+
+// The member a wire name spells; empty for a name this vocabulary refuses.
+inline std::optional<DecisionSource> parse_decision_source(std::string_view name) {
+    if (name == "none") return DecisionSource::None;
+    if (name == "own_rule") return DecisionSource::OwnRule;
+    if (name == "typed_block") return DecisionSource::TypedBlock;
+    if (name == "account_default") return DecisionSource::AccountDefault;
+    if (name == "default_excluded") return DecisionSource::DefaultExcluded;
+    return std::nullopt;
+}
+
+// A member equals its wire name, so code holding the contract's word compares directly.
+inline constexpr bool operator==(DecisionSource value, std::string_view name) { return wire_name(value) == name; }
+inline constexpr bool operator!=(DecisionSource value, std::string_view name) { return wire_name(value) != name; }
+inline constexpr bool operator==(std::string_view name, DecisionSource value) { return wire_name(value) == name; }
+inline constexpr bool operator!=(std::string_view name, DecisionSource value) { return wire_name(value) != name; }
+
+inline const std::vector<std::string> kDecisionSourceNames = {"none", "own_rule", "typed_block", "account_default", "default_excluded"};
+
+enum class ResourceSelectorKind : std::int32_t {
+    One = 1,
+    All = 2,
+};
+
+// The member's name on the wire; empty for a value that names no member.
+inline constexpr std::string_view wire_name(ResourceSelectorKind value) {
+    switch (value) {
+        case ResourceSelectorKind::One: return "one";
+        case ResourceSelectorKind::All: return "all";
+    }
+    return {};
+}
+
+// The member a wire name spells; empty for a name this vocabulary refuses.
+inline std::optional<ResourceSelectorKind> parse_resource_selector_kind(std::string_view name) {
+    if (name == "one") return ResourceSelectorKind::One;
+    if (name == "all") return ResourceSelectorKind::All;
+    return std::nullopt;
+}
+
+// A member equals its wire name, so code holding the contract's word compares directly.
+inline constexpr bool operator==(ResourceSelectorKind value, std::string_view name) { return wire_name(value) == name; }
+inline constexpr bool operator!=(ResourceSelectorKind value, std::string_view name) { return wire_name(value) != name; }
+inline constexpr bool operator==(std::string_view name, ResourceSelectorKind value) { return wire_name(value) == name; }
+inline constexpr bool operator!=(std::string_view name, ResourceSelectorKind value) { return wire_name(value) != name; }
+
+inline const std::vector<std::string> kResourceSelectorKindNames = {"one", "all"};
+
+enum class BatchCheckOutcome : std::int32_t {
+    Checked = 1,
+    Conflict = 2,
+    Invalid = 3,
+    Forbidden = 4,
+    Unavailable = 5,
+};
+
+// The member's name on the wire; empty for a value that names no member.
+inline constexpr std::string_view wire_name(BatchCheckOutcome value) {
+    switch (value) {
+        case BatchCheckOutcome::Checked: return "checked";
+        case BatchCheckOutcome::Conflict: return "conflict";
+        case BatchCheckOutcome::Invalid: return "invalid";
+        case BatchCheckOutcome::Forbidden: return "forbidden";
+        case BatchCheckOutcome::Unavailable: return "unavailable";
+    }
+    return {};
+}
+
+// The member a wire name spells; empty for a name this vocabulary refuses.
+inline std::optional<BatchCheckOutcome> parse_batch_check_outcome(std::string_view name) {
+    if (name == "checked") return BatchCheckOutcome::Checked;
+    if (name == "conflict") return BatchCheckOutcome::Conflict;
+    if (name == "invalid") return BatchCheckOutcome::Invalid;
+    if (name == "forbidden") return BatchCheckOutcome::Forbidden;
+    if (name == "unavailable") return BatchCheckOutcome::Unavailable;
+    return std::nullopt;
+}
+
+// A member equals its wire name, so code holding the contract's word compares directly.
+inline constexpr bool operator==(BatchCheckOutcome value, std::string_view name) { return wire_name(value) == name; }
+inline constexpr bool operator!=(BatchCheckOutcome value, std::string_view name) { return wire_name(value) != name; }
+inline constexpr bool operator==(std::string_view name, BatchCheckOutcome value) { return wire_name(value) == name; }
+inline constexpr bool operator!=(std::string_view name, BatchCheckOutcome value) { return wire_name(value) != name; }
+
+inline const std::vector<std::string> kBatchCheckOutcomeNames = {"checked", "conflict", "invalid", "forbidden", "unavailable"};
 
 inline const std::vector<std::string> kServiceErrorCodeNames = {"handler_error", "invalid_result", "unknown_version", "unknown_service", "unknown_method", "wrong_mode"};
 inline constexpr std::string_view kServiceErrorCodeHandlerError = "handler_error";
@@ -402,6 +539,64 @@ struct CatalogEntry {
     std::string registered_at;
 };
 
+// Operator-declared description of a stable app feature. feature_app names the
+// described app, never the grant/decision subject. app_label and description
+// are trimmed control-free UTF-8 text of 1..128 and 1..512 bytes. declared_risk
+// is trimmed 1..32 bytes of display metadata: routine, sensitive,
+// administrative and unknown align existing words; unfamiliar words have
+// unknown interpretation. Risk text changes no authorization, question tier or
+// answerer authority. Metadata establishes no code behavior or vendor trust.
+struct ActionDescription {
+    std::string action;
+    Subject feature_app;
+    std::string app_label;
+    std::string description;
+    std::string declared_risk;
+};
+
+// Service-owned definition metadata for one stable exact action. Operations
+// identify owning IDL methods and existing domain effects. resource_profile is
+// an immutable namespaced profile@version bound to a compiled owning validator
+// by trusted composition; unknown profiles/versions are refused. Legacy
+// exact-string profiles retain bounded exact bytes, including literal '*', and
+// describe their resource owner's existing validation. served distinguishes
+// implemented receiving enforcement from defined/unserved operations; unserved
+// definitions admit no first-use request. first_use names only existing exact
+// or consuming paired admission; dynamic tier/answerer facts remain separately
+// service-owned. Disclosure and lifecycle explain data/effects and account,
+// deletion and name-reuse boundaries. Metadata conveys no proof, grant,
+// callback or scope selector. Changed authority requires a new action
+// identity/version. This additive record is available to generated consumers;
+// no service method publishes or registers definitions in this slice.
+struct PermissionDefinition {
+    std::string action;
+    std::string owner_contract;
+    std::vector<std::string> operations;
+    std::string resource_profile;
+    std::string resource_type;
+    std::vector<std::string> enforced_by;
+    std::string disclosure;
+    std::string lifecycle;
+    PermissionFirstUse first_use{};
+    bool served = false;
+};
+
+// One current catalogue action. choices is exactly allow, block, remove_rule,
+// naming existing SetRule permit/deny and RevokeRule choices without authority
+// to invoke them. Description and publication fields occur together or are all
+// absent. description.action equals action. published_by is the operator
+// subject established for publication; feature_app is its administrative
+// declaration, and the imported descriptor's author/vendor remain unverified.
+// published_at is service UTC RFC 3339 with milliseconds. Undescribed names
+// carry no invented app information.
+struct DescribedAction {
+    std::string action;
+    std::vector<std::string> choices;
+    std::optional<ActionDescription> description;
+    std::optional<Subject> published_by;
+    std::string published_at;
+};
+
 // applied, conflict and unknown carry the revision observed inside the
 // conditional edit. applied and conflict carry the action's registration entry
 // when one exists; a seeded or retired action has none. unknown means
@@ -413,6 +608,260 @@ struct ActionEdit {
     ActionEditOutcome outcome{};
     std::string revision;
     std::optional<CatalogEntry> current;
+};
+
+// applied/conflict carry the revision and current described catalogue action
+// when present; all other outcomes carry neither. A stale expected revision
+// always conflicts. Identical metadata at the current revision is a no-op. A
+// valid correction changes descriptor publication provenance/time and revision,
+// preserving all grants, denies, targets, expiry and private answer receipts.
+// Registration alone grants nothing.
+struct DescriptionEdit {
+    ActionEditOutcome outcome{};
+    std::string revision;
+    std::optional<DescribedAction> current;
+};
+
+// Sorted current catalogue descriptions, including undescribed names, under one
+// durable revision. 1..64 requested entries and at most 256 KiB encoded reply.
+// Noncomplete pages have a nonempty next cursor and at least one entry; cursors
+// are at most 256 UTF-8 bytes. Refusals have empty revision/actions/next and
+// complete=false. No retained enumeration snapshot or historical replay.
+struct DescriptionPage {
+    PolicyPageOutcome outcome{};
+    std::string revision;
+    std::vector<DescribedAction> actions;
+    std::string next;
+    bool complete = false;
+};
+
+// One account-wide default the receiving runtime configures: a permit on action
+// for every program of the runtime's own account that has no live rule of its
+// own on the queried target. name is 1..64 bytes of lowercase ASCII letters,
+// digits, '.', '_' and '-'. resource is the one exact resource the default
+// covers; with every_resource it is empty and the default covers every resource
+// of the action. on is the switch: true after a fresh install, until an
+// operator turns it off. set_by and set_at occur together, name the operator
+// subject the rights service established for the last switch edit and its
+// service UTC time, and are absent while the switch was never turned. A
+// per-program rule, a Block included, decides before any default; a configured
+// excluded program, such as a script host, and every other account receive no
+// default. A default writes no rule.
+struct AccountDefault {
+    std::string name;
+    std::string action;
+    std::string resource;
+    bool every_resource = false;
+    bool on = false;
+    std::optional<Subject> set_by;
+    std::string set_at;
+};
+
+// Every configured account-wide default, sorted by name, under one durable
+// revision; at most 32 entries. Refusals have an empty revision and no
+// defaults.
+struct DefaultPage {
+    PolicyPageOutcome outcome{};
+    std::string revision;
+    std::vector<AccountDefault> defaults;
+};
+
+// applied and conflict carry the revision and the named default's current state
+// observed inside the conditional edit. Other outcomes carry neither. A stale
+// expected revision always conflicts. Setting a switch to its current state at
+// the matching revision is a no-op that keeps the revision.
+struct DefaultEdit {
+    PolicyEditOutcome outcome{};
+    std::string revision;
+    std::optional<AccountDefault> current;
+};
+
+// One exact decision for a subject with the step that decided it, from the same
+// evaluation a decision makes. own_rule is the subject's own live exact rule,
+// matched by program identity; typed_block a live typed Block that covers the
+// target; account_default the named account-wide default that permits;
+// default_excluded a named default switched on for the target that the
+// configured exclusion, such as the script-host rule, keeps from this program;
+// none no rule and no default. outcome and policy_revision are those the
+// decision carries. Refusals (invalid, forbidden, unavailable) carry no
+// revision, source or name.
+struct DecisionExplanation {
+    DecisionOutcome outcome{};
+    std::string policy_revision;
+    std::optional<DecisionSource> source;
+    std::string default_name;
+};
+
+struct PermissionKey {
+    std::string action;
+    std::string resource_profile;
+};
+
+// One has one bounded canonical owning-IDL document. All omits target and
+// selects the fixed profile collection within the rule subject's
+// account/runtime. Operator inputs are prepared by the trusted owning profile;
+// arbitrary captured identity evidence is refused.
+struct ResourceSelector {
+    ResourceSelectorKind kind{};
+    std::optional<std::vector<std::uint8_t>> target;
+};
+
+struct PermissionSelection {
+    PermissionKey permission;
+    ResourceSelector selector;
+};
+
+// A concrete resource, never a grant selector. Historical captured evidence is
+// accepted only from an explicitly authorized receiving enforcer; no direct
+// caller obtains effect authority from this assertion.
+struct ConcreteResource {
+    PermissionKey permission;
+    std::vector<std::uint8_t> target;
+};
+
+struct CheckBatchRequest {
+    std::string expected_revision;
+    std::optional<PermissionKey> collection_admission;
+    std::vector<ConcreteResource> resources;
+};
+
+// checked has one revision and ordered evaluated outcomes from one immutable
+// policy snapshot and one clock sample. conflict has the observed revision and
+// no outcomes. Other refusals have empty revision and no outcomes. A batch
+// never mixes revisions or partially succeeds. No authority lease is issued.
+struct BatchDecision {
+    BatchCheckOutcome outcome{};
+    std::string revision;
+    std::optional<DecisionOutcome> collection_outcome;
+    std::vector<DecisionOutcome> outcomes;
+};
+
+// Full key is definition.action plus definition.resource_profile. Service-owned
+// collection/all_effect state membership and present/future meaning. Only
+// actually served receiving selectors are advertised. Existing
+// PermissionDefinition.first_use remains the legacy projection; new selector
+// first use uses first_use_selectors.
+struct SelectorPermissionDefinition {
+    PermissionDefinition definition;
+    std::string label;
+    std::vector<ResourceSelectorKind> supported_selectors;
+    std::vector<ResourceSelectorKind> first_use_selectors;
+    std::string collection;
+    std::string all_effect;
+    std::string request_type;
+};
+
+struct PermissionDefinitionPage {
+    PolicyPageOutcome outcome{};
+    std::string revision;
+    std::vector<SelectorPermissionDefinition> definitions;
+    std::string next;
+    bool complete = false;
+};
+
+// Immutable finite expansion identified by namespaced bundle@version and
+// deterministic content digest. This slice permits only member profiles with
+// the same owning target document and collection. Each member validates
+// independently. No mapping language, live role reference, future operation or
+// permission-administration effect is implied.
+struct PermissionBundleDefinition {
+    std::string bundle_ref;
+    std::string owner_contract;
+    std::string label;
+    std::string target_type;
+    std::vector<ResourceSelectorKind> supported_selectors;
+    std::vector<PermissionKey> members;
+    std::string disclosure;
+    std::string definition_digest;
+};
+
+struct PermissionBundlePage {
+    PolicyPageOutcome outcome{};
+    std::string revision;
+    std::vector<PermissionBundleDefinition> bundles;
+    std::string next;
+    bool complete = false;
+};
+
+// The exact original finite expansion, retained independently of later
+// catalogue changes. All selected member profiles must accept the same
+// canonical target/collection. A new version requires new consent.
+struct BundleExpansion {
+    std::string bundle_ref;
+    std::string definition_digest;
+    ResourceSelector selector;
+    std::vector<PermissionSelection> selections;
+};
+
+// Complete typed permit proposal retained by a trusted Asks admission owner.
+// When bundle is present its selections equal this complete list. Native
+// preparation establishes subject and target evidence. Text, a serialized
+// subject or an app-supplied effect grants no authority.
+struct PermissionEffect {
+    Subject subject;
+    std::vector<PermissionSelection> selections;
+    std::optional<BundleExpansion> bundle;
+};
+
+struct SelectorRule {
+    Subject subject;
+    PermissionSelection selection;
+    bool permit = false;
+};
+
+// Rights-established historical application identity and immutable expansion.
+// An origin explains how rules arose; it does not assert that all original
+// members remain current.
+struct BundleOrigin {
+    std::string id;
+    BundleExpansion expansion;
+};
+
+struct SelectorRuleRecord {
+    SelectorRule rule;
+    Subject set_by;
+    std::string set_at;
+    std::string why;
+    std::string expires;
+    std::optional<BundleOrigin> bundle_origin;
+};
+
+struct SelectorRulePage {
+    PolicyPageOutcome outcome{};
+    std::string revision;
+    std::vector<SelectorRuleRecord> records;
+    std::string next;
+    bool complete = false;
+};
+
+struct SelectorRuleRead {
+    RuleReadOutcome outcome{};
+    std::string revision;
+    std::optional<SelectorRuleRecord> record;
+};
+
+// Applied/conflict carry the locked observed revision and complete bounded
+// affected state. Stale expected revision always conflicts, including matching
+// desired state. Other refusals carry empty revision/current. Atomic edits have
+// no per-member success. Individual replacement removes that row's active
+// bundle origin; remaining rows keep historical origin.
+struct SelectorEdit {
+    PolicyEditOutcome outcome{};
+    std::string revision;
+    std::vector<SelectorRuleRecord> current;
+    std::optional<BundleOrigin> bundle_origin;
+};
+
+// Old exact authority plus an optional receiver-known concrete effect. Trusted
+// compiled capability equivalence validates the supplied effect against this
+// old operation and its fixed collection. Original legacy authority and live
+// equivalent typed restrictions are evaluated at one snapshot. Missing concrete
+// detail on a coarse view uses conservative collection intersection. This
+// method imports explicit blocks only; it grants no typed permit.
+struct LegacyOperationRequest {
+    std::string legacy_action;
+    std::string legacy_resource;
+    std::optional<ConcreteResource> concrete_operation;
 };
 
 // Codec machinery. Nothing here is API; it may change in any release.
@@ -460,6 +909,19 @@ inline void strs(std::string& out, const std::vector<std::string>& v, int depth)
     out += ']';
 }
 
+template <typename E>
+inline void enum_strs(std::string& out, const std::vector<E>& v, int depth) {
+    if (v.empty()) { out += "[]"; return; }
+    out += "[\n";
+    for (std::size_t i = 0; i < v.size(); ++i) {
+        pad(out, depth + 1);
+        esc(out, std::string(wire_name(v[i])));
+        if (i + 1 < v.size()) out += ',';
+        out += '\n';
+    }
+    pad(out, depth);
+    out += ']';
+}
 
 
 inline bool ws(unsigned char c) { return c == ' ' || c == '\t' || c == '\n' || c == '\r'; }
@@ -552,6 +1014,14 @@ inline void enc_list(std::string& out, const std::vector<T>& v, int depth,
     out += ']';
 }
 
+inline std::string encode_binary(const std::vector<std::uint8_t>&);
+inline std::vector<std::uint8_t> decode_binary(const std::string&);
+
+struct OAAuthorizationListActionDescriptionsArguments {
+    std::string cursor;
+    std::int64_t limit = 0;
+};
+
 struct OAAuthorizationDecideArguments {
     std::string action;
     std::string resource;
@@ -561,6 +1031,16 @@ struct OAAuthorizationDecideForArguments {
     Subject subject;
     std::string action;
     std::string resource;
+};
+
+struct OAAuthorizationOperatorRegisterDescribedActionArguments {
+    std::string expected_revision;
+    ActionDescription description;
+};
+
+struct OAAuthorizationOperatorApplyFirstUseAllowArguments {
+    std::string expected_revision;
+    std::string question_id;
 };
 
 struct OAAuthorizationOperatorListPolicyArguments {
@@ -580,9 +1060,31 @@ struct OAAuthorizationOperatorRevokeRuleArguments {
     std::string resource;
 };
 
+struct OAAuthorizationOperatorStopAnswererArguments {
+    std::string expected_revision;
+    Subject answerer;
+    bool also_revoke_grants = false;
+};
+
+struct OAAuthorizationOperatorRevokeAnswerPermitsArguments {
+    std::string expected_revision;
+    Subject answerer;
+    Subject target;
+    std::vector<std::string> actions;
+    std::string resource;
+    std::string question_id;
+};
+
 struct OAAuthorizationOperatorSetRuleForArguments {
     std::string expected_revision;
     PolicyRule rule;
+    std::int64_t ttl_ms = 0;
+    std::string why;
+};
+
+struct OAAuthorizationOperatorSetRulesForArguments {
+    std::string expected_revision;
+    std::vector<PolicyRule> rules;
     std::int64_t ttl_ms = 0;
     std::string why;
 };
@@ -601,6 +1103,93 @@ struct OAAuthorizationOperatorRegisterActionArguments {
 struct OAAuthorizationOperatorRetireActionArguments {
     std::string expected_revision;
     std::string action;
+};
+
+struct OAAuthorizationOperatorExplainForArguments {
+    Subject subject;
+    std::string action;
+    std::string resource;
+};
+
+struct OAAuthorizationOperatorListDefaultsArguments {
+};
+
+struct OAAuthorizationOperatorSetDefaultArguments {
+    std::string expected_revision;
+    std::string name;
+    bool on = false;
+};
+
+struct OASelectorAuthorizationListPermissionDefinitionsArguments {
+    std::string cursor;
+    std::int64_t limit = 0;
+};
+
+struct OASelectorAuthorizationListPermissionBundlesArguments {
+    std::string cursor;
+    std::int64_t limit = 0;
+};
+
+struct OASelectorAuthorizationCheckBatchArguments {
+    CheckBatchRequest request;
+};
+
+struct OASelectorAuthorizationCheckBatchForArguments {
+    Subject subject;
+    CheckBatchRequest request;
+};
+
+struct OASelectorAuthorizationCheckLegacyOperationForArguments {
+    Subject subject;
+    LegacyOperationRequest request;
+};
+
+struct OASelectorAuthorizationOperatorListSelectorRulesArguments {
+    std::string cursor;
+    std::int64_t limit = 0;
+};
+
+struct OASelectorAuthorizationOperatorReadSelectorRuleArguments {
+    Subject subject;
+    PermissionSelection selection;
+};
+
+struct OASelectorAuthorizationOperatorSetSelectorRuleArguments {
+    std::string expected_revision;
+    SelectorRule rule;
+    std::int64_t ttl_ms = 0;
+    std::string why;
+};
+
+struct OASelectorAuthorizationOperatorRemoveSelectorRuleArguments {
+    std::string expected_revision;
+    Subject subject;
+    PermissionSelection selection;
+};
+
+struct OASelectorAuthorizationOperatorApplyBundleArguments {
+    std::string expected_revision;
+    Subject subject;
+    std::string bundle_ref;
+    ResourceSelector selector;
+    std::int64_t ttl_ms = 0;
+    std::string why;
+};
+
+struct OASelectorAuthorizationOperatorRemoveBundleArguments {
+    std::string expected_revision;
+    Subject subject;
+    std::string origin_id;
+};
+
+struct OASelectorAuthorizationOperatorApplyPermissionAllowArguments {
+    std::string expected_revision;
+    std::string question_id;
+};
+
+struct OASelectorAuthorizationOperatorUndoPermissionEffectArguments {
+    std::string expected_revision;
+    std::string question_id;
 };
 
 struct OAServiceFrame {
@@ -623,12 +1212,24 @@ struct OAServiceError {
     std::string message;
 };
 
+struct OAAuthorizationListActionDescriptionsResult {
+    DescriptionPage value;
+};
+
 struct OAAuthorizationDecideResult {
     Decision value;
 };
 
 struct OAAuthorizationDecideForResult {
     Decision value;
+};
+
+struct OAAuthorizationOperatorRegisterDescribedActionResult {
+    DescriptionEdit value;
+};
+
+struct OAAuthorizationOperatorApplyFirstUseAllowResult {
+    PolicyEdit value;
 };
 
 struct OAAuthorizationOperatorListPolicyResult {
@@ -643,7 +1244,19 @@ struct OAAuthorizationOperatorRevokeRuleResult {
     PolicyEdit value;
 };
 
+struct OAAuthorizationOperatorStopAnswererResult {
+    PolicyEdit value;
+};
+
+struct OAAuthorizationOperatorRevokeAnswerPermitsResult {
+    PolicyEdit value;
+};
+
 struct OAAuthorizationOperatorSetRuleForResult {
+    PolicyEdit value;
+};
+
+struct OAAuthorizationOperatorSetRulesForResult {
     PolicyEdit value;
 };
 
@@ -658,6 +1271,70 @@ struct OAAuthorizationOperatorRegisterActionResult {
 struct OAAuthorizationOperatorRetireActionResult {
     ActionEdit value;
 };
+
+struct OAAuthorizationOperatorExplainForResult {
+    DecisionExplanation value;
+};
+
+struct OAAuthorizationOperatorListDefaultsResult {
+    DefaultPage value;
+};
+
+struct OAAuthorizationOperatorSetDefaultResult {
+    DefaultEdit value;
+};
+
+struct OASelectorAuthorizationListPermissionDefinitionsResult {
+    PermissionDefinitionPage value;
+};
+
+struct OASelectorAuthorizationListPermissionBundlesResult {
+    PermissionBundlePage value;
+};
+
+struct OASelectorAuthorizationCheckBatchResult {
+    BatchDecision value;
+};
+
+struct OASelectorAuthorizationCheckBatchForResult {
+    BatchDecision value;
+};
+
+struct OASelectorAuthorizationCheckLegacyOperationForResult {
+    Decision value;
+};
+
+struct OASelectorAuthorizationOperatorListSelectorRulesResult {
+    SelectorRulePage value;
+};
+
+struct OASelectorAuthorizationOperatorReadSelectorRuleResult {
+    SelectorRuleRead value;
+};
+
+struct OASelectorAuthorizationOperatorSetSelectorRuleResult {
+    SelectorEdit value;
+};
+
+struct OASelectorAuthorizationOperatorRemoveSelectorRuleResult {
+    SelectorEdit value;
+};
+
+struct OASelectorAuthorizationOperatorApplyBundleResult {
+    SelectorEdit value;
+};
+
+struct OASelectorAuthorizationOperatorRemoveBundleResult {
+    SelectorEdit value;
+};
+
+struct OASelectorAuthorizationOperatorApplyPermissionAllowResult {
+    SelectorEdit value;
+};
+
+struct OASelectorAuthorizationOperatorUndoPermissionEffectResult {
+    SelectorEdit value;
+};
 inline void enc_request(std::string&, const Request&, int);
 inline void enc_app_metadata(std::string&, const AppMetadata&, int);
 inline void enc_hold_metadata(std::string&, const HoldMetadata&, int);
@@ -670,28 +1347,100 @@ inline void enc_policy_edit(std::string&, const PolicyEdit&, int);
 inline void enc_rule_record(std::string&, const RuleRecord&, int);
 inline void enc_rule_read(std::string&, const RuleRead&, int);
 inline void enc_catalog_entry(std::string&, const CatalogEntry&, int);
+inline void enc_action_description(std::string&, const ActionDescription&, int);
+inline void enc_permission_definition(std::string&, const PermissionDefinition&, int);
+inline void enc_described_action(std::string&, const DescribedAction&, int);
 inline void enc_action_edit(std::string&, const ActionEdit&, int);
+inline void enc_description_edit(std::string&, const DescriptionEdit&, int);
+inline void enc_description_page(std::string&, const DescriptionPage&, int);
+inline void enc_account_default(std::string&, const AccountDefault&, int);
+inline void enc_default_page(std::string&, const DefaultPage&, int);
+inline void enc_default_edit(std::string&, const DefaultEdit&, int);
+inline void enc_decision_explanation(std::string&, const DecisionExplanation&, int);
+inline void enc_permission_key(std::string&, const PermissionKey&, int);
+inline void enc_resource_selector(std::string&, const ResourceSelector&, int);
+inline void enc_permission_selection(std::string&, const PermissionSelection&, int);
+inline void enc_concrete_resource(std::string&, const ConcreteResource&, int);
+inline void enc_check_batch_request(std::string&, const CheckBatchRequest&, int);
+inline void enc_batch_decision(std::string&, const BatchDecision&, int);
+inline void enc_selector_permission_definition(std::string&, const SelectorPermissionDefinition&, int);
+inline void enc_permission_definition_page(std::string&, const PermissionDefinitionPage&, int);
+inline void enc_permission_bundle_definition(std::string&, const PermissionBundleDefinition&, int);
+inline void enc_permission_bundle_page(std::string&, const PermissionBundlePage&, int);
+inline void enc_bundle_expansion(std::string&, const BundleExpansion&, int);
+inline void enc_permission_effect(std::string&, const PermissionEffect&, int);
+inline void enc_selector_rule(std::string&, const SelectorRule&, int);
+inline void enc_bundle_origin(std::string&, const BundleOrigin&, int);
+inline void enc_selector_rule_record(std::string&, const SelectorRuleRecord&, int);
+inline void enc_selector_rule_page(std::string&, const SelectorRulePage&, int);
+inline void enc_selector_rule_read(std::string&, const SelectorRuleRead&, int);
+inline void enc_selector_edit(std::string&, const SelectorEdit&, int);
+inline void enc_legacy_operation_request(std::string&, const LegacyOperationRequest&, int);
+inline void enc_oa_authorization_list_action_descriptions_arguments(std::string&, const OAAuthorizationListActionDescriptionsArguments&, int);
 inline void enc_oa_authorization_decide_arguments(std::string&, const OAAuthorizationDecideArguments&, int);
 inline void enc_oa_authorization_decide_for_arguments(std::string&, const OAAuthorizationDecideForArguments&, int);
+inline void enc_oa_authorization_operator_register_described_action_arguments(std::string&, const OAAuthorizationOperatorRegisterDescribedActionArguments&, int);
+inline void enc_oa_authorization_operator_apply_first_use_allow_arguments(std::string&, const OAAuthorizationOperatorApplyFirstUseAllowArguments&, int);
 inline void enc_oa_authorization_operator_list_policy_arguments(std::string&, const OAAuthorizationOperatorListPolicyArguments&, int);
 inline void enc_oa_authorization_operator_set_rule_arguments(std::string&, const OAAuthorizationOperatorSetRuleArguments&, int);
 inline void enc_oa_authorization_operator_revoke_rule_arguments(std::string&, const OAAuthorizationOperatorRevokeRuleArguments&, int);
+inline void enc_oa_authorization_operator_stop_answerer_arguments(std::string&, const OAAuthorizationOperatorStopAnswererArguments&, int);
+inline void enc_oa_authorization_operator_revoke_answer_permits_arguments(std::string&, const OAAuthorizationOperatorRevokeAnswerPermitsArguments&, int);
 inline void enc_oa_authorization_operator_set_rule_for_arguments(std::string&, const OAAuthorizationOperatorSetRuleForArguments&, int);
+inline void enc_oa_authorization_operator_set_rules_for_arguments(std::string&, const OAAuthorizationOperatorSetRulesForArguments&, int);
 inline void enc_oa_authorization_operator_read_rule_arguments(std::string&, const OAAuthorizationOperatorReadRuleArguments&, int);
 inline void enc_oa_authorization_operator_register_action_arguments(std::string&, const OAAuthorizationOperatorRegisterActionArguments&, int);
 inline void enc_oa_authorization_operator_retire_action_arguments(std::string&, const OAAuthorizationOperatorRetireActionArguments&, int);
+inline void enc_oa_authorization_operator_explain_for_arguments(std::string&, const OAAuthorizationOperatorExplainForArguments&, int);
+inline void enc_oa_authorization_operator_list_defaults_arguments(std::string&, const OAAuthorizationOperatorListDefaultsArguments&, int);
+inline void enc_oa_authorization_operator_set_default_arguments(std::string&, const OAAuthorizationOperatorSetDefaultArguments&, int);
+inline void enc_oa_selector_authorization_list_permission_definitions_arguments(std::string&, const OASelectorAuthorizationListPermissionDefinitionsArguments&, int);
+inline void enc_oa_selector_authorization_list_permission_bundles_arguments(std::string&, const OASelectorAuthorizationListPermissionBundlesArguments&, int);
+inline void enc_oa_selector_authorization_check_batch_arguments(std::string&, const OASelectorAuthorizationCheckBatchArguments&, int);
+inline void enc_oa_selector_authorization_check_batch_for_arguments(std::string&, const OASelectorAuthorizationCheckBatchForArguments&, int);
+inline void enc_oa_selector_authorization_check_legacy_operation_for_arguments(std::string&, const OASelectorAuthorizationCheckLegacyOperationForArguments&, int);
+inline void enc_oa_selector_authorization_operator_list_selector_rules_arguments(std::string&, const OASelectorAuthorizationOperatorListSelectorRulesArguments&, int);
+inline void enc_oa_selector_authorization_operator_read_selector_rule_arguments(std::string&, const OASelectorAuthorizationOperatorReadSelectorRuleArguments&, int);
+inline void enc_oa_selector_authorization_operator_set_selector_rule_arguments(std::string&, const OASelectorAuthorizationOperatorSetSelectorRuleArguments&, int);
+inline void enc_oa_selector_authorization_operator_remove_selector_rule_arguments(std::string&, const OASelectorAuthorizationOperatorRemoveSelectorRuleArguments&, int);
+inline void enc_oa_selector_authorization_operator_apply_bundle_arguments(std::string&, const OASelectorAuthorizationOperatorApplyBundleArguments&, int);
+inline void enc_oa_selector_authorization_operator_remove_bundle_arguments(std::string&, const OASelectorAuthorizationOperatorRemoveBundleArguments&, int);
+inline void enc_oa_selector_authorization_operator_apply_permission_allow_arguments(std::string&, const OASelectorAuthorizationOperatorApplyPermissionAllowArguments&, int);
+inline void enc_oa_selector_authorization_operator_undo_permission_effect_arguments(std::string&, const OASelectorAuthorizationOperatorUndoPermissionEffectArguments&, int);
 inline void enc_oa_service_frame(std::string&, const OAServiceFrame&, int);
 inline void enc_oa_service_reply(std::string&, const OAServiceReply&, int);
 inline void enc_oa_service_error(std::string&, const OAServiceError&, int);
+inline void enc_oa_authorization_list_action_descriptions_result(std::string&, const OAAuthorizationListActionDescriptionsResult&, int);
 inline void enc_oa_authorization_decide_result(std::string&, const OAAuthorizationDecideResult&, int);
 inline void enc_oa_authorization_decide_for_result(std::string&, const OAAuthorizationDecideForResult&, int);
+inline void enc_oa_authorization_operator_register_described_action_result(std::string&, const OAAuthorizationOperatorRegisterDescribedActionResult&, int);
+inline void enc_oa_authorization_operator_apply_first_use_allow_result(std::string&, const OAAuthorizationOperatorApplyFirstUseAllowResult&, int);
 inline void enc_oa_authorization_operator_list_policy_result(std::string&, const OAAuthorizationOperatorListPolicyResult&, int);
 inline void enc_oa_authorization_operator_set_rule_result(std::string&, const OAAuthorizationOperatorSetRuleResult&, int);
 inline void enc_oa_authorization_operator_revoke_rule_result(std::string&, const OAAuthorizationOperatorRevokeRuleResult&, int);
+inline void enc_oa_authorization_operator_stop_answerer_result(std::string&, const OAAuthorizationOperatorStopAnswererResult&, int);
+inline void enc_oa_authorization_operator_revoke_answer_permits_result(std::string&, const OAAuthorizationOperatorRevokeAnswerPermitsResult&, int);
 inline void enc_oa_authorization_operator_set_rule_for_result(std::string&, const OAAuthorizationOperatorSetRuleForResult&, int);
+inline void enc_oa_authorization_operator_set_rules_for_result(std::string&, const OAAuthorizationOperatorSetRulesForResult&, int);
 inline void enc_oa_authorization_operator_read_rule_result(std::string&, const OAAuthorizationOperatorReadRuleResult&, int);
 inline void enc_oa_authorization_operator_register_action_result(std::string&, const OAAuthorizationOperatorRegisterActionResult&, int);
 inline void enc_oa_authorization_operator_retire_action_result(std::string&, const OAAuthorizationOperatorRetireActionResult&, int);
+inline void enc_oa_authorization_operator_explain_for_result(std::string&, const OAAuthorizationOperatorExplainForResult&, int);
+inline void enc_oa_authorization_operator_list_defaults_result(std::string&, const OAAuthorizationOperatorListDefaultsResult&, int);
+inline void enc_oa_authorization_operator_set_default_result(std::string&, const OAAuthorizationOperatorSetDefaultResult&, int);
+inline void enc_oa_selector_authorization_list_permission_definitions_result(std::string&, const OASelectorAuthorizationListPermissionDefinitionsResult&, int);
+inline void enc_oa_selector_authorization_list_permission_bundles_result(std::string&, const OASelectorAuthorizationListPermissionBundlesResult&, int);
+inline void enc_oa_selector_authorization_check_batch_result(std::string&, const OASelectorAuthorizationCheckBatchResult&, int);
+inline void enc_oa_selector_authorization_check_batch_for_result(std::string&, const OASelectorAuthorizationCheckBatchForResult&, int);
+inline void enc_oa_selector_authorization_check_legacy_operation_for_result(std::string&, const OASelectorAuthorizationCheckLegacyOperationForResult&, int);
+inline void enc_oa_selector_authorization_operator_list_selector_rules_result(std::string&, const OASelectorAuthorizationOperatorListSelectorRulesResult&, int);
+inline void enc_oa_selector_authorization_operator_read_selector_rule_result(std::string&, const OASelectorAuthorizationOperatorReadSelectorRuleResult&, int);
+inline void enc_oa_selector_authorization_operator_set_selector_rule_result(std::string&, const OASelectorAuthorizationOperatorSetSelectorRuleResult&, int);
+inline void enc_oa_selector_authorization_operator_remove_selector_rule_result(std::string&, const OASelectorAuthorizationOperatorRemoveSelectorRuleResult&, int);
+inline void enc_oa_selector_authorization_operator_apply_bundle_result(std::string&, const OASelectorAuthorizationOperatorApplyBundleResult&, int);
+inline void enc_oa_selector_authorization_operator_remove_bundle_result(std::string&, const OASelectorAuthorizationOperatorRemoveBundleResult&, int);
+inline void enc_oa_selector_authorization_operator_apply_permission_allow_result(std::string&, const OASelectorAuthorizationOperatorApplyPermissionAllowResult&, int);
+inline void enc_oa_selector_authorization_operator_undo_permission_effect_result(std::string&, const OASelectorAuthorizationOperatorUndoPermissionEffectResult&, int);
 
 inline void enc_request(std::string& out, const Request& v, int depth) {
     out += '{';
@@ -1148,6 +1897,151 @@ inline void enc_catalog_entry(std::string& out, const CatalogEntry& v, int depth
     out += '}';
 }
 
+inline void enc_action_description(std::string& out, const ActionDescription& v, int depth) {
+    out += '{';
+    out += '\n';
+    pad(out, depth + 1);
+    esc(out, "action");
+    out += ": ";
+    esc(out, v.action);
+    out += ',';
+    out += '\n';
+    pad(out, depth + 1);
+    esc(out, "feature_app");
+    out += ": ";
+    enc_subject(out, v.feature_app, depth + 1);
+    out += ',';
+    out += '\n';
+    pad(out, depth + 1);
+    esc(out, "app_label");
+    out += ": ";
+    esc(out, v.app_label);
+    out += ',';
+    out += '\n';
+    pad(out, depth + 1);
+    esc(out, "description");
+    out += ": ";
+    esc(out, v.description);
+    out += ',';
+    out += '\n';
+    pad(out, depth + 1);
+    esc(out, "declared_risk");
+    out += ": ";
+    esc(out, v.declared_risk);
+    out += '\n';
+    pad(out, depth);
+    out += '}';
+}
+
+inline void enc_permission_definition(std::string& out, const PermissionDefinition& v, int depth) {
+    if (wire_name(v.first_use).empty()) throw Refusal("bad_enum", 0);
+    out += '{';
+    out += '\n';
+    pad(out, depth + 1);
+    esc(out, "action");
+    out += ": ";
+    esc(out, v.action);
+    out += ',';
+    out += '\n';
+    pad(out, depth + 1);
+    esc(out, "owner_contract");
+    out += ": ";
+    esc(out, v.owner_contract);
+    out += ',';
+    out += '\n';
+    pad(out, depth + 1);
+    esc(out, "operations");
+    out += ": ";
+    strs(out, v.operations, depth + 1);
+    out += ',';
+    out += '\n';
+    pad(out, depth + 1);
+    esc(out, "resource_profile");
+    out += ": ";
+    esc(out, v.resource_profile);
+    out += ',';
+    out += '\n';
+    pad(out, depth + 1);
+    esc(out, "resource_type");
+    out += ": ";
+    esc(out, v.resource_type);
+    out += ',';
+    out += '\n';
+    pad(out, depth + 1);
+    esc(out, "enforced_by");
+    out += ": ";
+    strs(out, v.enforced_by, depth + 1);
+    out += ',';
+    out += '\n';
+    pad(out, depth + 1);
+    esc(out, "disclosure");
+    out += ": ";
+    esc(out, v.disclosure);
+    out += ',';
+    out += '\n';
+    pad(out, depth + 1);
+    esc(out, "lifecycle");
+    out += ": ";
+    esc(out, v.lifecycle);
+    out += ',';
+    out += '\n';
+    pad(out, depth + 1);
+    esc(out, "first_use");
+    out += ": ";
+    esc(out, std::string(wire_name(v.first_use)));
+    out += ',';
+    out += '\n';
+    pad(out, depth + 1);
+    esc(out, "served");
+    out += ": ";
+    out += v.served ? "true" : "false";
+    out += '\n';
+    pad(out, depth);
+    out += '}';
+}
+
+inline void enc_described_action(std::string& out, const DescribedAction& v, int depth) {
+    out += '{';
+    out += '\n';
+    pad(out, depth + 1);
+    esc(out, "action");
+    out += ": ";
+    esc(out, v.action);
+    out += ',';
+    out += '\n';
+    pad(out, depth + 1);
+    esc(out, "choices");
+    out += ": ";
+    strs(out, v.choices, depth + 1);
+    if (v.description.has_value()) {
+        out += ',';
+        out += '\n';
+        pad(out, depth + 1);
+        esc(out, "description");
+        out += ": ";
+        enc_action_description(out, *v.description, depth + 1);
+    }
+    if (v.published_by.has_value()) {
+        out += ',';
+        out += '\n';
+        pad(out, depth + 1);
+        esc(out, "published_by");
+        out += ": ";
+        enc_subject(out, *v.published_by, depth + 1);
+    }
+    if (!v.published_at.empty()) {
+        out += ',';
+        out += '\n';
+        pad(out, depth + 1);
+        esc(out, "published_at");
+        out += ": ";
+        esc(out, v.published_at);
+    }
+    out += '\n';
+    pad(out, depth);
+    out += '}';
+}
+
 inline void enc_action_edit(std::string& out, const ActionEdit& v, int depth) {
     if (wire_name(v.outcome).empty()) throw Refusal("bad_enum", 0);
     out += '{';
@@ -1170,6 +2064,815 @@ inline void enc_action_edit(std::string& out, const ActionEdit& v, int depth) {
         out += ": ";
         enc_catalog_entry(out, *v.current, depth + 1);
     }
+    out += '\n';
+    pad(out, depth);
+    out += '}';
+}
+
+inline void enc_description_edit(std::string& out, const DescriptionEdit& v, int depth) {
+    if (wire_name(v.outcome).empty()) throw Refusal("bad_enum", 0);
+    out += '{';
+    out += '\n';
+    pad(out, depth + 1);
+    esc(out, "outcome");
+    out += ": ";
+    esc(out, std::string(wire_name(v.outcome)));
+    out += ',';
+    out += '\n';
+    pad(out, depth + 1);
+    esc(out, "revision");
+    out += ": ";
+    esc(out, v.revision);
+    if (v.current.has_value()) {
+        out += ',';
+        out += '\n';
+        pad(out, depth + 1);
+        esc(out, "current");
+        out += ": ";
+        enc_described_action(out, *v.current, depth + 1);
+    }
+    out += '\n';
+    pad(out, depth);
+    out += '}';
+}
+
+inline void enc_description_page(std::string& out, const DescriptionPage& v, int depth) {
+    if (wire_name(v.outcome).empty()) throw Refusal("bad_enum", 0);
+    out += '{';
+    out += '\n';
+    pad(out, depth + 1);
+    esc(out, "outcome");
+    out += ": ";
+    esc(out, std::string(wire_name(v.outcome)));
+    out += ',';
+    out += '\n';
+    pad(out, depth + 1);
+    esc(out, "revision");
+    out += ": ";
+    esc(out, v.revision);
+    out += ',';
+    out += '\n';
+    pad(out, depth + 1);
+    esc(out, "actions");
+    out += ": ";
+    enc_list<DescribedAction>(out, v.actions, depth + 1, enc_described_action);
+    out += ',';
+    out += '\n';
+    pad(out, depth + 1);
+    esc(out, "next");
+    out += ": ";
+    esc(out, v.next);
+    out += ',';
+    out += '\n';
+    pad(out, depth + 1);
+    esc(out, "complete");
+    out += ": ";
+    out += v.complete ? "true" : "false";
+    out += '\n';
+    pad(out, depth);
+    out += '}';
+}
+
+inline void enc_account_default(std::string& out, const AccountDefault& v, int depth) {
+    out += '{';
+    out += '\n';
+    pad(out, depth + 1);
+    esc(out, "name");
+    out += ": ";
+    esc(out, v.name);
+    out += ',';
+    out += '\n';
+    pad(out, depth + 1);
+    esc(out, "action");
+    out += ": ";
+    esc(out, v.action);
+    out += ',';
+    out += '\n';
+    pad(out, depth + 1);
+    esc(out, "resource");
+    out += ": ";
+    esc(out, v.resource);
+    out += ',';
+    out += '\n';
+    pad(out, depth + 1);
+    esc(out, "every_resource");
+    out += ": ";
+    out += v.every_resource ? "true" : "false";
+    out += ',';
+    out += '\n';
+    pad(out, depth + 1);
+    esc(out, "on");
+    out += ": ";
+    out += v.on ? "true" : "false";
+    if (v.set_by.has_value()) {
+        out += ',';
+        out += '\n';
+        pad(out, depth + 1);
+        esc(out, "set_by");
+        out += ": ";
+        enc_subject(out, *v.set_by, depth + 1);
+    }
+    if (!v.set_at.empty()) {
+        out += ',';
+        out += '\n';
+        pad(out, depth + 1);
+        esc(out, "set_at");
+        out += ": ";
+        esc(out, v.set_at);
+    }
+    out += '\n';
+    pad(out, depth);
+    out += '}';
+}
+
+inline void enc_default_page(std::string& out, const DefaultPage& v, int depth) {
+    if (wire_name(v.outcome).empty()) throw Refusal("bad_enum", 0);
+    out += '{';
+    out += '\n';
+    pad(out, depth + 1);
+    esc(out, "outcome");
+    out += ": ";
+    esc(out, std::string(wire_name(v.outcome)));
+    out += ',';
+    out += '\n';
+    pad(out, depth + 1);
+    esc(out, "revision");
+    out += ": ";
+    esc(out, v.revision);
+    out += ',';
+    out += '\n';
+    pad(out, depth + 1);
+    esc(out, "defaults");
+    out += ": ";
+    enc_list<AccountDefault>(out, v.defaults, depth + 1, enc_account_default);
+    out += '\n';
+    pad(out, depth);
+    out += '}';
+}
+
+inline void enc_default_edit(std::string& out, const DefaultEdit& v, int depth) {
+    if (wire_name(v.outcome).empty()) throw Refusal("bad_enum", 0);
+    out += '{';
+    out += '\n';
+    pad(out, depth + 1);
+    esc(out, "outcome");
+    out += ": ";
+    esc(out, std::string(wire_name(v.outcome)));
+    out += ',';
+    out += '\n';
+    pad(out, depth + 1);
+    esc(out, "revision");
+    out += ": ";
+    esc(out, v.revision);
+    if (v.current.has_value()) {
+        out += ',';
+        out += '\n';
+        pad(out, depth + 1);
+        esc(out, "current");
+        out += ": ";
+        enc_account_default(out, *v.current, depth + 1);
+    }
+    out += '\n';
+    pad(out, depth);
+    out += '}';
+}
+
+inline void enc_decision_explanation(std::string& out, const DecisionExplanation& v, int depth) {
+    if (wire_name(v.outcome).empty()) throw Refusal("bad_enum", 0);
+    if (v.source.has_value() && wire_name(*v.source).empty()) throw Refusal("bad_enum", 0);
+    out += '{';
+    out += '\n';
+    pad(out, depth + 1);
+    esc(out, "outcome");
+    out += ": ";
+    esc(out, std::string(wire_name(v.outcome)));
+    if (!v.policy_revision.empty()) {
+        out += ',';
+        out += '\n';
+        pad(out, depth + 1);
+        esc(out, "policy_revision");
+        out += ": ";
+        esc(out, v.policy_revision);
+    }
+    if (v.source.has_value()) {
+        out += ',';
+        out += '\n';
+        pad(out, depth + 1);
+        esc(out, "source");
+        out += ": ";
+        esc(out, std::string(wire_name(*v.source)));
+    }
+    if (!v.default_name.empty()) {
+        out += ',';
+        out += '\n';
+        pad(out, depth + 1);
+        esc(out, "default_name");
+        out += ": ";
+        esc(out, v.default_name);
+    }
+    out += '\n';
+    pad(out, depth);
+    out += '}';
+}
+
+inline void enc_permission_key(std::string& out, const PermissionKey& v, int depth) {
+    out += '{';
+    out += '\n';
+    pad(out, depth + 1);
+    esc(out, "action");
+    out += ": ";
+    esc(out, v.action);
+    out += ',';
+    out += '\n';
+    pad(out, depth + 1);
+    esc(out, "resource_profile");
+    out += ": ";
+    esc(out, v.resource_profile);
+    out += '\n';
+    pad(out, depth);
+    out += '}';
+}
+
+inline void enc_resource_selector(std::string& out, const ResourceSelector& v, int depth) {
+    if (wire_name(v.kind).empty()) throw Refusal("bad_enum", 0);
+    out += '{';
+    out += '\n';
+    pad(out, depth + 1);
+    esc(out, "kind");
+    out += ": ";
+    esc(out, std::string(wire_name(v.kind)));
+    if (v.target.has_value()) {
+        out += ',';
+        out += '\n';
+        pad(out, depth + 1);
+        esc(out, "target");
+        out += ": ";
+        esc(out, encode_binary(*v.target));
+    }
+    out += '\n';
+    pad(out, depth);
+    out += '}';
+}
+
+inline void enc_permission_selection(std::string& out, const PermissionSelection& v, int depth) {
+    out += '{';
+    out += '\n';
+    pad(out, depth + 1);
+    esc(out, "permission");
+    out += ": ";
+    enc_permission_key(out, v.permission, depth + 1);
+    out += ',';
+    out += '\n';
+    pad(out, depth + 1);
+    esc(out, "selector");
+    out += ": ";
+    enc_resource_selector(out, v.selector, depth + 1);
+    out += '\n';
+    pad(out, depth);
+    out += '}';
+}
+
+inline void enc_concrete_resource(std::string& out, const ConcreteResource& v, int depth) {
+    out += '{';
+    out += '\n';
+    pad(out, depth + 1);
+    esc(out, "permission");
+    out += ": ";
+    enc_permission_key(out, v.permission, depth + 1);
+    out += ',';
+    out += '\n';
+    pad(out, depth + 1);
+    esc(out, "target");
+    out += ": ";
+    esc(out, encode_binary(v.target));
+    out += '\n';
+    pad(out, depth);
+    out += '}';
+}
+
+inline void enc_check_batch_request(std::string& out, const CheckBatchRequest& v, int depth) {
+    out += '{';
+    bool first = true;
+    if (!v.expected_revision.empty()) {
+        first = false;
+        out += '\n';
+        pad(out, depth + 1);
+        esc(out, "expected_revision");
+        out += ": ";
+        esc(out, v.expected_revision);
+    }
+    if (v.collection_admission.has_value()) {
+        if (!first) out += ',';
+        first = false;
+        out += '\n';
+        pad(out, depth + 1);
+        esc(out, "collection_admission");
+        out += ": ";
+        enc_permission_key(out, *v.collection_admission, depth + 1);
+    }
+    if (!first) out += ',';
+    out += '\n';
+    pad(out, depth + 1);
+    esc(out, "resources");
+    out += ": ";
+    enc_list<ConcreteResource>(out, v.resources, depth + 1, enc_concrete_resource);
+    out += '\n';
+    pad(out, depth);
+    out += '}';
+}
+
+inline void enc_batch_decision(std::string& out, const BatchDecision& v, int depth) {
+    if (wire_name(v.outcome).empty()) throw Refusal("bad_enum", 0);
+    if (v.collection_outcome.has_value() && wire_name(*v.collection_outcome).empty()) throw Refusal("bad_enum", 0);
+    for (const auto item : v.outcomes) if (wire_name(item).empty()) throw Refusal("bad_enum", 0);
+    out += '{';
+    out += '\n';
+    pad(out, depth + 1);
+    esc(out, "outcome");
+    out += ": ";
+    esc(out, std::string(wire_name(v.outcome)));
+    out += ',';
+    out += '\n';
+    pad(out, depth + 1);
+    esc(out, "revision");
+    out += ": ";
+    esc(out, v.revision);
+    if (v.collection_outcome.has_value()) {
+        out += ',';
+        out += '\n';
+        pad(out, depth + 1);
+        esc(out, "collection_outcome");
+        out += ": ";
+        esc(out, std::string(wire_name(*v.collection_outcome)));
+    }
+    out += ',';
+    out += '\n';
+    pad(out, depth + 1);
+    esc(out, "outcomes");
+    out += ": ";
+    enum_strs(out, v.outcomes, depth + 1);
+    out += '\n';
+    pad(out, depth);
+    out += '}';
+}
+
+inline void enc_selector_permission_definition(std::string& out, const SelectorPermissionDefinition& v, int depth) {
+    for (const auto item : v.supported_selectors) if (wire_name(item).empty()) throw Refusal("bad_enum", 0);
+    for (const auto item : v.first_use_selectors) if (wire_name(item).empty()) throw Refusal("bad_enum", 0);
+    out += '{';
+    out += '\n';
+    pad(out, depth + 1);
+    esc(out, "definition");
+    out += ": ";
+    enc_permission_definition(out, v.definition, depth + 1);
+    out += ',';
+    out += '\n';
+    pad(out, depth + 1);
+    esc(out, "label");
+    out += ": ";
+    esc(out, v.label);
+    out += ',';
+    out += '\n';
+    pad(out, depth + 1);
+    esc(out, "supported_selectors");
+    out += ": ";
+    enum_strs(out, v.supported_selectors, depth + 1);
+    out += ',';
+    out += '\n';
+    pad(out, depth + 1);
+    esc(out, "first_use_selectors");
+    out += ": ";
+    enum_strs(out, v.first_use_selectors, depth + 1);
+    out += ',';
+    out += '\n';
+    pad(out, depth + 1);
+    esc(out, "collection");
+    out += ": ";
+    esc(out, v.collection);
+    out += ',';
+    out += '\n';
+    pad(out, depth + 1);
+    esc(out, "all_effect");
+    out += ": ";
+    esc(out, v.all_effect);
+    out += ',';
+    out += '\n';
+    pad(out, depth + 1);
+    esc(out, "request_type");
+    out += ": ";
+    esc(out, v.request_type);
+    out += '\n';
+    pad(out, depth);
+    out += '}';
+}
+
+inline void enc_permission_definition_page(std::string& out, const PermissionDefinitionPage& v, int depth) {
+    if (wire_name(v.outcome).empty()) throw Refusal("bad_enum", 0);
+    out += '{';
+    out += '\n';
+    pad(out, depth + 1);
+    esc(out, "outcome");
+    out += ": ";
+    esc(out, std::string(wire_name(v.outcome)));
+    out += ',';
+    out += '\n';
+    pad(out, depth + 1);
+    esc(out, "revision");
+    out += ": ";
+    esc(out, v.revision);
+    out += ',';
+    out += '\n';
+    pad(out, depth + 1);
+    esc(out, "definitions");
+    out += ": ";
+    enc_list<SelectorPermissionDefinition>(out, v.definitions, depth + 1, enc_selector_permission_definition);
+    out += ',';
+    out += '\n';
+    pad(out, depth + 1);
+    esc(out, "next");
+    out += ": ";
+    esc(out, v.next);
+    out += ',';
+    out += '\n';
+    pad(out, depth + 1);
+    esc(out, "complete");
+    out += ": ";
+    out += v.complete ? "true" : "false";
+    out += '\n';
+    pad(out, depth);
+    out += '}';
+}
+
+inline void enc_permission_bundle_definition(std::string& out, const PermissionBundleDefinition& v, int depth) {
+    for (const auto item : v.supported_selectors) if (wire_name(item).empty()) throw Refusal("bad_enum", 0);
+    out += '{';
+    out += '\n';
+    pad(out, depth + 1);
+    esc(out, "bundle_ref");
+    out += ": ";
+    esc(out, v.bundle_ref);
+    out += ',';
+    out += '\n';
+    pad(out, depth + 1);
+    esc(out, "owner_contract");
+    out += ": ";
+    esc(out, v.owner_contract);
+    out += ',';
+    out += '\n';
+    pad(out, depth + 1);
+    esc(out, "label");
+    out += ": ";
+    esc(out, v.label);
+    out += ',';
+    out += '\n';
+    pad(out, depth + 1);
+    esc(out, "target_type");
+    out += ": ";
+    esc(out, v.target_type);
+    out += ',';
+    out += '\n';
+    pad(out, depth + 1);
+    esc(out, "supported_selectors");
+    out += ": ";
+    enum_strs(out, v.supported_selectors, depth + 1);
+    out += ',';
+    out += '\n';
+    pad(out, depth + 1);
+    esc(out, "members");
+    out += ": ";
+    enc_list<PermissionKey>(out, v.members, depth + 1, enc_permission_key);
+    out += ',';
+    out += '\n';
+    pad(out, depth + 1);
+    esc(out, "disclosure");
+    out += ": ";
+    esc(out, v.disclosure);
+    out += ',';
+    out += '\n';
+    pad(out, depth + 1);
+    esc(out, "definition_digest");
+    out += ": ";
+    esc(out, v.definition_digest);
+    out += '\n';
+    pad(out, depth);
+    out += '}';
+}
+
+inline void enc_permission_bundle_page(std::string& out, const PermissionBundlePage& v, int depth) {
+    if (wire_name(v.outcome).empty()) throw Refusal("bad_enum", 0);
+    out += '{';
+    out += '\n';
+    pad(out, depth + 1);
+    esc(out, "outcome");
+    out += ": ";
+    esc(out, std::string(wire_name(v.outcome)));
+    out += ',';
+    out += '\n';
+    pad(out, depth + 1);
+    esc(out, "revision");
+    out += ": ";
+    esc(out, v.revision);
+    out += ',';
+    out += '\n';
+    pad(out, depth + 1);
+    esc(out, "bundles");
+    out += ": ";
+    enc_list<PermissionBundleDefinition>(out, v.bundles, depth + 1, enc_permission_bundle_definition);
+    out += ',';
+    out += '\n';
+    pad(out, depth + 1);
+    esc(out, "next");
+    out += ": ";
+    esc(out, v.next);
+    out += ',';
+    out += '\n';
+    pad(out, depth + 1);
+    esc(out, "complete");
+    out += ": ";
+    out += v.complete ? "true" : "false";
+    out += '\n';
+    pad(out, depth);
+    out += '}';
+}
+
+inline void enc_bundle_expansion(std::string& out, const BundleExpansion& v, int depth) {
+    out += '{';
+    out += '\n';
+    pad(out, depth + 1);
+    esc(out, "bundle_ref");
+    out += ": ";
+    esc(out, v.bundle_ref);
+    out += ',';
+    out += '\n';
+    pad(out, depth + 1);
+    esc(out, "definition_digest");
+    out += ": ";
+    esc(out, v.definition_digest);
+    out += ',';
+    out += '\n';
+    pad(out, depth + 1);
+    esc(out, "selector");
+    out += ": ";
+    enc_resource_selector(out, v.selector, depth + 1);
+    out += ',';
+    out += '\n';
+    pad(out, depth + 1);
+    esc(out, "selections");
+    out += ": ";
+    enc_list<PermissionSelection>(out, v.selections, depth + 1, enc_permission_selection);
+    out += '\n';
+    pad(out, depth);
+    out += '}';
+}
+
+inline void enc_permission_effect(std::string& out, const PermissionEffect& v, int depth) {
+    out += '{';
+    out += '\n';
+    pad(out, depth + 1);
+    esc(out, "subject");
+    out += ": ";
+    enc_subject(out, v.subject, depth + 1);
+    out += ',';
+    out += '\n';
+    pad(out, depth + 1);
+    esc(out, "selections");
+    out += ": ";
+    enc_list<PermissionSelection>(out, v.selections, depth + 1, enc_permission_selection);
+    if (v.bundle.has_value()) {
+        out += ',';
+        out += '\n';
+        pad(out, depth + 1);
+        esc(out, "bundle");
+        out += ": ";
+        enc_bundle_expansion(out, *v.bundle, depth + 1);
+    }
+    out += '\n';
+    pad(out, depth);
+    out += '}';
+}
+
+inline void enc_selector_rule(std::string& out, const SelectorRule& v, int depth) {
+    out += '{';
+    out += '\n';
+    pad(out, depth + 1);
+    esc(out, "subject");
+    out += ": ";
+    enc_subject(out, v.subject, depth + 1);
+    out += ',';
+    out += '\n';
+    pad(out, depth + 1);
+    esc(out, "selection");
+    out += ": ";
+    enc_permission_selection(out, v.selection, depth + 1);
+    out += ',';
+    out += '\n';
+    pad(out, depth + 1);
+    esc(out, "permit");
+    out += ": ";
+    out += v.permit ? "true" : "false";
+    out += '\n';
+    pad(out, depth);
+    out += '}';
+}
+
+inline void enc_bundle_origin(std::string& out, const BundleOrigin& v, int depth) {
+    out += '{';
+    out += '\n';
+    pad(out, depth + 1);
+    esc(out, "id");
+    out += ": ";
+    esc(out, v.id);
+    out += ',';
+    out += '\n';
+    pad(out, depth + 1);
+    esc(out, "expansion");
+    out += ": ";
+    enc_bundle_expansion(out, v.expansion, depth + 1);
+    out += '\n';
+    pad(out, depth);
+    out += '}';
+}
+
+inline void enc_selector_rule_record(std::string& out, const SelectorRuleRecord& v, int depth) {
+    out += '{';
+    out += '\n';
+    pad(out, depth + 1);
+    esc(out, "rule");
+    out += ": ";
+    enc_selector_rule(out, v.rule, depth + 1);
+    out += ',';
+    out += '\n';
+    pad(out, depth + 1);
+    esc(out, "set_by");
+    out += ": ";
+    enc_subject(out, v.set_by, depth + 1);
+    out += ',';
+    out += '\n';
+    pad(out, depth + 1);
+    esc(out, "set_at");
+    out += ": ";
+    esc(out, v.set_at);
+    out += ',';
+    out += '\n';
+    pad(out, depth + 1);
+    esc(out, "why");
+    out += ": ";
+    esc(out, v.why);
+    out += ',';
+    out += '\n';
+    pad(out, depth + 1);
+    esc(out, "expires");
+    out += ": ";
+    esc(out, v.expires);
+    if (v.bundle_origin.has_value()) {
+        out += ',';
+        out += '\n';
+        pad(out, depth + 1);
+        esc(out, "bundle_origin");
+        out += ": ";
+        enc_bundle_origin(out, *v.bundle_origin, depth + 1);
+    }
+    out += '\n';
+    pad(out, depth);
+    out += '}';
+}
+
+inline void enc_selector_rule_page(std::string& out, const SelectorRulePage& v, int depth) {
+    if (wire_name(v.outcome).empty()) throw Refusal("bad_enum", 0);
+    out += '{';
+    out += '\n';
+    pad(out, depth + 1);
+    esc(out, "outcome");
+    out += ": ";
+    esc(out, std::string(wire_name(v.outcome)));
+    out += ',';
+    out += '\n';
+    pad(out, depth + 1);
+    esc(out, "revision");
+    out += ": ";
+    esc(out, v.revision);
+    out += ',';
+    out += '\n';
+    pad(out, depth + 1);
+    esc(out, "records");
+    out += ": ";
+    enc_list<SelectorRuleRecord>(out, v.records, depth + 1, enc_selector_rule_record);
+    out += ',';
+    out += '\n';
+    pad(out, depth + 1);
+    esc(out, "next");
+    out += ": ";
+    esc(out, v.next);
+    out += ',';
+    out += '\n';
+    pad(out, depth + 1);
+    esc(out, "complete");
+    out += ": ";
+    out += v.complete ? "true" : "false";
+    out += '\n';
+    pad(out, depth);
+    out += '}';
+}
+
+inline void enc_selector_rule_read(std::string& out, const SelectorRuleRead& v, int depth) {
+    if (wire_name(v.outcome).empty()) throw Refusal("bad_enum", 0);
+    out += '{';
+    out += '\n';
+    pad(out, depth + 1);
+    esc(out, "outcome");
+    out += ": ";
+    esc(out, std::string(wire_name(v.outcome)));
+    out += ',';
+    out += '\n';
+    pad(out, depth + 1);
+    esc(out, "revision");
+    out += ": ";
+    esc(out, v.revision);
+    if (v.record.has_value()) {
+        out += ',';
+        out += '\n';
+        pad(out, depth + 1);
+        esc(out, "record");
+        out += ": ";
+        enc_selector_rule_record(out, *v.record, depth + 1);
+    }
+    out += '\n';
+    pad(out, depth);
+    out += '}';
+}
+
+inline void enc_selector_edit(std::string& out, const SelectorEdit& v, int depth) {
+    if (wire_name(v.outcome).empty()) throw Refusal("bad_enum", 0);
+    out += '{';
+    out += '\n';
+    pad(out, depth + 1);
+    esc(out, "outcome");
+    out += ": ";
+    esc(out, std::string(wire_name(v.outcome)));
+    out += ',';
+    out += '\n';
+    pad(out, depth + 1);
+    esc(out, "revision");
+    out += ": ";
+    esc(out, v.revision);
+    out += ',';
+    out += '\n';
+    pad(out, depth + 1);
+    esc(out, "current");
+    out += ": ";
+    enc_list<SelectorRuleRecord>(out, v.current, depth + 1, enc_selector_rule_record);
+    if (v.bundle_origin.has_value()) {
+        out += ',';
+        out += '\n';
+        pad(out, depth + 1);
+        esc(out, "bundle_origin");
+        out += ": ";
+        enc_bundle_origin(out, *v.bundle_origin, depth + 1);
+    }
+    out += '\n';
+    pad(out, depth);
+    out += '}';
+}
+
+inline void enc_legacy_operation_request(std::string& out, const LegacyOperationRequest& v, int depth) {
+    out += '{';
+    out += '\n';
+    pad(out, depth + 1);
+    esc(out, "legacy_action");
+    out += ": ";
+    esc(out, v.legacy_action);
+    out += ',';
+    out += '\n';
+    pad(out, depth + 1);
+    esc(out, "legacy_resource");
+    out += ": ";
+    esc(out, v.legacy_resource);
+    if (v.concrete_operation.has_value()) {
+        out += ',';
+        out += '\n';
+        pad(out, depth + 1);
+        esc(out, "concrete_operation");
+        out += ": ";
+        enc_concrete_resource(out, *v.concrete_operation, depth + 1);
+    }
+    out += '\n';
+    pad(out, depth);
+    out += '}';
+}
+
+inline void enc_oa_authorization_list_action_descriptions_arguments(std::string& out, const OAAuthorizationListActionDescriptionsArguments& v, int depth) {
+    out += '{';
+    out += '\n';
+    pad(out, depth + 1);
+    esc(out, "cursor");
+    out += ": ";
+    esc(out, v.cursor);
+    out += ',';
+    out += '\n';
+    pad(out, depth + 1);
+    esc(out, "limit");
+    out += ": ";
+    num(out, v.limit);
     out += '\n';
     pad(out, depth);
     out += '}';
@@ -1212,6 +2915,42 @@ inline void enc_oa_authorization_decide_for_arguments(std::string& out, const OA
     esc(out, "resource");
     out += ": ";
     esc(out, v.resource);
+    out += '\n';
+    pad(out, depth);
+    out += '}';
+}
+
+inline void enc_oa_authorization_operator_register_described_action_arguments(std::string& out, const OAAuthorizationOperatorRegisterDescribedActionArguments& v, int depth) {
+    out += '{';
+    out += '\n';
+    pad(out, depth + 1);
+    esc(out, "expected_revision");
+    out += ": ";
+    esc(out, v.expected_revision);
+    out += ',';
+    out += '\n';
+    pad(out, depth + 1);
+    esc(out, "description");
+    out += ": ";
+    enc_action_description(out, v.description, depth + 1);
+    out += '\n';
+    pad(out, depth);
+    out += '}';
+}
+
+inline void enc_oa_authorization_operator_apply_first_use_allow_arguments(std::string& out, const OAAuthorizationOperatorApplyFirstUseAllowArguments& v, int depth) {
+    out += '{';
+    out += '\n';
+    pad(out, depth + 1);
+    esc(out, "expected_revision");
+    out += ": ";
+    esc(out, v.expected_revision);
+    out += ',';
+    out += '\n';
+    pad(out, depth + 1);
+    esc(out, "question_id");
+    out += ": ";
+    esc(out, v.question_id);
     out += '\n';
     pad(out, depth);
     out += '}';
@@ -1283,6 +3022,72 @@ inline void enc_oa_authorization_operator_revoke_rule_arguments(std::string& out
     out += '}';
 }
 
+inline void enc_oa_authorization_operator_stop_answerer_arguments(std::string& out, const OAAuthorizationOperatorStopAnswererArguments& v, int depth) {
+    out += '{';
+    out += '\n';
+    pad(out, depth + 1);
+    esc(out, "expected_revision");
+    out += ": ";
+    esc(out, v.expected_revision);
+    out += ',';
+    out += '\n';
+    pad(out, depth + 1);
+    esc(out, "answerer");
+    out += ": ";
+    enc_subject(out, v.answerer, depth + 1);
+    out += ',';
+    out += '\n';
+    pad(out, depth + 1);
+    esc(out, "also_revoke_grants");
+    out += ": ";
+    out += v.also_revoke_grants ? "true" : "false";
+    out += '\n';
+    pad(out, depth);
+    out += '}';
+}
+
+inline void enc_oa_authorization_operator_revoke_answer_permits_arguments(std::string& out, const OAAuthorizationOperatorRevokeAnswerPermitsArguments& v, int depth) {
+    out += '{';
+    out += '\n';
+    pad(out, depth + 1);
+    esc(out, "expected_revision");
+    out += ": ";
+    esc(out, v.expected_revision);
+    out += ',';
+    out += '\n';
+    pad(out, depth + 1);
+    esc(out, "answerer");
+    out += ": ";
+    enc_subject(out, v.answerer, depth + 1);
+    out += ',';
+    out += '\n';
+    pad(out, depth + 1);
+    esc(out, "target");
+    out += ": ";
+    enc_subject(out, v.target, depth + 1);
+    out += ',';
+    out += '\n';
+    pad(out, depth + 1);
+    esc(out, "actions");
+    out += ": ";
+    strs(out, v.actions, depth + 1);
+    out += ',';
+    out += '\n';
+    pad(out, depth + 1);
+    esc(out, "resource");
+    out += ": ";
+    esc(out, v.resource);
+    out += ',';
+    out += '\n';
+    pad(out, depth + 1);
+    esc(out, "question_id");
+    out += ": ";
+    esc(out, v.question_id);
+    out += '\n';
+    pad(out, depth);
+    out += '}';
+}
+
 inline void enc_oa_authorization_operator_set_rule_for_arguments(std::string& out, const OAAuthorizationOperatorSetRuleForArguments& v, int depth) {
     out += '{';
     out += '\n';
@@ -1296,6 +3101,36 @@ inline void enc_oa_authorization_operator_set_rule_for_arguments(std::string& ou
     esc(out, "rule");
     out += ": ";
     enc_policy_rule(out, v.rule, depth + 1);
+    out += ',';
+    out += '\n';
+    pad(out, depth + 1);
+    esc(out, "ttl_ms");
+    out += ": ";
+    num(out, v.ttl_ms);
+    out += ',';
+    out += '\n';
+    pad(out, depth + 1);
+    esc(out, "why");
+    out += ": ";
+    esc(out, v.why);
+    out += '\n';
+    pad(out, depth);
+    out += '}';
+}
+
+inline void enc_oa_authorization_operator_set_rules_for_arguments(std::string& out, const OAAuthorizationOperatorSetRulesForArguments& v, int depth) {
+    out += '{';
+    out += '\n';
+    pad(out, depth + 1);
+    esc(out, "expected_revision");
+    out += ": ";
+    esc(out, v.expected_revision);
+    out += ',';
+    out += '\n';
+    pad(out, depth + 1);
+    esc(out, "rules");
+    out += ": ";
+    enc_list<PolicyRule>(out, v.rules, depth + 1, enc_policy_rule);
     out += ',';
     out += '\n';
     pad(out, depth + 1);
@@ -1368,6 +3203,337 @@ inline void enc_oa_authorization_operator_retire_action_arguments(std::string& o
     esc(out, "action");
     out += ": ";
     esc(out, v.action);
+    out += '\n';
+    pad(out, depth);
+    out += '}';
+}
+
+inline void enc_oa_authorization_operator_explain_for_arguments(std::string& out, const OAAuthorizationOperatorExplainForArguments& v, int depth) {
+    out += '{';
+    out += '\n';
+    pad(out, depth + 1);
+    esc(out, "subject");
+    out += ": ";
+    enc_subject(out, v.subject, depth + 1);
+    out += ',';
+    out += '\n';
+    pad(out, depth + 1);
+    esc(out, "action");
+    out += ": ";
+    esc(out, v.action);
+    out += ',';
+    out += '\n';
+    pad(out, depth + 1);
+    esc(out, "resource");
+    out += ": ";
+    esc(out, v.resource);
+    out += '\n';
+    pad(out, depth);
+    out += '}';
+}
+
+inline void enc_oa_authorization_operator_list_defaults_arguments(std::string& out, const OAAuthorizationOperatorListDefaultsArguments& v, int depth) {
+    (void)v;
+    (void)depth;
+    out += '{';
+    out += '}';
+}
+
+inline void enc_oa_authorization_operator_set_default_arguments(std::string& out, const OAAuthorizationOperatorSetDefaultArguments& v, int depth) {
+    out += '{';
+    out += '\n';
+    pad(out, depth + 1);
+    esc(out, "expected_revision");
+    out += ": ";
+    esc(out, v.expected_revision);
+    out += ',';
+    out += '\n';
+    pad(out, depth + 1);
+    esc(out, "name");
+    out += ": ";
+    esc(out, v.name);
+    out += ',';
+    out += '\n';
+    pad(out, depth + 1);
+    esc(out, "on");
+    out += ": ";
+    out += v.on ? "true" : "false";
+    out += '\n';
+    pad(out, depth);
+    out += '}';
+}
+
+inline void enc_oa_selector_authorization_list_permission_definitions_arguments(std::string& out, const OASelectorAuthorizationListPermissionDefinitionsArguments& v, int depth) {
+    out += '{';
+    out += '\n';
+    pad(out, depth + 1);
+    esc(out, "cursor");
+    out += ": ";
+    esc(out, v.cursor);
+    out += ',';
+    out += '\n';
+    pad(out, depth + 1);
+    esc(out, "limit");
+    out += ": ";
+    num(out, v.limit);
+    out += '\n';
+    pad(out, depth);
+    out += '}';
+}
+
+inline void enc_oa_selector_authorization_list_permission_bundles_arguments(std::string& out, const OASelectorAuthorizationListPermissionBundlesArguments& v, int depth) {
+    out += '{';
+    out += '\n';
+    pad(out, depth + 1);
+    esc(out, "cursor");
+    out += ": ";
+    esc(out, v.cursor);
+    out += ',';
+    out += '\n';
+    pad(out, depth + 1);
+    esc(out, "limit");
+    out += ": ";
+    num(out, v.limit);
+    out += '\n';
+    pad(out, depth);
+    out += '}';
+}
+
+inline void enc_oa_selector_authorization_check_batch_arguments(std::string& out, const OASelectorAuthorizationCheckBatchArguments& v, int depth) {
+    out += '{';
+    out += '\n';
+    pad(out, depth + 1);
+    esc(out, "request");
+    out += ": ";
+    enc_check_batch_request(out, v.request, depth + 1);
+    out += '\n';
+    pad(out, depth);
+    out += '}';
+}
+
+inline void enc_oa_selector_authorization_check_batch_for_arguments(std::string& out, const OASelectorAuthorizationCheckBatchForArguments& v, int depth) {
+    out += '{';
+    out += '\n';
+    pad(out, depth + 1);
+    esc(out, "subject");
+    out += ": ";
+    enc_subject(out, v.subject, depth + 1);
+    out += ',';
+    out += '\n';
+    pad(out, depth + 1);
+    esc(out, "request");
+    out += ": ";
+    enc_check_batch_request(out, v.request, depth + 1);
+    out += '\n';
+    pad(out, depth);
+    out += '}';
+}
+
+inline void enc_oa_selector_authorization_check_legacy_operation_for_arguments(std::string& out, const OASelectorAuthorizationCheckLegacyOperationForArguments& v, int depth) {
+    out += '{';
+    out += '\n';
+    pad(out, depth + 1);
+    esc(out, "subject");
+    out += ": ";
+    enc_subject(out, v.subject, depth + 1);
+    out += ',';
+    out += '\n';
+    pad(out, depth + 1);
+    esc(out, "request");
+    out += ": ";
+    enc_legacy_operation_request(out, v.request, depth + 1);
+    out += '\n';
+    pad(out, depth);
+    out += '}';
+}
+
+inline void enc_oa_selector_authorization_operator_list_selector_rules_arguments(std::string& out, const OASelectorAuthorizationOperatorListSelectorRulesArguments& v, int depth) {
+    out += '{';
+    out += '\n';
+    pad(out, depth + 1);
+    esc(out, "cursor");
+    out += ": ";
+    esc(out, v.cursor);
+    out += ',';
+    out += '\n';
+    pad(out, depth + 1);
+    esc(out, "limit");
+    out += ": ";
+    num(out, v.limit);
+    out += '\n';
+    pad(out, depth);
+    out += '}';
+}
+
+inline void enc_oa_selector_authorization_operator_read_selector_rule_arguments(std::string& out, const OASelectorAuthorizationOperatorReadSelectorRuleArguments& v, int depth) {
+    out += '{';
+    out += '\n';
+    pad(out, depth + 1);
+    esc(out, "subject");
+    out += ": ";
+    enc_subject(out, v.subject, depth + 1);
+    out += ',';
+    out += '\n';
+    pad(out, depth + 1);
+    esc(out, "selection");
+    out += ": ";
+    enc_permission_selection(out, v.selection, depth + 1);
+    out += '\n';
+    pad(out, depth);
+    out += '}';
+}
+
+inline void enc_oa_selector_authorization_operator_set_selector_rule_arguments(std::string& out, const OASelectorAuthorizationOperatorSetSelectorRuleArguments& v, int depth) {
+    out += '{';
+    out += '\n';
+    pad(out, depth + 1);
+    esc(out, "expected_revision");
+    out += ": ";
+    esc(out, v.expected_revision);
+    out += ',';
+    out += '\n';
+    pad(out, depth + 1);
+    esc(out, "rule");
+    out += ": ";
+    enc_selector_rule(out, v.rule, depth + 1);
+    out += ',';
+    out += '\n';
+    pad(out, depth + 1);
+    esc(out, "ttl_ms");
+    out += ": ";
+    num(out, v.ttl_ms);
+    out += ',';
+    out += '\n';
+    pad(out, depth + 1);
+    esc(out, "why");
+    out += ": ";
+    esc(out, v.why);
+    out += '\n';
+    pad(out, depth);
+    out += '}';
+}
+
+inline void enc_oa_selector_authorization_operator_remove_selector_rule_arguments(std::string& out, const OASelectorAuthorizationOperatorRemoveSelectorRuleArguments& v, int depth) {
+    out += '{';
+    out += '\n';
+    pad(out, depth + 1);
+    esc(out, "expected_revision");
+    out += ": ";
+    esc(out, v.expected_revision);
+    out += ',';
+    out += '\n';
+    pad(out, depth + 1);
+    esc(out, "subject");
+    out += ": ";
+    enc_subject(out, v.subject, depth + 1);
+    out += ',';
+    out += '\n';
+    pad(out, depth + 1);
+    esc(out, "selection");
+    out += ": ";
+    enc_permission_selection(out, v.selection, depth + 1);
+    out += '\n';
+    pad(out, depth);
+    out += '}';
+}
+
+inline void enc_oa_selector_authorization_operator_apply_bundle_arguments(std::string& out, const OASelectorAuthorizationOperatorApplyBundleArguments& v, int depth) {
+    out += '{';
+    out += '\n';
+    pad(out, depth + 1);
+    esc(out, "expected_revision");
+    out += ": ";
+    esc(out, v.expected_revision);
+    out += ',';
+    out += '\n';
+    pad(out, depth + 1);
+    esc(out, "subject");
+    out += ": ";
+    enc_subject(out, v.subject, depth + 1);
+    out += ',';
+    out += '\n';
+    pad(out, depth + 1);
+    esc(out, "bundle_ref");
+    out += ": ";
+    esc(out, v.bundle_ref);
+    out += ',';
+    out += '\n';
+    pad(out, depth + 1);
+    esc(out, "selector");
+    out += ": ";
+    enc_resource_selector(out, v.selector, depth + 1);
+    out += ',';
+    out += '\n';
+    pad(out, depth + 1);
+    esc(out, "ttl_ms");
+    out += ": ";
+    num(out, v.ttl_ms);
+    out += ',';
+    out += '\n';
+    pad(out, depth + 1);
+    esc(out, "why");
+    out += ": ";
+    esc(out, v.why);
+    out += '\n';
+    pad(out, depth);
+    out += '}';
+}
+
+inline void enc_oa_selector_authorization_operator_remove_bundle_arguments(std::string& out, const OASelectorAuthorizationOperatorRemoveBundleArguments& v, int depth) {
+    out += '{';
+    out += '\n';
+    pad(out, depth + 1);
+    esc(out, "expected_revision");
+    out += ": ";
+    esc(out, v.expected_revision);
+    out += ',';
+    out += '\n';
+    pad(out, depth + 1);
+    esc(out, "subject");
+    out += ": ";
+    enc_subject(out, v.subject, depth + 1);
+    out += ',';
+    out += '\n';
+    pad(out, depth + 1);
+    esc(out, "origin_id");
+    out += ": ";
+    esc(out, v.origin_id);
+    out += '\n';
+    pad(out, depth);
+    out += '}';
+}
+
+inline void enc_oa_selector_authorization_operator_apply_permission_allow_arguments(std::string& out, const OASelectorAuthorizationOperatorApplyPermissionAllowArguments& v, int depth) {
+    out += '{';
+    out += '\n';
+    pad(out, depth + 1);
+    esc(out, "expected_revision");
+    out += ": ";
+    esc(out, v.expected_revision);
+    out += ',';
+    out += '\n';
+    pad(out, depth + 1);
+    esc(out, "question_id");
+    out += ": ";
+    esc(out, v.question_id);
+    out += '\n';
+    pad(out, depth);
+    out += '}';
+}
+
+inline void enc_oa_selector_authorization_operator_undo_permission_effect_arguments(std::string& out, const OASelectorAuthorizationOperatorUndoPermissionEffectArguments& v, int depth) {
+    out += '{';
+    out += '\n';
+    pad(out, depth + 1);
+    esc(out, "expected_revision");
+    out += ": ";
+    esc(out, v.expected_revision);
+    out += ',';
+    out += '\n';
+    pad(out, depth + 1);
+    esc(out, "question_id");
+    out += ": ";
+    esc(out, v.question_id);
     out += '\n';
     pad(out, depth);
     out += '}';
@@ -1457,6 +3623,18 @@ inline void enc_oa_service_error(std::string& out, const OAServiceError& v, int 
     out += '}';
 }
 
+inline void enc_oa_authorization_list_action_descriptions_result(std::string& out, const OAAuthorizationListActionDescriptionsResult& v, int depth) {
+    out += '{';
+    out += '\n';
+    pad(out, depth + 1);
+    esc(out, "value");
+    out += ": ";
+    enc_description_page(out, v.value, depth + 1);
+    out += '\n';
+    pad(out, depth);
+    out += '}';
+}
+
 inline void enc_oa_authorization_decide_result(std::string& out, const OAAuthorizationDecideResult& v, int depth) {
     out += '{';
     out += '\n';
@@ -1476,6 +3654,30 @@ inline void enc_oa_authorization_decide_for_result(std::string& out, const OAAut
     esc(out, "value");
     out += ": ";
     enc_decision(out, v.value, depth + 1);
+    out += '\n';
+    pad(out, depth);
+    out += '}';
+}
+
+inline void enc_oa_authorization_operator_register_described_action_result(std::string& out, const OAAuthorizationOperatorRegisterDescribedActionResult& v, int depth) {
+    out += '{';
+    out += '\n';
+    pad(out, depth + 1);
+    esc(out, "value");
+    out += ": ";
+    enc_description_edit(out, v.value, depth + 1);
+    out += '\n';
+    pad(out, depth);
+    out += '}';
+}
+
+inline void enc_oa_authorization_operator_apply_first_use_allow_result(std::string& out, const OAAuthorizationOperatorApplyFirstUseAllowResult& v, int depth) {
+    out += '{';
+    out += '\n';
+    pad(out, depth + 1);
+    esc(out, "value");
+    out += ": ";
+    enc_policy_edit(out, v.value, depth + 1);
     out += '\n';
     pad(out, depth);
     out += '}';
@@ -1517,7 +3719,43 @@ inline void enc_oa_authorization_operator_revoke_rule_result(std::string& out, c
     out += '}';
 }
 
+inline void enc_oa_authorization_operator_stop_answerer_result(std::string& out, const OAAuthorizationOperatorStopAnswererResult& v, int depth) {
+    out += '{';
+    out += '\n';
+    pad(out, depth + 1);
+    esc(out, "value");
+    out += ": ";
+    enc_policy_edit(out, v.value, depth + 1);
+    out += '\n';
+    pad(out, depth);
+    out += '}';
+}
+
+inline void enc_oa_authorization_operator_revoke_answer_permits_result(std::string& out, const OAAuthorizationOperatorRevokeAnswerPermitsResult& v, int depth) {
+    out += '{';
+    out += '\n';
+    pad(out, depth + 1);
+    esc(out, "value");
+    out += ": ";
+    enc_policy_edit(out, v.value, depth + 1);
+    out += '\n';
+    pad(out, depth);
+    out += '}';
+}
+
 inline void enc_oa_authorization_operator_set_rule_for_result(std::string& out, const OAAuthorizationOperatorSetRuleForResult& v, int depth) {
+    out += '{';
+    out += '\n';
+    pad(out, depth + 1);
+    esc(out, "value");
+    out += ": ";
+    enc_policy_edit(out, v.value, depth + 1);
+    out += '\n';
+    pad(out, depth);
+    out += '}';
+}
+
+inline void enc_oa_authorization_operator_set_rules_for_result(std::string& out, const OAAuthorizationOperatorSetRulesForResult& v, int depth) {
     out += '{';
     out += '\n';
     pad(out, depth + 1);
@@ -1560,6 +3798,198 @@ inline void enc_oa_authorization_operator_retire_action_result(std::string& out,
     esc(out, "value");
     out += ": ";
     enc_action_edit(out, v.value, depth + 1);
+    out += '\n';
+    pad(out, depth);
+    out += '}';
+}
+
+inline void enc_oa_authorization_operator_explain_for_result(std::string& out, const OAAuthorizationOperatorExplainForResult& v, int depth) {
+    out += '{';
+    out += '\n';
+    pad(out, depth + 1);
+    esc(out, "value");
+    out += ": ";
+    enc_decision_explanation(out, v.value, depth + 1);
+    out += '\n';
+    pad(out, depth);
+    out += '}';
+}
+
+inline void enc_oa_authorization_operator_list_defaults_result(std::string& out, const OAAuthorizationOperatorListDefaultsResult& v, int depth) {
+    out += '{';
+    out += '\n';
+    pad(out, depth + 1);
+    esc(out, "value");
+    out += ": ";
+    enc_default_page(out, v.value, depth + 1);
+    out += '\n';
+    pad(out, depth);
+    out += '}';
+}
+
+inline void enc_oa_authorization_operator_set_default_result(std::string& out, const OAAuthorizationOperatorSetDefaultResult& v, int depth) {
+    out += '{';
+    out += '\n';
+    pad(out, depth + 1);
+    esc(out, "value");
+    out += ": ";
+    enc_default_edit(out, v.value, depth + 1);
+    out += '\n';
+    pad(out, depth);
+    out += '}';
+}
+
+inline void enc_oa_selector_authorization_list_permission_definitions_result(std::string& out, const OASelectorAuthorizationListPermissionDefinitionsResult& v, int depth) {
+    out += '{';
+    out += '\n';
+    pad(out, depth + 1);
+    esc(out, "value");
+    out += ": ";
+    enc_permission_definition_page(out, v.value, depth + 1);
+    out += '\n';
+    pad(out, depth);
+    out += '}';
+}
+
+inline void enc_oa_selector_authorization_list_permission_bundles_result(std::string& out, const OASelectorAuthorizationListPermissionBundlesResult& v, int depth) {
+    out += '{';
+    out += '\n';
+    pad(out, depth + 1);
+    esc(out, "value");
+    out += ": ";
+    enc_permission_bundle_page(out, v.value, depth + 1);
+    out += '\n';
+    pad(out, depth);
+    out += '}';
+}
+
+inline void enc_oa_selector_authorization_check_batch_result(std::string& out, const OASelectorAuthorizationCheckBatchResult& v, int depth) {
+    out += '{';
+    out += '\n';
+    pad(out, depth + 1);
+    esc(out, "value");
+    out += ": ";
+    enc_batch_decision(out, v.value, depth + 1);
+    out += '\n';
+    pad(out, depth);
+    out += '}';
+}
+
+inline void enc_oa_selector_authorization_check_batch_for_result(std::string& out, const OASelectorAuthorizationCheckBatchForResult& v, int depth) {
+    out += '{';
+    out += '\n';
+    pad(out, depth + 1);
+    esc(out, "value");
+    out += ": ";
+    enc_batch_decision(out, v.value, depth + 1);
+    out += '\n';
+    pad(out, depth);
+    out += '}';
+}
+
+inline void enc_oa_selector_authorization_check_legacy_operation_for_result(std::string& out, const OASelectorAuthorizationCheckLegacyOperationForResult& v, int depth) {
+    out += '{';
+    out += '\n';
+    pad(out, depth + 1);
+    esc(out, "value");
+    out += ": ";
+    enc_decision(out, v.value, depth + 1);
+    out += '\n';
+    pad(out, depth);
+    out += '}';
+}
+
+inline void enc_oa_selector_authorization_operator_list_selector_rules_result(std::string& out, const OASelectorAuthorizationOperatorListSelectorRulesResult& v, int depth) {
+    out += '{';
+    out += '\n';
+    pad(out, depth + 1);
+    esc(out, "value");
+    out += ": ";
+    enc_selector_rule_page(out, v.value, depth + 1);
+    out += '\n';
+    pad(out, depth);
+    out += '}';
+}
+
+inline void enc_oa_selector_authorization_operator_read_selector_rule_result(std::string& out, const OASelectorAuthorizationOperatorReadSelectorRuleResult& v, int depth) {
+    out += '{';
+    out += '\n';
+    pad(out, depth + 1);
+    esc(out, "value");
+    out += ": ";
+    enc_selector_rule_read(out, v.value, depth + 1);
+    out += '\n';
+    pad(out, depth);
+    out += '}';
+}
+
+inline void enc_oa_selector_authorization_operator_set_selector_rule_result(std::string& out, const OASelectorAuthorizationOperatorSetSelectorRuleResult& v, int depth) {
+    out += '{';
+    out += '\n';
+    pad(out, depth + 1);
+    esc(out, "value");
+    out += ": ";
+    enc_selector_edit(out, v.value, depth + 1);
+    out += '\n';
+    pad(out, depth);
+    out += '}';
+}
+
+inline void enc_oa_selector_authorization_operator_remove_selector_rule_result(std::string& out, const OASelectorAuthorizationOperatorRemoveSelectorRuleResult& v, int depth) {
+    out += '{';
+    out += '\n';
+    pad(out, depth + 1);
+    esc(out, "value");
+    out += ": ";
+    enc_selector_edit(out, v.value, depth + 1);
+    out += '\n';
+    pad(out, depth);
+    out += '}';
+}
+
+inline void enc_oa_selector_authorization_operator_apply_bundle_result(std::string& out, const OASelectorAuthorizationOperatorApplyBundleResult& v, int depth) {
+    out += '{';
+    out += '\n';
+    pad(out, depth + 1);
+    esc(out, "value");
+    out += ": ";
+    enc_selector_edit(out, v.value, depth + 1);
+    out += '\n';
+    pad(out, depth);
+    out += '}';
+}
+
+inline void enc_oa_selector_authorization_operator_remove_bundle_result(std::string& out, const OASelectorAuthorizationOperatorRemoveBundleResult& v, int depth) {
+    out += '{';
+    out += '\n';
+    pad(out, depth + 1);
+    esc(out, "value");
+    out += ": ";
+    enc_selector_edit(out, v.value, depth + 1);
+    out += '\n';
+    pad(out, depth);
+    out += '}';
+}
+
+inline void enc_oa_selector_authorization_operator_apply_permission_allow_result(std::string& out, const OASelectorAuthorizationOperatorApplyPermissionAllowResult& v, int depth) {
+    out += '{';
+    out += '\n';
+    pad(out, depth + 1);
+    esc(out, "value");
+    out += ": ";
+    enc_selector_edit(out, v.value, depth + 1);
+    out += '\n';
+    pad(out, depth);
+    out += '}';
+}
+
+inline void enc_oa_selector_authorization_operator_undo_permission_effect_result(std::string& out, const OASelectorAuthorizationOperatorUndoPermissionEffectResult& v, int depth) {
+    out += '{';
+    out += '\n';
+    pad(out, depth + 1);
+    esc(out, "value");
+    out += ": ";
+    enc_selector_edit(out, v.value, depth + 1);
     out += '\n';
     pad(out, depth);
     out += '}';
@@ -1613,6 +4043,7 @@ struct Reader {
     std::string_view buf;
     std::size_t pos = 0;
     int depth = 0;
+ int limit = kDepthLimit;
 
     [[noreturn]] void refuse(const char* word) const { throw Refusal(word, pos); }
 
@@ -1627,7 +4058,7 @@ struct Reader {
     }
 
     void enter() {
-        if (++depth > kDepthLimit) refuse("depth_exceeded");
+        if (++depth > limit) refuse("depth_exceeded");
     }
 
     std::string str() {
@@ -1894,28 +4325,100 @@ inline PolicyEdit decode_policy_edit(Reader& r);
 inline RuleRecord decode_rule_record(Reader& r);
 inline RuleRead decode_rule_read(Reader& r);
 inline CatalogEntry decode_catalog_entry(Reader& r);
+inline ActionDescription decode_action_description(Reader& r);
+inline PermissionDefinition decode_permission_definition(Reader& r);
+inline DescribedAction decode_described_action(Reader& r);
 inline ActionEdit decode_action_edit(Reader& r);
+inline DescriptionEdit decode_description_edit(Reader& r);
+inline DescriptionPage decode_description_page(Reader& r);
+inline AccountDefault decode_account_default(Reader& r);
+inline DefaultPage decode_default_page(Reader& r);
+inline DefaultEdit decode_default_edit(Reader& r);
+inline DecisionExplanation decode_decision_explanation(Reader& r);
+inline PermissionKey decode_permission_key(Reader& r);
+inline ResourceSelector decode_resource_selector(Reader& r);
+inline PermissionSelection decode_permission_selection(Reader& r);
+inline ConcreteResource decode_concrete_resource(Reader& r);
+inline CheckBatchRequest decode_check_batch_request(Reader& r);
+inline BatchDecision decode_batch_decision(Reader& r);
+inline SelectorPermissionDefinition decode_selector_permission_definition(Reader& r);
+inline PermissionDefinitionPage decode_permission_definition_page(Reader& r);
+inline PermissionBundleDefinition decode_permission_bundle_definition(Reader& r);
+inline PermissionBundlePage decode_permission_bundle_page(Reader& r);
+inline BundleExpansion decode_bundle_expansion(Reader& r);
+inline PermissionEffect decode_permission_effect(Reader& r);
+inline SelectorRule decode_selector_rule(Reader& r);
+inline BundleOrigin decode_bundle_origin(Reader& r);
+inline SelectorRuleRecord decode_selector_rule_record(Reader& r);
+inline SelectorRulePage decode_selector_rule_page(Reader& r);
+inline SelectorRuleRead decode_selector_rule_read(Reader& r);
+inline SelectorEdit decode_selector_edit(Reader& r);
+inline LegacyOperationRequest decode_legacy_operation_request(Reader& r);
+inline OAAuthorizationListActionDescriptionsArguments decode_oa_authorization_list_action_descriptions_arguments(Reader& r);
 inline OAAuthorizationDecideArguments decode_oa_authorization_decide_arguments(Reader& r);
 inline OAAuthorizationDecideForArguments decode_oa_authorization_decide_for_arguments(Reader& r);
+inline OAAuthorizationOperatorRegisterDescribedActionArguments decode_oa_authorization_operator_register_described_action_arguments(Reader& r);
+inline OAAuthorizationOperatorApplyFirstUseAllowArguments decode_oa_authorization_operator_apply_first_use_allow_arguments(Reader& r);
 inline OAAuthorizationOperatorListPolicyArguments decode_oa_authorization_operator_list_policy_arguments(Reader& r);
 inline OAAuthorizationOperatorSetRuleArguments decode_oa_authorization_operator_set_rule_arguments(Reader& r);
 inline OAAuthorizationOperatorRevokeRuleArguments decode_oa_authorization_operator_revoke_rule_arguments(Reader& r);
+inline OAAuthorizationOperatorStopAnswererArguments decode_oa_authorization_operator_stop_answerer_arguments(Reader& r);
+inline OAAuthorizationOperatorRevokeAnswerPermitsArguments decode_oa_authorization_operator_revoke_answer_permits_arguments(Reader& r);
 inline OAAuthorizationOperatorSetRuleForArguments decode_oa_authorization_operator_set_rule_for_arguments(Reader& r);
+inline OAAuthorizationOperatorSetRulesForArguments decode_oa_authorization_operator_set_rules_for_arguments(Reader& r);
 inline OAAuthorizationOperatorReadRuleArguments decode_oa_authorization_operator_read_rule_arguments(Reader& r);
 inline OAAuthorizationOperatorRegisterActionArguments decode_oa_authorization_operator_register_action_arguments(Reader& r);
 inline OAAuthorizationOperatorRetireActionArguments decode_oa_authorization_operator_retire_action_arguments(Reader& r);
+inline OAAuthorizationOperatorExplainForArguments decode_oa_authorization_operator_explain_for_arguments(Reader& r);
+inline OAAuthorizationOperatorListDefaultsArguments decode_oa_authorization_operator_list_defaults_arguments(Reader& r);
+inline OAAuthorizationOperatorSetDefaultArguments decode_oa_authorization_operator_set_default_arguments(Reader& r);
+inline OASelectorAuthorizationListPermissionDefinitionsArguments decode_oa_selector_authorization_list_permission_definitions_arguments(Reader& r);
+inline OASelectorAuthorizationListPermissionBundlesArguments decode_oa_selector_authorization_list_permission_bundles_arguments(Reader& r);
+inline OASelectorAuthorizationCheckBatchArguments decode_oa_selector_authorization_check_batch_arguments(Reader& r);
+inline OASelectorAuthorizationCheckBatchForArguments decode_oa_selector_authorization_check_batch_for_arguments(Reader& r);
+inline OASelectorAuthorizationCheckLegacyOperationForArguments decode_oa_selector_authorization_check_legacy_operation_for_arguments(Reader& r);
+inline OASelectorAuthorizationOperatorListSelectorRulesArguments decode_oa_selector_authorization_operator_list_selector_rules_arguments(Reader& r);
+inline OASelectorAuthorizationOperatorReadSelectorRuleArguments decode_oa_selector_authorization_operator_read_selector_rule_arguments(Reader& r);
+inline OASelectorAuthorizationOperatorSetSelectorRuleArguments decode_oa_selector_authorization_operator_set_selector_rule_arguments(Reader& r);
+inline OASelectorAuthorizationOperatorRemoveSelectorRuleArguments decode_oa_selector_authorization_operator_remove_selector_rule_arguments(Reader& r);
+inline OASelectorAuthorizationOperatorApplyBundleArguments decode_oa_selector_authorization_operator_apply_bundle_arguments(Reader& r);
+inline OASelectorAuthorizationOperatorRemoveBundleArguments decode_oa_selector_authorization_operator_remove_bundle_arguments(Reader& r);
+inline OASelectorAuthorizationOperatorApplyPermissionAllowArguments decode_oa_selector_authorization_operator_apply_permission_allow_arguments(Reader& r);
+inline OASelectorAuthorizationOperatorUndoPermissionEffectArguments decode_oa_selector_authorization_operator_undo_permission_effect_arguments(Reader& r);
 inline OAServiceFrame decode_oa_service_frame(Reader& r);
 inline OAServiceReply decode_oa_service_reply(Reader& r);
 inline OAServiceError decode_oa_service_error(Reader& r);
+inline OAAuthorizationListActionDescriptionsResult decode_oa_authorization_list_action_descriptions_result(Reader& r);
 inline OAAuthorizationDecideResult decode_oa_authorization_decide_result(Reader& r);
 inline OAAuthorizationDecideForResult decode_oa_authorization_decide_for_result(Reader& r);
+inline OAAuthorizationOperatorRegisterDescribedActionResult decode_oa_authorization_operator_register_described_action_result(Reader& r);
+inline OAAuthorizationOperatorApplyFirstUseAllowResult decode_oa_authorization_operator_apply_first_use_allow_result(Reader& r);
 inline OAAuthorizationOperatorListPolicyResult decode_oa_authorization_operator_list_policy_result(Reader& r);
 inline OAAuthorizationOperatorSetRuleResult decode_oa_authorization_operator_set_rule_result(Reader& r);
 inline OAAuthorizationOperatorRevokeRuleResult decode_oa_authorization_operator_revoke_rule_result(Reader& r);
+inline OAAuthorizationOperatorStopAnswererResult decode_oa_authorization_operator_stop_answerer_result(Reader& r);
+inline OAAuthorizationOperatorRevokeAnswerPermitsResult decode_oa_authorization_operator_revoke_answer_permits_result(Reader& r);
 inline OAAuthorizationOperatorSetRuleForResult decode_oa_authorization_operator_set_rule_for_result(Reader& r);
+inline OAAuthorizationOperatorSetRulesForResult decode_oa_authorization_operator_set_rules_for_result(Reader& r);
 inline OAAuthorizationOperatorReadRuleResult decode_oa_authorization_operator_read_rule_result(Reader& r);
 inline OAAuthorizationOperatorRegisterActionResult decode_oa_authorization_operator_register_action_result(Reader& r);
 inline OAAuthorizationOperatorRetireActionResult decode_oa_authorization_operator_retire_action_result(Reader& r);
+inline OAAuthorizationOperatorExplainForResult decode_oa_authorization_operator_explain_for_result(Reader& r);
+inline OAAuthorizationOperatorListDefaultsResult decode_oa_authorization_operator_list_defaults_result(Reader& r);
+inline OAAuthorizationOperatorSetDefaultResult decode_oa_authorization_operator_set_default_result(Reader& r);
+inline OASelectorAuthorizationListPermissionDefinitionsResult decode_oa_selector_authorization_list_permission_definitions_result(Reader& r);
+inline OASelectorAuthorizationListPermissionBundlesResult decode_oa_selector_authorization_list_permission_bundles_result(Reader& r);
+inline OASelectorAuthorizationCheckBatchResult decode_oa_selector_authorization_check_batch_result(Reader& r);
+inline OASelectorAuthorizationCheckBatchForResult decode_oa_selector_authorization_check_batch_for_result(Reader& r);
+inline OASelectorAuthorizationCheckLegacyOperationForResult decode_oa_selector_authorization_check_legacy_operation_for_result(Reader& r);
+inline OASelectorAuthorizationOperatorListSelectorRulesResult decode_oa_selector_authorization_operator_list_selector_rules_result(Reader& r);
+inline OASelectorAuthorizationOperatorReadSelectorRuleResult decode_oa_selector_authorization_operator_read_selector_rule_result(Reader& r);
+inline OASelectorAuthorizationOperatorSetSelectorRuleResult decode_oa_selector_authorization_operator_set_selector_rule_result(Reader& r);
+inline OASelectorAuthorizationOperatorRemoveSelectorRuleResult decode_oa_selector_authorization_operator_remove_selector_rule_result(Reader& r);
+inline OASelectorAuthorizationOperatorApplyBundleResult decode_oa_selector_authorization_operator_apply_bundle_result(Reader& r);
+inline OASelectorAuthorizationOperatorRemoveBundleResult decode_oa_selector_authorization_operator_remove_bundle_result(Reader& r);
+inline OASelectorAuthorizationOperatorApplyPermissionAllowResult decode_oa_selector_authorization_operator_apply_permission_allow_result(Reader& r);
+inline OASelectorAuthorizationOperatorUndoPermissionEffectResult decode_oa_selector_authorization_operator_undo_permission_effect_result(Reader& r);
 
 inline Request decode_request(Reader& r) {
     if (r.at() != '{') r.refuse("wrong_type");
@@ -2532,6 +5035,185 @@ inline CatalogEntry decode_catalog_entry(Reader& r) {
     return v;
 }
 
+inline ActionDescription decode_action_description(Reader& r) {
+    if (r.at() != '{') r.refuse("wrong_type");
+    r.enter();
+    ++r.pos;
+    ActionDescription v;
+    std::uint32_t seen = 0;
+    r.skip_ws();
+    if (r.at() != '}') {
+        for (;;) {
+            r.skip_ws();
+            if (r.at() != '"') r.refuse("malformed");
+            const std::string key = r.str();
+            r.skip_ws();
+            if (r.at() != ':') r.refuse("malformed");
+            ++r.pos;
+            r.skip_ws();
+            if (key == "action") {
+                if (seen & 1u) r.refuse("duplicate_field");
+                seen |= 1u;
+                v.action = r.str();
+            } else if (key == "feature_app") {
+                if (seen & 2u) r.refuse("duplicate_field");
+                seen |= 2u;
+                v.feature_app = decode_subject(r);
+            } else if (key == "app_label") {
+                if (seen & 4u) r.refuse("duplicate_field");
+                seen |= 4u;
+                v.app_label = r.str();
+            } else if (key == "description") {
+                if (seen & 8u) r.refuse("duplicate_field");
+                seen |= 8u;
+                v.description = r.str();
+            } else if (key == "declared_risk") {
+                if (seen & 16u) r.refuse("duplicate_field");
+                seen |= 16u;
+                v.declared_risk = r.str();
+            } else {
+                r.refuse("unknown_field");
+            }
+            r.skip_ws();
+            if (r.at() != ',') break;
+            ++r.pos;
+        }
+    }
+    if (r.at() != '}') r.refuse("malformed");
+    ++r.pos;
+    --r.depth;
+    if ((seen & 31u) != 31u) r.refuse("missing_field");
+    return v;
+}
+
+inline PermissionDefinition decode_permission_definition(Reader& r) {
+    if (r.at() != '{') r.refuse("wrong_type");
+    r.enter();
+    ++r.pos;
+    PermissionDefinition v;
+    std::optional<std::string> wire_first_use;
+    std::uint32_t seen = 0;
+    r.skip_ws();
+    if (r.at() != '}') {
+        for (;;) {
+            r.skip_ws();
+            if (r.at() != '"') r.refuse("malformed");
+            const std::string key = r.str();
+            r.skip_ws();
+            if (r.at() != ':') r.refuse("malformed");
+            ++r.pos;
+            r.skip_ws();
+            if (key == "action") {
+                if (seen & 1u) r.refuse("duplicate_field");
+                seen |= 1u;
+                v.action = r.str();
+            } else if (key == "owner_contract") {
+                if (seen & 2u) r.refuse("duplicate_field");
+                seen |= 2u;
+                v.owner_contract = r.str();
+            } else if (key == "operations") {
+                if (seen & 4u) r.refuse("duplicate_field");
+                seen |= 4u;
+                v.operations = r.str_list();
+            } else if (key == "resource_profile") {
+                if (seen & 8u) r.refuse("duplicate_field");
+                seen |= 8u;
+                v.resource_profile = r.str();
+            } else if (key == "resource_type") {
+                if (seen & 16u) r.refuse("duplicate_field");
+                seen |= 16u;
+                v.resource_type = r.str();
+            } else if (key == "enforced_by") {
+                if (seen & 32u) r.refuse("duplicate_field");
+                seen |= 32u;
+                v.enforced_by = r.str_list();
+            } else if (key == "disclosure") {
+                if (seen & 64u) r.refuse("duplicate_field");
+                seen |= 64u;
+                v.disclosure = r.str();
+            } else if (key == "lifecycle") {
+                if (seen & 128u) r.refuse("duplicate_field");
+                seen |= 128u;
+                v.lifecycle = r.str();
+            } else if (key == "first_use") {
+                if (seen & 256u) r.refuse("duplicate_field");
+                seen |= 256u;
+                wire_first_use = r.str();
+            } else if (key == "served") {
+                if (seen & 512u) r.refuse("duplicate_field");
+                seen |= 512u;
+                v.served = r.boolean();
+            } else {
+                r.refuse("unknown_field");
+            }
+            r.skip_ws();
+            if (r.at() != ',') break;
+            ++r.pos;
+        }
+    }
+    if (r.at() != '}') r.refuse("malformed");
+    ++r.pos;
+    --r.depth;
+    if ((seen & 1023u) != 1023u) r.refuse("missing_field");
+    if (wire_first_use) {
+        const auto parsed = parse_permission_first_use(*wire_first_use);
+        if (!parsed) r.refuse("bad_enum");
+        v.first_use = *parsed;
+    }
+    return v;
+}
+
+inline DescribedAction decode_described_action(Reader& r) {
+    if (r.at() != '{') r.refuse("wrong_type");
+    r.enter();
+    ++r.pos;
+    DescribedAction v;
+    std::uint32_t seen = 0;
+    r.skip_ws();
+    if (r.at() != '}') {
+        for (;;) {
+            r.skip_ws();
+            if (r.at() != '"') r.refuse("malformed");
+            const std::string key = r.str();
+            r.skip_ws();
+            if (r.at() != ':') r.refuse("malformed");
+            ++r.pos;
+            r.skip_ws();
+            if (key == "action") {
+                if (seen & 1u) r.refuse("duplicate_field");
+                seen |= 1u;
+                v.action = r.str();
+            } else if (key == "choices") {
+                if (seen & 2u) r.refuse("duplicate_field");
+                seen |= 2u;
+                v.choices = r.str_list();
+            } else if (key == "description") {
+                if (seen & 4u) r.refuse("duplicate_field");
+                seen |= 4u;
+                v.description = decode_action_description(r);
+            } else if (key == "published_by") {
+                if (seen & 8u) r.refuse("duplicate_field");
+                seen |= 8u;
+                v.published_by = decode_subject(r);
+            } else if (key == "published_at") {
+                if (seen & 16u) r.refuse("duplicate_field");
+                seen |= 16u;
+                v.published_at = r.str();
+            } else {
+                r.refuse("unknown_field");
+            }
+            r.skip_ws();
+            if (r.at() != ',') break;
+            ++r.pos;
+        }
+    }
+    if (r.at() != '}') r.refuse("malformed");
+    ++r.pos;
+    --r.depth;
+    if ((seen & 3u) != 3u) r.refuse("missing_field");
+    return v;
+}
+
 inline ActionEdit decode_action_edit(Reader& r) {
     if (r.at() != '{') r.refuse("wrong_type");
     r.enter();
@@ -2578,6 +5260,1316 @@ inline ActionEdit decode_action_edit(Reader& r) {
         if (!parsed) r.refuse("bad_enum");
         v.outcome = *parsed;
     }
+    return v;
+}
+
+inline DescriptionEdit decode_description_edit(Reader& r) {
+    if (r.at() != '{') r.refuse("wrong_type");
+    r.enter();
+    ++r.pos;
+    DescriptionEdit v;
+    std::optional<std::string> wire_outcome;
+    std::uint32_t seen = 0;
+    r.skip_ws();
+    if (r.at() != '}') {
+        for (;;) {
+            r.skip_ws();
+            if (r.at() != '"') r.refuse("malformed");
+            const std::string key = r.str();
+            r.skip_ws();
+            if (r.at() != ':') r.refuse("malformed");
+            ++r.pos;
+            r.skip_ws();
+            if (key == "outcome") {
+                if (seen & 1u) r.refuse("duplicate_field");
+                seen |= 1u;
+                wire_outcome = r.str();
+            } else if (key == "revision") {
+                if (seen & 2u) r.refuse("duplicate_field");
+                seen |= 2u;
+                v.revision = r.str();
+            } else if (key == "current") {
+                if (seen & 4u) r.refuse("duplicate_field");
+                seen |= 4u;
+                v.current = decode_described_action(r);
+            } else {
+                r.refuse("unknown_field");
+            }
+            r.skip_ws();
+            if (r.at() != ',') break;
+            ++r.pos;
+        }
+    }
+    if (r.at() != '}') r.refuse("malformed");
+    ++r.pos;
+    --r.depth;
+    if ((seen & 3u) != 3u) r.refuse("missing_field");
+    if (wire_outcome) {
+        const auto parsed = parse_action_edit_outcome(*wire_outcome);
+        if (!parsed) r.refuse("bad_enum");
+        v.outcome = *parsed;
+    }
+    return v;
+}
+
+inline DescriptionPage decode_description_page(Reader& r) {
+    if (r.at() != '{') r.refuse("wrong_type");
+    r.enter();
+    ++r.pos;
+    DescriptionPage v;
+    std::optional<std::string> wire_outcome;
+    std::uint32_t seen = 0;
+    r.skip_ws();
+    if (r.at() != '}') {
+        for (;;) {
+            r.skip_ws();
+            if (r.at() != '"') r.refuse("malformed");
+            const std::string key = r.str();
+            r.skip_ws();
+            if (r.at() != ':') r.refuse("malformed");
+            ++r.pos;
+            r.skip_ws();
+            if (key == "outcome") {
+                if (seen & 1u) r.refuse("duplicate_field");
+                seen |= 1u;
+                wire_outcome = r.str();
+            } else if (key == "revision") {
+                if (seen & 2u) r.refuse("duplicate_field");
+                seen |= 2u;
+                v.revision = r.str();
+            } else if (key == "actions") {
+                if (seen & 4u) r.refuse("duplicate_field");
+                seen |= 4u;
+                v.actions = decode_list<DescribedAction>(r, decode_described_action);
+            } else if (key == "next") {
+                if (seen & 8u) r.refuse("duplicate_field");
+                seen |= 8u;
+                v.next = r.str();
+            } else if (key == "complete") {
+                if (seen & 16u) r.refuse("duplicate_field");
+                seen |= 16u;
+                v.complete = r.boolean();
+            } else {
+                r.refuse("unknown_field");
+            }
+            r.skip_ws();
+            if (r.at() != ',') break;
+            ++r.pos;
+        }
+    }
+    if (r.at() != '}') r.refuse("malformed");
+    ++r.pos;
+    --r.depth;
+    if ((seen & 31u) != 31u) r.refuse("missing_field");
+    if (wire_outcome) {
+        const auto parsed = parse_policy_page_outcome(*wire_outcome);
+        if (!parsed) r.refuse("bad_enum");
+        v.outcome = *parsed;
+    }
+    return v;
+}
+
+inline AccountDefault decode_account_default(Reader& r) {
+    if (r.at() != '{') r.refuse("wrong_type");
+    r.enter();
+    ++r.pos;
+    AccountDefault v;
+    std::uint32_t seen = 0;
+    r.skip_ws();
+    if (r.at() != '}') {
+        for (;;) {
+            r.skip_ws();
+            if (r.at() != '"') r.refuse("malformed");
+            const std::string key = r.str();
+            r.skip_ws();
+            if (r.at() != ':') r.refuse("malformed");
+            ++r.pos;
+            r.skip_ws();
+            if (key == "name") {
+                if (seen & 1u) r.refuse("duplicate_field");
+                seen |= 1u;
+                v.name = r.str();
+            } else if (key == "action") {
+                if (seen & 2u) r.refuse("duplicate_field");
+                seen |= 2u;
+                v.action = r.str();
+            } else if (key == "resource") {
+                if (seen & 4u) r.refuse("duplicate_field");
+                seen |= 4u;
+                v.resource = r.str();
+            } else if (key == "every_resource") {
+                if (seen & 8u) r.refuse("duplicate_field");
+                seen |= 8u;
+                v.every_resource = r.boolean();
+            } else if (key == "on") {
+                if (seen & 16u) r.refuse("duplicate_field");
+                seen |= 16u;
+                v.on = r.boolean();
+            } else if (key == "set_by") {
+                if (seen & 32u) r.refuse("duplicate_field");
+                seen |= 32u;
+                v.set_by = decode_subject(r);
+            } else if (key == "set_at") {
+                if (seen & 64u) r.refuse("duplicate_field");
+                seen |= 64u;
+                v.set_at = r.str();
+            } else {
+                r.refuse("unknown_field");
+            }
+            r.skip_ws();
+            if (r.at() != ',') break;
+            ++r.pos;
+        }
+    }
+    if (r.at() != '}') r.refuse("malformed");
+    ++r.pos;
+    --r.depth;
+    if ((seen & 31u) != 31u) r.refuse("missing_field");
+    return v;
+}
+
+inline DefaultPage decode_default_page(Reader& r) {
+    if (r.at() != '{') r.refuse("wrong_type");
+    r.enter();
+    ++r.pos;
+    DefaultPage v;
+    std::optional<std::string> wire_outcome;
+    std::uint32_t seen = 0;
+    r.skip_ws();
+    if (r.at() != '}') {
+        for (;;) {
+            r.skip_ws();
+            if (r.at() != '"') r.refuse("malformed");
+            const std::string key = r.str();
+            r.skip_ws();
+            if (r.at() != ':') r.refuse("malformed");
+            ++r.pos;
+            r.skip_ws();
+            if (key == "outcome") {
+                if (seen & 1u) r.refuse("duplicate_field");
+                seen |= 1u;
+                wire_outcome = r.str();
+            } else if (key == "revision") {
+                if (seen & 2u) r.refuse("duplicate_field");
+                seen |= 2u;
+                v.revision = r.str();
+            } else if (key == "defaults") {
+                if (seen & 4u) r.refuse("duplicate_field");
+                seen |= 4u;
+                v.defaults = decode_list<AccountDefault>(r, decode_account_default);
+            } else {
+                r.refuse("unknown_field");
+            }
+            r.skip_ws();
+            if (r.at() != ',') break;
+            ++r.pos;
+        }
+    }
+    if (r.at() != '}') r.refuse("malformed");
+    ++r.pos;
+    --r.depth;
+    if ((seen & 7u) != 7u) r.refuse("missing_field");
+    if (wire_outcome) {
+        const auto parsed = parse_policy_page_outcome(*wire_outcome);
+        if (!parsed) r.refuse("bad_enum");
+        v.outcome = *parsed;
+    }
+    return v;
+}
+
+inline DefaultEdit decode_default_edit(Reader& r) {
+    if (r.at() != '{') r.refuse("wrong_type");
+    r.enter();
+    ++r.pos;
+    DefaultEdit v;
+    std::optional<std::string> wire_outcome;
+    std::uint32_t seen = 0;
+    r.skip_ws();
+    if (r.at() != '}') {
+        for (;;) {
+            r.skip_ws();
+            if (r.at() != '"') r.refuse("malformed");
+            const std::string key = r.str();
+            r.skip_ws();
+            if (r.at() != ':') r.refuse("malformed");
+            ++r.pos;
+            r.skip_ws();
+            if (key == "outcome") {
+                if (seen & 1u) r.refuse("duplicate_field");
+                seen |= 1u;
+                wire_outcome = r.str();
+            } else if (key == "revision") {
+                if (seen & 2u) r.refuse("duplicate_field");
+                seen |= 2u;
+                v.revision = r.str();
+            } else if (key == "current") {
+                if (seen & 4u) r.refuse("duplicate_field");
+                seen |= 4u;
+                v.current = decode_account_default(r);
+            } else {
+                r.refuse("unknown_field");
+            }
+            r.skip_ws();
+            if (r.at() != ',') break;
+            ++r.pos;
+        }
+    }
+    if (r.at() != '}') r.refuse("malformed");
+    ++r.pos;
+    --r.depth;
+    if ((seen & 3u) != 3u) r.refuse("missing_field");
+    if (wire_outcome) {
+        const auto parsed = parse_policy_edit_outcome(*wire_outcome);
+        if (!parsed) r.refuse("bad_enum");
+        v.outcome = *parsed;
+    }
+    return v;
+}
+
+inline DecisionExplanation decode_decision_explanation(Reader& r) {
+    if (r.at() != '{') r.refuse("wrong_type");
+    r.enter();
+    ++r.pos;
+    DecisionExplanation v;
+    std::optional<std::string> wire_outcome;
+    std::optional<std::string> wire_source;
+    std::uint32_t seen = 0;
+    r.skip_ws();
+    if (r.at() != '}') {
+        for (;;) {
+            r.skip_ws();
+            if (r.at() != '"') r.refuse("malformed");
+            const std::string key = r.str();
+            r.skip_ws();
+            if (r.at() != ':') r.refuse("malformed");
+            ++r.pos;
+            r.skip_ws();
+            if (key == "outcome") {
+                if (seen & 1u) r.refuse("duplicate_field");
+                seen |= 1u;
+                wire_outcome = r.str();
+            } else if (key == "policy_revision") {
+                if (seen & 2u) r.refuse("duplicate_field");
+                seen |= 2u;
+                v.policy_revision = r.str();
+            } else if (key == "source") {
+                if (seen & 4u) r.refuse("duplicate_field");
+                seen |= 4u;
+                wire_source = r.str();
+            } else if (key == "default_name") {
+                if (seen & 8u) r.refuse("duplicate_field");
+                seen |= 8u;
+                v.default_name = r.str();
+            } else {
+                r.refuse("unknown_field");
+            }
+            r.skip_ws();
+            if (r.at() != ',') break;
+            ++r.pos;
+        }
+    }
+    if (r.at() != '}') r.refuse("malformed");
+    ++r.pos;
+    --r.depth;
+    if ((seen & 1u) != 1u) r.refuse("missing_field");
+    if (wire_outcome) {
+        const auto parsed = parse_decision_outcome(*wire_outcome);
+        if (!parsed) r.refuse("bad_enum");
+        v.outcome = *parsed;
+    }
+    if (wire_source) {
+        const auto parsed = parse_decision_source(*wire_source);
+        if (!parsed) r.refuse("bad_enum");
+        v.source = *parsed;
+    }
+    return v;
+}
+
+inline PermissionKey decode_permission_key(Reader& r) {
+    if (r.at() != '{') r.refuse("wrong_type");
+    r.enter();
+    ++r.pos;
+    PermissionKey v;
+    std::uint32_t seen = 0;
+    r.skip_ws();
+    if (r.at() != '}') {
+        for (;;) {
+            r.skip_ws();
+            if (r.at() != '"') r.refuse("malformed");
+            const std::string key = r.str();
+            r.skip_ws();
+            if (r.at() != ':') r.refuse("malformed");
+            ++r.pos;
+            r.skip_ws();
+            if (key == "action") {
+                if (seen & 1u) r.refuse("duplicate_field");
+                seen |= 1u;
+                v.action = r.str();
+            } else if (key == "resource_profile") {
+                if (seen & 2u) r.refuse("duplicate_field");
+                seen |= 2u;
+                v.resource_profile = r.str();
+            } else {
+                r.refuse("unknown_field");
+            }
+            r.skip_ws();
+            if (r.at() != ',') break;
+            ++r.pos;
+        }
+    }
+    if (r.at() != '}') r.refuse("malformed");
+    ++r.pos;
+    --r.depth;
+    if ((seen & 3u) != 3u) r.refuse("missing_field");
+    return v;
+}
+
+inline ResourceSelector decode_resource_selector(Reader& r) {
+    if (r.at() != '{') r.refuse("wrong_type");
+    r.enter();
+    ++r.pos;
+    ResourceSelector v;
+    std::optional<std::string> wire_kind;
+    std::uint32_t seen = 0;
+    r.skip_ws();
+    if (r.at() != '}') {
+        for (;;) {
+            r.skip_ws();
+            if (r.at() != '"') r.refuse("malformed");
+            const std::string key = r.str();
+            r.skip_ws();
+            if (r.at() != ':') r.refuse("malformed");
+            ++r.pos;
+            r.skip_ws();
+            if (key == "kind") {
+                if (seen & 1u) r.refuse("duplicate_field");
+                seen |= 1u;
+                wire_kind = r.str();
+            } else if (key == "target") {
+                if (seen & 2u) r.refuse("duplicate_field");
+                seen |= 2u;
+                v.target = decode_binary(r.str());
+            } else {
+                r.refuse("unknown_field");
+            }
+            r.skip_ws();
+            if (r.at() != ',') break;
+            ++r.pos;
+        }
+    }
+    if (r.at() != '}') r.refuse("malformed");
+    ++r.pos;
+    --r.depth;
+    if ((seen & 1u) != 1u) r.refuse("missing_field");
+    if (wire_kind) {
+        const auto parsed = parse_resource_selector_kind(*wire_kind);
+        if (!parsed) r.refuse("bad_enum");
+        v.kind = *parsed;
+    }
+    return v;
+}
+
+inline PermissionSelection decode_permission_selection(Reader& r) {
+    if (r.at() != '{') r.refuse("wrong_type");
+    r.enter();
+    ++r.pos;
+    PermissionSelection v;
+    std::uint32_t seen = 0;
+    r.skip_ws();
+    if (r.at() != '}') {
+        for (;;) {
+            r.skip_ws();
+            if (r.at() != '"') r.refuse("malformed");
+            const std::string key = r.str();
+            r.skip_ws();
+            if (r.at() != ':') r.refuse("malformed");
+            ++r.pos;
+            r.skip_ws();
+            if (key == "permission") {
+                if (seen & 1u) r.refuse("duplicate_field");
+                seen |= 1u;
+                v.permission = decode_permission_key(r);
+            } else if (key == "selector") {
+                if (seen & 2u) r.refuse("duplicate_field");
+                seen |= 2u;
+                v.selector = decode_resource_selector(r);
+            } else {
+                r.refuse("unknown_field");
+            }
+            r.skip_ws();
+            if (r.at() != ',') break;
+            ++r.pos;
+        }
+    }
+    if (r.at() != '}') r.refuse("malformed");
+    ++r.pos;
+    --r.depth;
+    if ((seen & 3u) != 3u) r.refuse("missing_field");
+    return v;
+}
+
+inline ConcreteResource decode_concrete_resource(Reader& r) {
+    if (r.at() != '{') r.refuse("wrong_type");
+    r.enter();
+    ++r.pos;
+    ConcreteResource v;
+    std::uint32_t seen = 0;
+    r.skip_ws();
+    if (r.at() != '}') {
+        for (;;) {
+            r.skip_ws();
+            if (r.at() != '"') r.refuse("malformed");
+            const std::string key = r.str();
+            r.skip_ws();
+            if (r.at() != ':') r.refuse("malformed");
+            ++r.pos;
+            r.skip_ws();
+            if (key == "permission") {
+                if (seen & 1u) r.refuse("duplicate_field");
+                seen |= 1u;
+                v.permission = decode_permission_key(r);
+            } else if (key == "target") {
+                if (seen & 2u) r.refuse("duplicate_field");
+                seen |= 2u;
+                v.target = decode_binary(r.str());
+            } else {
+                r.refuse("unknown_field");
+            }
+            r.skip_ws();
+            if (r.at() != ',') break;
+            ++r.pos;
+        }
+    }
+    if (r.at() != '}') r.refuse("malformed");
+    ++r.pos;
+    --r.depth;
+    if ((seen & 3u) != 3u) r.refuse("missing_field");
+    return v;
+}
+
+inline CheckBatchRequest decode_check_batch_request(Reader& r) {
+    if (r.at() != '{') r.refuse("wrong_type");
+    r.enter();
+    ++r.pos;
+    CheckBatchRequest v;
+    std::uint32_t seen = 0;
+    r.skip_ws();
+    if (r.at() != '}') {
+        for (;;) {
+            r.skip_ws();
+            if (r.at() != '"') r.refuse("malformed");
+            const std::string key = r.str();
+            r.skip_ws();
+            if (r.at() != ':') r.refuse("malformed");
+            ++r.pos;
+            r.skip_ws();
+            if (key == "expected_revision") {
+                if (seen & 1u) r.refuse("duplicate_field");
+                seen |= 1u;
+                v.expected_revision = r.str();
+            } else if (key == "collection_admission") {
+                if (seen & 2u) r.refuse("duplicate_field");
+                seen |= 2u;
+                v.collection_admission = decode_permission_key(r);
+            } else if (key == "resources") {
+                if (seen & 4u) r.refuse("duplicate_field");
+                seen |= 4u;
+                v.resources = decode_list<ConcreteResource>(r, decode_concrete_resource);
+            } else {
+                r.refuse("unknown_field");
+            }
+            r.skip_ws();
+            if (r.at() != ',') break;
+            ++r.pos;
+        }
+    }
+    if (r.at() != '}') r.refuse("malformed");
+    ++r.pos;
+    --r.depth;
+    if ((seen & 4u) != 4u) r.refuse("missing_field");
+    return v;
+}
+
+inline BatchDecision decode_batch_decision(Reader& r) {
+    if (r.at() != '{') r.refuse("wrong_type");
+    r.enter();
+    ++r.pos;
+    BatchDecision v;
+    std::optional<std::string> wire_outcome;
+    std::optional<std::string> wire_collection_outcome;
+    std::optional<std::vector<std::string>> wire_outcomes;
+    std::uint32_t seen = 0;
+    r.skip_ws();
+    if (r.at() != '}') {
+        for (;;) {
+            r.skip_ws();
+            if (r.at() != '"') r.refuse("malformed");
+            const std::string key = r.str();
+            r.skip_ws();
+            if (r.at() != ':') r.refuse("malformed");
+            ++r.pos;
+            r.skip_ws();
+            if (key == "outcome") {
+                if (seen & 1u) r.refuse("duplicate_field");
+                seen |= 1u;
+                wire_outcome = r.str();
+            } else if (key == "revision") {
+                if (seen & 2u) r.refuse("duplicate_field");
+                seen |= 2u;
+                v.revision = r.str();
+            } else if (key == "collection_outcome") {
+                if (seen & 4u) r.refuse("duplicate_field");
+                seen |= 4u;
+                wire_collection_outcome = r.str();
+            } else if (key == "outcomes") {
+                if (seen & 8u) r.refuse("duplicate_field");
+                seen |= 8u;
+                wire_outcomes = r.str_list();
+            } else {
+                r.refuse("unknown_field");
+            }
+            r.skip_ws();
+            if (r.at() != ',') break;
+            ++r.pos;
+        }
+    }
+    if (r.at() != '}') r.refuse("malformed");
+    ++r.pos;
+    --r.depth;
+    if ((seen & 11u) != 11u) r.refuse("missing_field");
+    if (wire_outcome) {
+        const auto parsed = parse_batch_check_outcome(*wire_outcome);
+        if (!parsed) r.refuse("bad_enum");
+        v.outcome = *parsed;
+    }
+    if (wire_collection_outcome) {
+        const auto parsed = parse_decision_outcome(*wire_collection_outcome);
+        if (!parsed) r.refuse("bad_enum");
+        v.collection_outcome = *parsed;
+    }
+    if (wire_outcomes) {
+        v.outcomes.reserve(wire_outcomes->size());
+        for (const auto& name : *wire_outcomes) { const auto parsed = parse_decision_outcome(name); if (!parsed) r.refuse("bad_enum"); v.outcomes.push_back(*parsed); }
+    }
+    return v;
+}
+
+inline SelectorPermissionDefinition decode_selector_permission_definition(Reader& r) {
+    if (r.at() != '{') r.refuse("wrong_type");
+    r.enter();
+    ++r.pos;
+    SelectorPermissionDefinition v;
+    std::optional<std::vector<std::string>> wire_supported_selectors;
+    std::optional<std::vector<std::string>> wire_first_use_selectors;
+    std::uint32_t seen = 0;
+    r.skip_ws();
+    if (r.at() != '}') {
+        for (;;) {
+            r.skip_ws();
+            if (r.at() != '"') r.refuse("malformed");
+            const std::string key = r.str();
+            r.skip_ws();
+            if (r.at() != ':') r.refuse("malformed");
+            ++r.pos;
+            r.skip_ws();
+            if (key == "definition") {
+                if (seen & 1u) r.refuse("duplicate_field");
+                seen |= 1u;
+                v.definition = decode_permission_definition(r);
+            } else if (key == "label") {
+                if (seen & 2u) r.refuse("duplicate_field");
+                seen |= 2u;
+                v.label = r.str();
+            } else if (key == "supported_selectors") {
+                if (seen & 4u) r.refuse("duplicate_field");
+                seen |= 4u;
+                wire_supported_selectors = r.str_list();
+            } else if (key == "first_use_selectors") {
+                if (seen & 8u) r.refuse("duplicate_field");
+                seen |= 8u;
+                wire_first_use_selectors = r.str_list();
+            } else if (key == "collection") {
+                if (seen & 16u) r.refuse("duplicate_field");
+                seen |= 16u;
+                v.collection = r.str();
+            } else if (key == "all_effect") {
+                if (seen & 32u) r.refuse("duplicate_field");
+                seen |= 32u;
+                v.all_effect = r.str();
+            } else if (key == "request_type") {
+                if (seen & 64u) r.refuse("duplicate_field");
+                seen |= 64u;
+                v.request_type = r.str();
+            } else {
+                r.refuse("unknown_field");
+            }
+            r.skip_ws();
+            if (r.at() != ',') break;
+            ++r.pos;
+        }
+    }
+    if (r.at() != '}') r.refuse("malformed");
+    ++r.pos;
+    --r.depth;
+    if ((seen & 127u) != 127u) r.refuse("missing_field");
+    if (wire_supported_selectors) {
+        v.supported_selectors.reserve(wire_supported_selectors->size());
+        for (const auto& name : *wire_supported_selectors) { const auto parsed = parse_resource_selector_kind(name); if (!parsed) r.refuse("bad_enum"); v.supported_selectors.push_back(*parsed); }
+    }
+    if (wire_first_use_selectors) {
+        v.first_use_selectors.reserve(wire_first_use_selectors->size());
+        for (const auto& name : *wire_first_use_selectors) { const auto parsed = parse_resource_selector_kind(name); if (!parsed) r.refuse("bad_enum"); v.first_use_selectors.push_back(*parsed); }
+    }
+    return v;
+}
+
+inline PermissionDefinitionPage decode_permission_definition_page(Reader& r) {
+    if (r.at() != '{') r.refuse("wrong_type");
+    r.enter();
+    ++r.pos;
+    PermissionDefinitionPage v;
+    std::optional<std::string> wire_outcome;
+    std::uint32_t seen = 0;
+    r.skip_ws();
+    if (r.at() != '}') {
+        for (;;) {
+            r.skip_ws();
+            if (r.at() != '"') r.refuse("malformed");
+            const std::string key = r.str();
+            r.skip_ws();
+            if (r.at() != ':') r.refuse("malformed");
+            ++r.pos;
+            r.skip_ws();
+            if (key == "outcome") {
+                if (seen & 1u) r.refuse("duplicate_field");
+                seen |= 1u;
+                wire_outcome = r.str();
+            } else if (key == "revision") {
+                if (seen & 2u) r.refuse("duplicate_field");
+                seen |= 2u;
+                v.revision = r.str();
+            } else if (key == "definitions") {
+                if (seen & 4u) r.refuse("duplicate_field");
+                seen |= 4u;
+                v.definitions = decode_list<SelectorPermissionDefinition>(r, decode_selector_permission_definition);
+            } else if (key == "next") {
+                if (seen & 8u) r.refuse("duplicate_field");
+                seen |= 8u;
+                v.next = r.str();
+            } else if (key == "complete") {
+                if (seen & 16u) r.refuse("duplicate_field");
+                seen |= 16u;
+                v.complete = r.boolean();
+            } else {
+                r.refuse("unknown_field");
+            }
+            r.skip_ws();
+            if (r.at() != ',') break;
+            ++r.pos;
+        }
+    }
+    if (r.at() != '}') r.refuse("malformed");
+    ++r.pos;
+    --r.depth;
+    if ((seen & 31u) != 31u) r.refuse("missing_field");
+    if (wire_outcome) {
+        const auto parsed = parse_policy_page_outcome(*wire_outcome);
+        if (!parsed) r.refuse("bad_enum");
+        v.outcome = *parsed;
+    }
+    return v;
+}
+
+inline PermissionBundleDefinition decode_permission_bundle_definition(Reader& r) {
+    if (r.at() != '{') r.refuse("wrong_type");
+    r.enter();
+    ++r.pos;
+    PermissionBundleDefinition v;
+    std::optional<std::vector<std::string>> wire_supported_selectors;
+    std::uint32_t seen = 0;
+    r.skip_ws();
+    if (r.at() != '}') {
+        for (;;) {
+            r.skip_ws();
+            if (r.at() != '"') r.refuse("malformed");
+            const std::string key = r.str();
+            r.skip_ws();
+            if (r.at() != ':') r.refuse("malformed");
+            ++r.pos;
+            r.skip_ws();
+            if (key == "bundle_ref") {
+                if (seen & 1u) r.refuse("duplicate_field");
+                seen |= 1u;
+                v.bundle_ref = r.str();
+            } else if (key == "owner_contract") {
+                if (seen & 2u) r.refuse("duplicate_field");
+                seen |= 2u;
+                v.owner_contract = r.str();
+            } else if (key == "label") {
+                if (seen & 4u) r.refuse("duplicate_field");
+                seen |= 4u;
+                v.label = r.str();
+            } else if (key == "target_type") {
+                if (seen & 8u) r.refuse("duplicate_field");
+                seen |= 8u;
+                v.target_type = r.str();
+            } else if (key == "supported_selectors") {
+                if (seen & 16u) r.refuse("duplicate_field");
+                seen |= 16u;
+                wire_supported_selectors = r.str_list();
+            } else if (key == "members") {
+                if (seen & 32u) r.refuse("duplicate_field");
+                seen |= 32u;
+                v.members = decode_list<PermissionKey>(r, decode_permission_key);
+            } else if (key == "disclosure") {
+                if (seen & 64u) r.refuse("duplicate_field");
+                seen |= 64u;
+                v.disclosure = r.str();
+            } else if (key == "definition_digest") {
+                if (seen & 128u) r.refuse("duplicate_field");
+                seen |= 128u;
+                v.definition_digest = r.str();
+            } else {
+                r.refuse("unknown_field");
+            }
+            r.skip_ws();
+            if (r.at() != ',') break;
+            ++r.pos;
+        }
+    }
+    if (r.at() != '}') r.refuse("malformed");
+    ++r.pos;
+    --r.depth;
+    if ((seen & 255u) != 255u) r.refuse("missing_field");
+    if (wire_supported_selectors) {
+        v.supported_selectors.reserve(wire_supported_selectors->size());
+        for (const auto& name : *wire_supported_selectors) { const auto parsed = parse_resource_selector_kind(name); if (!parsed) r.refuse("bad_enum"); v.supported_selectors.push_back(*parsed); }
+    }
+    return v;
+}
+
+inline PermissionBundlePage decode_permission_bundle_page(Reader& r) {
+    if (r.at() != '{') r.refuse("wrong_type");
+    r.enter();
+    ++r.pos;
+    PermissionBundlePage v;
+    std::optional<std::string> wire_outcome;
+    std::uint32_t seen = 0;
+    r.skip_ws();
+    if (r.at() != '}') {
+        for (;;) {
+            r.skip_ws();
+            if (r.at() != '"') r.refuse("malformed");
+            const std::string key = r.str();
+            r.skip_ws();
+            if (r.at() != ':') r.refuse("malformed");
+            ++r.pos;
+            r.skip_ws();
+            if (key == "outcome") {
+                if (seen & 1u) r.refuse("duplicate_field");
+                seen |= 1u;
+                wire_outcome = r.str();
+            } else if (key == "revision") {
+                if (seen & 2u) r.refuse("duplicate_field");
+                seen |= 2u;
+                v.revision = r.str();
+            } else if (key == "bundles") {
+                if (seen & 4u) r.refuse("duplicate_field");
+                seen |= 4u;
+                v.bundles = decode_list<PermissionBundleDefinition>(r, decode_permission_bundle_definition);
+            } else if (key == "next") {
+                if (seen & 8u) r.refuse("duplicate_field");
+                seen |= 8u;
+                v.next = r.str();
+            } else if (key == "complete") {
+                if (seen & 16u) r.refuse("duplicate_field");
+                seen |= 16u;
+                v.complete = r.boolean();
+            } else {
+                r.refuse("unknown_field");
+            }
+            r.skip_ws();
+            if (r.at() != ',') break;
+            ++r.pos;
+        }
+    }
+    if (r.at() != '}') r.refuse("malformed");
+    ++r.pos;
+    --r.depth;
+    if ((seen & 31u) != 31u) r.refuse("missing_field");
+    if (wire_outcome) {
+        const auto parsed = parse_policy_page_outcome(*wire_outcome);
+        if (!parsed) r.refuse("bad_enum");
+        v.outcome = *parsed;
+    }
+    return v;
+}
+
+inline BundleExpansion decode_bundle_expansion(Reader& r) {
+    if (r.at() != '{') r.refuse("wrong_type");
+    r.enter();
+    ++r.pos;
+    BundleExpansion v;
+    std::uint32_t seen = 0;
+    r.skip_ws();
+    if (r.at() != '}') {
+        for (;;) {
+            r.skip_ws();
+            if (r.at() != '"') r.refuse("malformed");
+            const std::string key = r.str();
+            r.skip_ws();
+            if (r.at() != ':') r.refuse("malformed");
+            ++r.pos;
+            r.skip_ws();
+            if (key == "bundle_ref") {
+                if (seen & 1u) r.refuse("duplicate_field");
+                seen |= 1u;
+                v.bundle_ref = r.str();
+            } else if (key == "definition_digest") {
+                if (seen & 2u) r.refuse("duplicate_field");
+                seen |= 2u;
+                v.definition_digest = r.str();
+            } else if (key == "selector") {
+                if (seen & 4u) r.refuse("duplicate_field");
+                seen |= 4u;
+                v.selector = decode_resource_selector(r);
+            } else if (key == "selections") {
+                if (seen & 8u) r.refuse("duplicate_field");
+                seen |= 8u;
+                v.selections = decode_list<PermissionSelection>(r, decode_permission_selection);
+            } else {
+                r.refuse("unknown_field");
+            }
+            r.skip_ws();
+            if (r.at() != ',') break;
+            ++r.pos;
+        }
+    }
+    if (r.at() != '}') r.refuse("malformed");
+    ++r.pos;
+    --r.depth;
+    if ((seen & 15u) != 15u) r.refuse("missing_field");
+    return v;
+}
+
+inline PermissionEffect decode_permission_effect(Reader& r) {
+    if (r.at() != '{') r.refuse("wrong_type");
+    r.enter();
+    ++r.pos;
+    PermissionEffect v;
+    std::uint32_t seen = 0;
+    r.skip_ws();
+    if (r.at() != '}') {
+        for (;;) {
+            r.skip_ws();
+            if (r.at() != '"') r.refuse("malformed");
+            const std::string key = r.str();
+            r.skip_ws();
+            if (r.at() != ':') r.refuse("malformed");
+            ++r.pos;
+            r.skip_ws();
+            if (key == "subject") {
+                if (seen & 1u) r.refuse("duplicate_field");
+                seen |= 1u;
+                v.subject = decode_subject(r);
+            } else if (key == "selections") {
+                if (seen & 2u) r.refuse("duplicate_field");
+                seen |= 2u;
+                v.selections = decode_list<PermissionSelection>(r, decode_permission_selection);
+            } else if (key == "bundle") {
+                if (seen & 4u) r.refuse("duplicate_field");
+                seen |= 4u;
+                v.bundle = decode_bundle_expansion(r);
+            } else {
+                r.refuse("unknown_field");
+            }
+            r.skip_ws();
+            if (r.at() != ',') break;
+            ++r.pos;
+        }
+    }
+    if (r.at() != '}') r.refuse("malformed");
+    ++r.pos;
+    --r.depth;
+    if ((seen & 3u) != 3u) r.refuse("missing_field");
+    return v;
+}
+
+inline SelectorRule decode_selector_rule(Reader& r) {
+    if (r.at() != '{') r.refuse("wrong_type");
+    r.enter();
+    ++r.pos;
+    SelectorRule v;
+    std::uint32_t seen = 0;
+    r.skip_ws();
+    if (r.at() != '}') {
+        for (;;) {
+            r.skip_ws();
+            if (r.at() != '"') r.refuse("malformed");
+            const std::string key = r.str();
+            r.skip_ws();
+            if (r.at() != ':') r.refuse("malformed");
+            ++r.pos;
+            r.skip_ws();
+            if (key == "subject") {
+                if (seen & 1u) r.refuse("duplicate_field");
+                seen |= 1u;
+                v.subject = decode_subject(r);
+            } else if (key == "selection") {
+                if (seen & 2u) r.refuse("duplicate_field");
+                seen |= 2u;
+                v.selection = decode_permission_selection(r);
+            } else if (key == "permit") {
+                if (seen & 4u) r.refuse("duplicate_field");
+                seen |= 4u;
+                v.permit = r.boolean();
+            } else {
+                r.refuse("unknown_field");
+            }
+            r.skip_ws();
+            if (r.at() != ',') break;
+            ++r.pos;
+        }
+    }
+    if (r.at() != '}') r.refuse("malformed");
+    ++r.pos;
+    --r.depth;
+    if ((seen & 7u) != 7u) r.refuse("missing_field");
+    return v;
+}
+
+inline BundleOrigin decode_bundle_origin(Reader& r) {
+    if (r.at() != '{') r.refuse("wrong_type");
+    r.enter();
+    ++r.pos;
+    BundleOrigin v;
+    std::uint32_t seen = 0;
+    r.skip_ws();
+    if (r.at() != '}') {
+        for (;;) {
+            r.skip_ws();
+            if (r.at() != '"') r.refuse("malformed");
+            const std::string key = r.str();
+            r.skip_ws();
+            if (r.at() != ':') r.refuse("malformed");
+            ++r.pos;
+            r.skip_ws();
+            if (key == "id") {
+                if (seen & 1u) r.refuse("duplicate_field");
+                seen |= 1u;
+                v.id = r.str();
+            } else if (key == "expansion") {
+                if (seen & 2u) r.refuse("duplicate_field");
+                seen |= 2u;
+                v.expansion = decode_bundle_expansion(r);
+            } else {
+                r.refuse("unknown_field");
+            }
+            r.skip_ws();
+            if (r.at() != ',') break;
+            ++r.pos;
+        }
+    }
+    if (r.at() != '}') r.refuse("malformed");
+    ++r.pos;
+    --r.depth;
+    if ((seen & 3u) != 3u) r.refuse("missing_field");
+    return v;
+}
+
+inline SelectorRuleRecord decode_selector_rule_record(Reader& r) {
+    if (r.at() != '{') r.refuse("wrong_type");
+    r.enter();
+    ++r.pos;
+    SelectorRuleRecord v;
+    std::uint32_t seen = 0;
+    r.skip_ws();
+    if (r.at() != '}') {
+        for (;;) {
+            r.skip_ws();
+            if (r.at() != '"') r.refuse("malformed");
+            const std::string key = r.str();
+            r.skip_ws();
+            if (r.at() != ':') r.refuse("malformed");
+            ++r.pos;
+            r.skip_ws();
+            if (key == "rule") {
+                if (seen & 1u) r.refuse("duplicate_field");
+                seen |= 1u;
+                v.rule = decode_selector_rule(r);
+            } else if (key == "set_by") {
+                if (seen & 2u) r.refuse("duplicate_field");
+                seen |= 2u;
+                v.set_by = decode_subject(r);
+            } else if (key == "set_at") {
+                if (seen & 4u) r.refuse("duplicate_field");
+                seen |= 4u;
+                v.set_at = r.str();
+            } else if (key == "why") {
+                if (seen & 8u) r.refuse("duplicate_field");
+                seen |= 8u;
+                v.why = r.str();
+            } else if (key == "expires") {
+                if (seen & 16u) r.refuse("duplicate_field");
+                seen |= 16u;
+                v.expires = r.str();
+            } else if (key == "bundle_origin") {
+                if (seen & 32u) r.refuse("duplicate_field");
+                seen |= 32u;
+                v.bundle_origin = decode_bundle_origin(r);
+            } else {
+                r.refuse("unknown_field");
+            }
+            r.skip_ws();
+            if (r.at() != ',') break;
+            ++r.pos;
+        }
+    }
+    if (r.at() != '}') r.refuse("malformed");
+    ++r.pos;
+    --r.depth;
+    if ((seen & 31u) != 31u) r.refuse("missing_field");
+    return v;
+}
+
+inline SelectorRulePage decode_selector_rule_page(Reader& r) {
+    if (r.at() != '{') r.refuse("wrong_type");
+    r.enter();
+    ++r.pos;
+    SelectorRulePage v;
+    std::optional<std::string> wire_outcome;
+    std::uint32_t seen = 0;
+    r.skip_ws();
+    if (r.at() != '}') {
+        for (;;) {
+            r.skip_ws();
+            if (r.at() != '"') r.refuse("malformed");
+            const std::string key = r.str();
+            r.skip_ws();
+            if (r.at() != ':') r.refuse("malformed");
+            ++r.pos;
+            r.skip_ws();
+            if (key == "outcome") {
+                if (seen & 1u) r.refuse("duplicate_field");
+                seen |= 1u;
+                wire_outcome = r.str();
+            } else if (key == "revision") {
+                if (seen & 2u) r.refuse("duplicate_field");
+                seen |= 2u;
+                v.revision = r.str();
+            } else if (key == "records") {
+                if (seen & 4u) r.refuse("duplicate_field");
+                seen |= 4u;
+                v.records = decode_list<SelectorRuleRecord>(r, decode_selector_rule_record);
+            } else if (key == "next") {
+                if (seen & 8u) r.refuse("duplicate_field");
+                seen |= 8u;
+                v.next = r.str();
+            } else if (key == "complete") {
+                if (seen & 16u) r.refuse("duplicate_field");
+                seen |= 16u;
+                v.complete = r.boolean();
+            } else {
+                r.refuse("unknown_field");
+            }
+            r.skip_ws();
+            if (r.at() != ',') break;
+            ++r.pos;
+        }
+    }
+    if (r.at() != '}') r.refuse("malformed");
+    ++r.pos;
+    --r.depth;
+    if ((seen & 31u) != 31u) r.refuse("missing_field");
+    if (wire_outcome) {
+        const auto parsed = parse_policy_page_outcome(*wire_outcome);
+        if (!parsed) r.refuse("bad_enum");
+        v.outcome = *parsed;
+    }
+    return v;
+}
+
+inline SelectorRuleRead decode_selector_rule_read(Reader& r) {
+    if (r.at() != '{') r.refuse("wrong_type");
+    r.enter();
+    ++r.pos;
+    SelectorRuleRead v;
+    std::optional<std::string> wire_outcome;
+    std::uint32_t seen = 0;
+    r.skip_ws();
+    if (r.at() != '}') {
+        for (;;) {
+            r.skip_ws();
+            if (r.at() != '"') r.refuse("malformed");
+            const std::string key = r.str();
+            r.skip_ws();
+            if (r.at() != ':') r.refuse("malformed");
+            ++r.pos;
+            r.skip_ws();
+            if (key == "outcome") {
+                if (seen & 1u) r.refuse("duplicate_field");
+                seen |= 1u;
+                wire_outcome = r.str();
+            } else if (key == "revision") {
+                if (seen & 2u) r.refuse("duplicate_field");
+                seen |= 2u;
+                v.revision = r.str();
+            } else if (key == "record") {
+                if (seen & 4u) r.refuse("duplicate_field");
+                seen |= 4u;
+                v.record = decode_selector_rule_record(r);
+            } else {
+                r.refuse("unknown_field");
+            }
+            r.skip_ws();
+            if (r.at() != ',') break;
+            ++r.pos;
+        }
+    }
+    if (r.at() != '}') r.refuse("malformed");
+    ++r.pos;
+    --r.depth;
+    if ((seen & 3u) != 3u) r.refuse("missing_field");
+    if (wire_outcome) {
+        const auto parsed = parse_rule_read_outcome(*wire_outcome);
+        if (!parsed) r.refuse("bad_enum");
+        v.outcome = *parsed;
+    }
+    return v;
+}
+
+inline SelectorEdit decode_selector_edit(Reader& r) {
+    if (r.at() != '{') r.refuse("wrong_type");
+    r.enter();
+    ++r.pos;
+    SelectorEdit v;
+    std::optional<std::string> wire_outcome;
+    std::uint32_t seen = 0;
+    r.skip_ws();
+    if (r.at() != '}') {
+        for (;;) {
+            r.skip_ws();
+            if (r.at() != '"') r.refuse("malformed");
+            const std::string key = r.str();
+            r.skip_ws();
+            if (r.at() != ':') r.refuse("malformed");
+            ++r.pos;
+            r.skip_ws();
+            if (key == "outcome") {
+                if (seen & 1u) r.refuse("duplicate_field");
+                seen |= 1u;
+                wire_outcome = r.str();
+            } else if (key == "revision") {
+                if (seen & 2u) r.refuse("duplicate_field");
+                seen |= 2u;
+                v.revision = r.str();
+            } else if (key == "current") {
+                if (seen & 4u) r.refuse("duplicate_field");
+                seen |= 4u;
+                v.current = decode_list<SelectorRuleRecord>(r, decode_selector_rule_record);
+            } else if (key == "bundle_origin") {
+                if (seen & 8u) r.refuse("duplicate_field");
+                seen |= 8u;
+                v.bundle_origin = decode_bundle_origin(r);
+            } else {
+                r.refuse("unknown_field");
+            }
+            r.skip_ws();
+            if (r.at() != ',') break;
+            ++r.pos;
+        }
+    }
+    if (r.at() != '}') r.refuse("malformed");
+    ++r.pos;
+    --r.depth;
+    if ((seen & 7u) != 7u) r.refuse("missing_field");
+    if (wire_outcome) {
+        const auto parsed = parse_policy_edit_outcome(*wire_outcome);
+        if (!parsed) r.refuse("bad_enum");
+        v.outcome = *parsed;
+    }
+    return v;
+}
+
+inline LegacyOperationRequest decode_legacy_operation_request(Reader& r) {
+    if (r.at() != '{') r.refuse("wrong_type");
+    r.enter();
+    ++r.pos;
+    LegacyOperationRequest v;
+    std::uint32_t seen = 0;
+    r.skip_ws();
+    if (r.at() != '}') {
+        for (;;) {
+            r.skip_ws();
+            if (r.at() != '"') r.refuse("malformed");
+            const std::string key = r.str();
+            r.skip_ws();
+            if (r.at() != ':') r.refuse("malformed");
+            ++r.pos;
+            r.skip_ws();
+            if (key == "legacy_action") {
+                if (seen & 1u) r.refuse("duplicate_field");
+                seen |= 1u;
+                v.legacy_action = r.str();
+            } else if (key == "legacy_resource") {
+                if (seen & 2u) r.refuse("duplicate_field");
+                seen |= 2u;
+                v.legacy_resource = r.str();
+            } else if (key == "concrete_operation") {
+                if (seen & 4u) r.refuse("duplicate_field");
+                seen |= 4u;
+                v.concrete_operation = decode_concrete_resource(r);
+            } else {
+                r.refuse("unknown_field");
+            }
+            r.skip_ws();
+            if (r.at() != ',') break;
+            ++r.pos;
+        }
+    }
+    if (r.at() != '}') r.refuse("malformed");
+    ++r.pos;
+    --r.depth;
+    if ((seen & 3u) != 3u) r.refuse("missing_field");
+    return v;
+}
+
+inline OAAuthorizationListActionDescriptionsArguments decode_oa_authorization_list_action_descriptions_arguments(Reader& r) {
+    if (r.at() != '{') r.refuse("wrong_type");
+    r.enter();
+    ++r.pos;
+    OAAuthorizationListActionDescriptionsArguments v;
+    std::uint32_t seen = 0;
+    r.skip_ws();
+    if (r.at() != '}') {
+        for (;;) {
+            r.skip_ws();
+            if (r.at() != '"') r.refuse("malformed");
+            const std::string key = r.str();
+            r.skip_ws();
+            if (r.at() != ':') r.refuse("malformed");
+            ++r.pos;
+            r.skip_ws();
+            if (key == "cursor") {
+                if (seen & 1u) r.refuse("duplicate_field");
+                seen |= 1u;
+                v.cursor = r.str();
+            } else if (key == "limit") {
+                if (seen & 2u) r.refuse("duplicate_field");
+                seen |= 2u;
+                v.limit = r.integer(INT64_MIN, INT64_MAX);
+            } else {
+                r.refuse("unknown_field");
+            }
+            r.skip_ws();
+            if (r.at() != ',') break;
+            ++r.pos;
+        }
+    }
+    if (r.at() != '}') r.refuse("malformed");
+    ++r.pos;
+    --r.depth;
+    if ((seen & 3u) != 3u) r.refuse("missing_field");
     return v;
 }
 
@@ -2660,6 +6652,84 @@ inline OAAuthorizationDecideForArguments decode_oa_authorization_decide_for_argu
     ++r.pos;
     --r.depth;
     if ((seen & 7u) != 7u) r.refuse("missing_field");
+    return v;
+}
+
+inline OAAuthorizationOperatorRegisterDescribedActionArguments decode_oa_authorization_operator_register_described_action_arguments(Reader& r) {
+    if (r.at() != '{') r.refuse("wrong_type");
+    r.enter();
+    ++r.pos;
+    OAAuthorizationOperatorRegisterDescribedActionArguments v;
+    std::uint32_t seen = 0;
+    r.skip_ws();
+    if (r.at() != '}') {
+        for (;;) {
+            r.skip_ws();
+            if (r.at() != '"') r.refuse("malformed");
+            const std::string key = r.str();
+            r.skip_ws();
+            if (r.at() != ':') r.refuse("malformed");
+            ++r.pos;
+            r.skip_ws();
+            if (key == "expected_revision") {
+                if (seen & 1u) r.refuse("duplicate_field");
+                seen |= 1u;
+                v.expected_revision = r.str();
+            } else if (key == "description") {
+                if (seen & 2u) r.refuse("duplicate_field");
+                seen |= 2u;
+                v.description = decode_action_description(r);
+            } else {
+                r.refuse("unknown_field");
+            }
+            r.skip_ws();
+            if (r.at() != ',') break;
+            ++r.pos;
+        }
+    }
+    if (r.at() != '}') r.refuse("malformed");
+    ++r.pos;
+    --r.depth;
+    if ((seen & 3u) != 3u) r.refuse("missing_field");
+    return v;
+}
+
+inline OAAuthorizationOperatorApplyFirstUseAllowArguments decode_oa_authorization_operator_apply_first_use_allow_arguments(Reader& r) {
+    if (r.at() != '{') r.refuse("wrong_type");
+    r.enter();
+    ++r.pos;
+    OAAuthorizationOperatorApplyFirstUseAllowArguments v;
+    std::uint32_t seen = 0;
+    r.skip_ws();
+    if (r.at() != '}') {
+        for (;;) {
+            r.skip_ws();
+            if (r.at() != '"') r.refuse("malformed");
+            const std::string key = r.str();
+            r.skip_ws();
+            if (r.at() != ':') r.refuse("malformed");
+            ++r.pos;
+            r.skip_ws();
+            if (key == "expected_revision") {
+                if (seen & 1u) r.refuse("duplicate_field");
+                seen |= 1u;
+                v.expected_revision = r.str();
+            } else if (key == "question_id") {
+                if (seen & 2u) r.refuse("duplicate_field");
+                seen |= 2u;
+                v.question_id = r.str();
+            } else {
+                r.refuse("unknown_field");
+            }
+            r.skip_ws();
+            if (r.at() != ',') break;
+            ++r.pos;
+        }
+    }
+    if (r.at() != '}') r.refuse("malformed");
+    ++r.pos;
+    --r.depth;
+    if ((seen & 3u) != 3u) r.refuse("missing_field");
     return v;
 }
 
@@ -2788,6 +6858,104 @@ inline OAAuthorizationOperatorRevokeRuleArguments decode_oa_authorization_operat
     return v;
 }
 
+inline OAAuthorizationOperatorStopAnswererArguments decode_oa_authorization_operator_stop_answerer_arguments(Reader& r) {
+    if (r.at() != '{') r.refuse("wrong_type");
+    r.enter();
+    ++r.pos;
+    OAAuthorizationOperatorStopAnswererArguments v;
+    std::uint32_t seen = 0;
+    r.skip_ws();
+    if (r.at() != '}') {
+        for (;;) {
+            r.skip_ws();
+            if (r.at() != '"') r.refuse("malformed");
+            const std::string key = r.str();
+            r.skip_ws();
+            if (r.at() != ':') r.refuse("malformed");
+            ++r.pos;
+            r.skip_ws();
+            if (key == "expected_revision") {
+                if (seen & 1u) r.refuse("duplicate_field");
+                seen |= 1u;
+                v.expected_revision = r.str();
+            } else if (key == "answerer") {
+                if (seen & 2u) r.refuse("duplicate_field");
+                seen |= 2u;
+                v.answerer = decode_subject(r);
+            } else if (key == "also_revoke_grants") {
+                if (seen & 4u) r.refuse("duplicate_field");
+                seen |= 4u;
+                v.also_revoke_grants = r.boolean();
+            } else {
+                r.refuse("unknown_field");
+            }
+            r.skip_ws();
+            if (r.at() != ',') break;
+            ++r.pos;
+        }
+    }
+    if (r.at() != '}') r.refuse("malformed");
+    ++r.pos;
+    --r.depth;
+    if ((seen & 7u) != 7u) r.refuse("missing_field");
+    return v;
+}
+
+inline OAAuthorizationOperatorRevokeAnswerPermitsArguments decode_oa_authorization_operator_revoke_answer_permits_arguments(Reader& r) {
+    if (r.at() != '{') r.refuse("wrong_type");
+    r.enter();
+    ++r.pos;
+    OAAuthorizationOperatorRevokeAnswerPermitsArguments v;
+    std::uint32_t seen = 0;
+    r.skip_ws();
+    if (r.at() != '}') {
+        for (;;) {
+            r.skip_ws();
+            if (r.at() != '"') r.refuse("malformed");
+            const std::string key = r.str();
+            r.skip_ws();
+            if (r.at() != ':') r.refuse("malformed");
+            ++r.pos;
+            r.skip_ws();
+            if (key == "expected_revision") {
+                if (seen & 1u) r.refuse("duplicate_field");
+                seen |= 1u;
+                v.expected_revision = r.str();
+            } else if (key == "answerer") {
+                if (seen & 2u) r.refuse("duplicate_field");
+                seen |= 2u;
+                v.answerer = decode_subject(r);
+            } else if (key == "target") {
+                if (seen & 4u) r.refuse("duplicate_field");
+                seen |= 4u;
+                v.target = decode_subject(r);
+            } else if (key == "actions") {
+                if (seen & 8u) r.refuse("duplicate_field");
+                seen |= 8u;
+                v.actions = r.str_list();
+            } else if (key == "resource") {
+                if (seen & 16u) r.refuse("duplicate_field");
+                seen |= 16u;
+                v.resource = r.str();
+            } else if (key == "question_id") {
+                if (seen & 32u) r.refuse("duplicate_field");
+                seen |= 32u;
+                v.question_id = r.str();
+            } else {
+                r.refuse("unknown_field");
+            }
+            r.skip_ws();
+            if (r.at() != ',') break;
+            ++r.pos;
+        }
+    }
+    if (r.at() != '}') r.refuse("malformed");
+    ++r.pos;
+    --r.depth;
+    if ((seen & 63u) != 63u) r.refuse("missing_field");
+    return v;
+}
+
 inline OAAuthorizationOperatorSetRuleForArguments decode_oa_authorization_operator_set_rule_for_arguments(Reader& r) {
     if (r.at() != '{') r.refuse("wrong_type");
     r.enter();
@@ -2812,6 +6980,53 @@ inline OAAuthorizationOperatorSetRuleForArguments decode_oa_authorization_operat
                 if (seen & 2u) r.refuse("duplicate_field");
                 seen |= 2u;
                 v.rule = decode_policy_rule(r);
+            } else if (key == "ttl_ms") {
+                if (seen & 4u) r.refuse("duplicate_field");
+                seen |= 4u;
+                v.ttl_ms = r.integer(INT64_MIN, INT64_MAX);
+            } else if (key == "why") {
+                if (seen & 8u) r.refuse("duplicate_field");
+                seen |= 8u;
+                v.why = r.str();
+            } else {
+                r.refuse("unknown_field");
+            }
+            r.skip_ws();
+            if (r.at() != ',') break;
+            ++r.pos;
+        }
+    }
+    if (r.at() != '}') r.refuse("malformed");
+    ++r.pos;
+    --r.depth;
+    if ((seen & 15u) != 15u) r.refuse("missing_field");
+    return v;
+}
+
+inline OAAuthorizationOperatorSetRulesForArguments decode_oa_authorization_operator_set_rules_for_arguments(Reader& r) {
+    if (r.at() != '{') r.refuse("wrong_type");
+    r.enter();
+    ++r.pos;
+    OAAuthorizationOperatorSetRulesForArguments v;
+    std::uint32_t seen = 0;
+    r.skip_ws();
+    if (r.at() != '}') {
+        for (;;) {
+            r.skip_ws();
+            if (r.at() != '"') r.refuse("malformed");
+            const std::string key = r.str();
+            r.skip_ws();
+            if (r.at() != ':') r.refuse("malformed");
+            ++r.pos;
+            r.skip_ws();
+            if (key == "expected_revision") {
+                if (seen & 1u) r.refuse("duplicate_field");
+                seen |= 1u;
+                v.expected_revision = r.str();
+            } else if (key == "rules") {
+                if (seen & 2u) r.refuse("duplicate_field");
+                seen |= 2u;
+                v.rules = decode_list<PolicyRule>(r, decode_policy_rule);
             } else if (key == "ttl_ms") {
                 if (seen & 4u) r.refuse("duplicate_field");
                 seen |= 4u;
@@ -2941,6 +7156,657 @@ inline OAAuthorizationOperatorRetireActionArguments decode_oa_authorization_oper
                 if (seen & 2u) r.refuse("duplicate_field");
                 seen |= 2u;
                 v.action = r.str();
+            } else {
+                r.refuse("unknown_field");
+            }
+            r.skip_ws();
+            if (r.at() != ',') break;
+            ++r.pos;
+        }
+    }
+    if (r.at() != '}') r.refuse("malformed");
+    ++r.pos;
+    --r.depth;
+    if ((seen & 3u) != 3u) r.refuse("missing_field");
+    return v;
+}
+
+inline OAAuthorizationOperatorExplainForArguments decode_oa_authorization_operator_explain_for_arguments(Reader& r) {
+    if (r.at() != '{') r.refuse("wrong_type");
+    r.enter();
+    ++r.pos;
+    OAAuthorizationOperatorExplainForArguments v;
+    std::uint32_t seen = 0;
+    r.skip_ws();
+    if (r.at() != '}') {
+        for (;;) {
+            r.skip_ws();
+            if (r.at() != '"') r.refuse("malformed");
+            const std::string key = r.str();
+            r.skip_ws();
+            if (r.at() != ':') r.refuse("malformed");
+            ++r.pos;
+            r.skip_ws();
+            if (key == "subject") {
+                if (seen & 1u) r.refuse("duplicate_field");
+                seen |= 1u;
+                v.subject = decode_subject(r);
+            } else if (key == "action") {
+                if (seen & 2u) r.refuse("duplicate_field");
+                seen |= 2u;
+                v.action = r.str();
+            } else if (key == "resource") {
+                if (seen & 4u) r.refuse("duplicate_field");
+                seen |= 4u;
+                v.resource = r.str();
+            } else {
+                r.refuse("unknown_field");
+            }
+            r.skip_ws();
+            if (r.at() != ',') break;
+            ++r.pos;
+        }
+    }
+    if (r.at() != '}') r.refuse("malformed");
+    ++r.pos;
+    --r.depth;
+    if ((seen & 7u) != 7u) r.refuse("missing_field");
+    return v;
+}
+
+inline OAAuthorizationOperatorListDefaultsArguments decode_oa_authorization_operator_list_defaults_arguments(Reader& r) {
+    if (r.at() != '{') r.refuse("wrong_type");
+    r.enter();
+    ++r.pos;
+    OAAuthorizationOperatorListDefaultsArguments v;
+    r.skip_ws();
+    if (r.at() != '}') {
+        for (;;) {
+            r.skip_ws();
+            if (r.at() != '"') r.refuse("malformed");
+            const std::string key = r.str();
+            r.skip_ws();
+            if (r.at() != ':') r.refuse("malformed");
+            ++r.pos;
+            r.skip_ws();
+            if (false) {
+            } else {
+                r.refuse("unknown_field");
+            }
+            r.skip_ws();
+            if (r.at() != ',') break;
+            ++r.pos;
+        }
+    }
+    if (r.at() != '}') r.refuse("malformed");
+    ++r.pos;
+    --r.depth;
+    return v;
+}
+
+inline OAAuthorizationOperatorSetDefaultArguments decode_oa_authorization_operator_set_default_arguments(Reader& r) {
+    if (r.at() != '{') r.refuse("wrong_type");
+    r.enter();
+    ++r.pos;
+    OAAuthorizationOperatorSetDefaultArguments v;
+    std::uint32_t seen = 0;
+    r.skip_ws();
+    if (r.at() != '}') {
+        for (;;) {
+            r.skip_ws();
+            if (r.at() != '"') r.refuse("malformed");
+            const std::string key = r.str();
+            r.skip_ws();
+            if (r.at() != ':') r.refuse("malformed");
+            ++r.pos;
+            r.skip_ws();
+            if (key == "expected_revision") {
+                if (seen & 1u) r.refuse("duplicate_field");
+                seen |= 1u;
+                v.expected_revision = r.str();
+            } else if (key == "name") {
+                if (seen & 2u) r.refuse("duplicate_field");
+                seen |= 2u;
+                v.name = r.str();
+            } else if (key == "on") {
+                if (seen & 4u) r.refuse("duplicate_field");
+                seen |= 4u;
+                v.on = r.boolean();
+            } else {
+                r.refuse("unknown_field");
+            }
+            r.skip_ws();
+            if (r.at() != ',') break;
+            ++r.pos;
+        }
+    }
+    if (r.at() != '}') r.refuse("malformed");
+    ++r.pos;
+    --r.depth;
+    if ((seen & 7u) != 7u) r.refuse("missing_field");
+    return v;
+}
+
+inline OASelectorAuthorizationListPermissionDefinitionsArguments decode_oa_selector_authorization_list_permission_definitions_arguments(Reader& r) {
+    if (r.at() != '{') r.refuse("wrong_type");
+    r.enter();
+    ++r.pos;
+    OASelectorAuthorizationListPermissionDefinitionsArguments v;
+    std::uint32_t seen = 0;
+    r.skip_ws();
+    if (r.at() != '}') {
+        for (;;) {
+            r.skip_ws();
+            if (r.at() != '"') r.refuse("malformed");
+            const std::string key = r.str();
+            r.skip_ws();
+            if (r.at() != ':') r.refuse("malformed");
+            ++r.pos;
+            r.skip_ws();
+            if (key == "cursor") {
+                if (seen & 1u) r.refuse("duplicate_field");
+                seen |= 1u;
+                v.cursor = r.str();
+            } else if (key == "limit") {
+                if (seen & 2u) r.refuse("duplicate_field");
+                seen |= 2u;
+                v.limit = r.integer(INT64_MIN, INT64_MAX);
+            } else {
+                r.refuse("unknown_field");
+            }
+            r.skip_ws();
+            if (r.at() != ',') break;
+            ++r.pos;
+        }
+    }
+    if (r.at() != '}') r.refuse("malformed");
+    ++r.pos;
+    --r.depth;
+    if ((seen & 3u) != 3u) r.refuse("missing_field");
+    return v;
+}
+
+inline OASelectorAuthorizationListPermissionBundlesArguments decode_oa_selector_authorization_list_permission_bundles_arguments(Reader& r) {
+    if (r.at() != '{') r.refuse("wrong_type");
+    r.enter();
+    ++r.pos;
+    OASelectorAuthorizationListPermissionBundlesArguments v;
+    std::uint32_t seen = 0;
+    r.skip_ws();
+    if (r.at() != '}') {
+        for (;;) {
+            r.skip_ws();
+            if (r.at() != '"') r.refuse("malformed");
+            const std::string key = r.str();
+            r.skip_ws();
+            if (r.at() != ':') r.refuse("malformed");
+            ++r.pos;
+            r.skip_ws();
+            if (key == "cursor") {
+                if (seen & 1u) r.refuse("duplicate_field");
+                seen |= 1u;
+                v.cursor = r.str();
+            } else if (key == "limit") {
+                if (seen & 2u) r.refuse("duplicate_field");
+                seen |= 2u;
+                v.limit = r.integer(INT64_MIN, INT64_MAX);
+            } else {
+                r.refuse("unknown_field");
+            }
+            r.skip_ws();
+            if (r.at() != ',') break;
+            ++r.pos;
+        }
+    }
+    if (r.at() != '}') r.refuse("malformed");
+    ++r.pos;
+    --r.depth;
+    if ((seen & 3u) != 3u) r.refuse("missing_field");
+    return v;
+}
+
+inline OASelectorAuthorizationCheckBatchArguments decode_oa_selector_authorization_check_batch_arguments(Reader& r) {
+    if (r.at() != '{') r.refuse("wrong_type");
+    r.enter();
+    ++r.pos;
+    OASelectorAuthorizationCheckBatchArguments v;
+    std::uint32_t seen = 0;
+    r.skip_ws();
+    if (r.at() != '}') {
+        for (;;) {
+            r.skip_ws();
+            if (r.at() != '"') r.refuse("malformed");
+            const std::string key = r.str();
+            r.skip_ws();
+            if (r.at() != ':') r.refuse("malformed");
+            ++r.pos;
+            r.skip_ws();
+            if (key == "request") {
+                if (seen & 1u) r.refuse("duplicate_field");
+                seen |= 1u;
+                v.request = decode_check_batch_request(r);
+            } else {
+                r.refuse("unknown_field");
+            }
+            r.skip_ws();
+            if (r.at() != ',') break;
+            ++r.pos;
+        }
+    }
+    if (r.at() != '}') r.refuse("malformed");
+    ++r.pos;
+    --r.depth;
+    if ((seen & 1u) != 1u) r.refuse("missing_field");
+    return v;
+}
+
+inline OASelectorAuthorizationCheckBatchForArguments decode_oa_selector_authorization_check_batch_for_arguments(Reader& r) {
+    if (r.at() != '{') r.refuse("wrong_type");
+    r.enter();
+    ++r.pos;
+    OASelectorAuthorizationCheckBatchForArguments v;
+    std::uint32_t seen = 0;
+    r.skip_ws();
+    if (r.at() != '}') {
+        for (;;) {
+            r.skip_ws();
+            if (r.at() != '"') r.refuse("malformed");
+            const std::string key = r.str();
+            r.skip_ws();
+            if (r.at() != ':') r.refuse("malformed");
+            ++r.pos;
+            r.skip_ws();
+            if (key == "subject") {
+                if (seen & 1u) r.refuse("duplicate_field");
+                seen |= 1u;
+                v.subject = decode_subject(r);
+            } else if (key == "request") {
+                if (seen & 2u) r.refuse("duplicate_field");
+                seen |= 2u;
+                v.request = decode_check_batch_request(r);
+            } else {
+                r.refuse("unknown_field");
+            }
+            r.skip_ws();
+            if (r.at() != ',') break;
+            ++r.pos;
+        }
+    }
+    if (r.at() != '}') r.refuse("malformed");
+    ++r.pos;
+    --r.depth;
+    if ((seen & 3u) != 3u) r.refuse("missing_field");
+    return v;
+}
+
+inline OASelectorAuthorizationCheckLegacyOperationForArguments decode_oa_selector_authorization_check_legacy_operation_for_arguments(Reader& r) {
+    if (r.at() != '{') r.refuse("wrong_type");
+    r.enter();
+    ++r.pos;
+    OASelectorAuthorizationCheckLegacyOperationForArguments v;
+    std::uint32_t seen = 0;
+    r.skip_ws();
+    if (r.at() != '}') {
+        for (;;) {
+            r.skip_ws();
+            if (r.at() != '"') r.refuse("malformed");
+            const std::string key = r.str();
+            r.skip_ws();
+            if (r.at() != ':') r.refuse("malformed");
+            ++r.pos;
+            r.skip_ws();
+            if (key == "subject") {
+                if (seen & 1u) r.refuse("duplicate_field");
+                seen |= 1u;
+                v.subject = decode_subject(r);
+            } else if (key == "request") {
+                if (seen & 2u) r.refuse("duplicate_field");
+                seen |= 2u;
+                v.request = decode_legacy_operation_request(r);
+            } else {
+                r.refuse("unknown_field");
+            }
+            r.skip_ws();
+            if (r.at() != ',') break;
+            ++r.pos;
+        }
+    }
+    if (r.at() != '}') r.refuse("malformed");
+    ++r.pos;
+    --r.depth;
+    if ((seen & 3u) != 3u) r.refuse("missing_field");
+    return v;
+}
+
+inline OASelectorAuthorizationOperatorListSelectorRulesArguments decode_oa_selector_authorization_operator_list_selector_rules_arguments(Reader& r) {
+    if (r.at() != '{') r.refuse("wrong_type");
+    r.enter();
+    ++r.pos;
+    OASelectorAuthorizationOperatorListSelectorRulesArguments v;
+    std::uint32_t seen = 0;
+    r.skip_ws();
+    if (r.at() != '}') {
+        for (;;) {
+            r.skip_ws();
+            if (r.at() != '"') r.refuse("malformed");
+            const std::string key = r.str();
+            r.skip_ws();
+            if (r.at() != ':') r.refuse("malformed");
+            ++r.pos;
+            r.skip_ws();
+            if (key == "cursor") {
+                if (seen & 1u) r.refuse("duplicate_field");
+                seen |= 1u;
+                v.cursor = r.str();
+            } else if (key == "limit") {
+                if (seen & 2u) r.refuse("duplicate_field");
+                seen |= 2u;
+                v.limit = r.integer(INT64_MIN, INT64_MAX);
+            } else {
+                r.refuse("unknown_field");
+            }
+            r.skip_ws();
+            if (r.at() != ',') break;
+            ++r.pos;
+        }
+    }
+    if (r.at() != '}') r.refuse("malformed");
+    ++r.pos;
+    --r.depth;
+    if ((seen & 3u) != 3u) r.refuse("missing_field");
+    return v;
+}
+
+inline OASelectorAuthorizationOperatorReadSelectorRuleArguments decode_oa_selector_authorization_operator_read_selector_rule_arguments(Reader& r) {
+    if (r.at() != '{') r.refuse("wrong_type");
+    r.enter();
+    ++r.pos;
+    OASelectorAuthorizationOperatorReadSelectorRuleArguments v;
+    std::uint32_t seen = 0;
+    r.skip_ws();
+    if (r.at() != '}') {
+        for (;;) {
+            r.skip_ws();
+            if (r.at() != '"') r.refuse("malformed");
+            const std::string key = r.str();
+            r.skip_ws();
+            if (r.at() != ':') r.refuse("malformed");
+            ++r.pos;
+            r.skip_ws();
+            if (key == "subject") {
+                if (seen & 1u) r.refuse("duplicate_field");
+                seen |= 1u;
+                v.subject = decode_subject(r);
+            } else if (key == "selection") {
+                if (seen & 2u) r.refuse("duplicate_field");
+                seen |= 2u;
+                v.selection = decode_permission_selection(r);
+            } else {
+                r.refuse("unknown_field");
+            }
+            r.skip_ws();
+            if (r.at() != ',') break;
+            ++r.pos;
+        }
+    }
+    if (r.at() != '}') r.refuse("malformed");
+    ++r.pos;
+    --r.depth;
+    if ((seen & 3u) != 3u) r.refuse("missing_field");
+    return v;
+}
+
+inline OASelectorAuthorizationOperatorSetSelectorRuleArguments decode_oa_selector_authorization_operator_set_selector_rule_arguments(Reader& r) {
+    if (r.at() != '{') r.refuse("wrong_type");
+    r.enter();
+    ++r.pos;
+    OASelectorAuthorizationOperatorSetSelectorRuleArguments v;
+    std::uint32_t seen = 0;
+    r.skip_ws();
+    if (r.at() != '}') {
+        for (;;) {
+            r.skip_ws();
+            if (r.at() != '"') r.refuse("malformed");
+            const std::string key = r.str();
+            r.skip_ws();
+            if (r.at() != ':') r.refuse("malformed");
+            ++r.pos;
+            r.skip_ws();
+            if (key == "expected_revision") {
+                if (seen & 1u) r.refuse("duplicate_field");
+                seen |= 1u;
+                v.expected_revision = r.str();
+            } else if (key == "rule") {
+                if (seen & 2u) r.refuse("duplicate_field");
+                seen |= 2u;
+                v.rule = decode_selector_rule(r);
+            } else if (key == "ttl_ms") {
+                if (seen & 4u) r.refuse("duplicate_field");
+                seen |= 4u;
+                v.ttl_ms = r.integer(INT64_MIN, INT64_MAX);
+            } else if (key == "why") {
+                if (seen & 8u) r.refuse("duplicate_field");
+                seen |= 8u;
+                v.why = r.str();
+            } else {
+                r.refuse("unknown_field");
+            }
+            r.skip_ws();
+            if (r.at() != ',') break;
+            ++r.pos;
+        }
+    }
+    if (r.at() != '}') r.refuse("malformed");
+    ++r.pos;
+    --r.depth;
+    if ((seen & 15u) != 15u) r.refuse("missing_field");
+    return v;
+}
+
+inline OASelectorAuthorizationOperatorRemoveSelectorRuleArguments decode_oa_selector_authorization_operator_remove_selector_rule_arguments(Reader& r) {
+    if (r.at() != '{') r.refuse("wrong_type");
+    r.enter();
+    ++r.pos;
+    OASelectorAuthorizationOperatorRemoveSelectorRuleArguments v;
+    std::uint32_t seen = 0;
+    r.skip_ws();
+    if (r.at() != '}') {
+        for (;;) {
+            r.skip_ws();
+            if (r.at() != '"') r.refuse("malformed");
+            const std::string key = r.str();
+            r.skip_ws();
+            if (r.at() != ':') r.refuse("malformed");
+            ++r.pos;
+            r.skip_ws();
+            if (key == "expected_revision") {
+                if (seen & 1u) r.refuse("duplicate_field");
+                seen |= 1u;
+                v.expected_revision = r.str();
+            } else if (key == "subject") {
+                if (seen & 2u) r.refuse("duplicate_field");
+                seen |= 2u;
+                v.subject = decode_subject(r);
+            } else if (key == "selection") {
+                if (seen & 4u) r.refuse("duplicate_field");
+                seen |= 4u;
+                v.selection = decode_permission_selection(r);
+            } else {
+                r.refuse("unknown_field");
+            }
+            r.skip_ws();
+            if (r.at() != ',') break;
+            ++r.pos;
+        }
+    }
+    if (r.at() != '}') r.refuse("malformed");
+    ++r.pos;
+    --r.depth;
+    if ((seen & 7u) != 7u) r.refuse("missing_field");
+    return v;
+}
+
+inline OASelectorAuthorizationOperatorApplyBundleArguments decode_oa_selector_authorization_operator_apply_bundle_arguments(Reader& r) {
+    if (r.at() != '{') r.refuse("wrong_type");
+    r.enter();
+    ++r.pos;
+    OASelectorAuthorizationOperatorApplyBundleArguments v;
+    std::uint32_t seen = 0;
+    r.skip_ws();
+    if (r.at() != '}') {
+        for (;;) {
+            r.skip_ws();
+            if (r.at() != '"') r.refuse("malformed");
+            const std::string key = r.str();
+            r.skip_ws();
+            if (r.at() != ':') r.refuse("malformed");
+            ++r.pos;
+            r.skip_ws();
+            if (key == "expected_revision") {
+                if (seen & 1u) r.refuse("duplicate_field");
+                seen |= 1u;
+                v.expected_revision = r.str();
+            } else if (key == "subject") {
+                if (seen & 2u) r.refuse("duplicate_field");
+                seen |= 2u;
+                v.subject = decode_subject(r);
+            } else if (key == "bundle_ref") {
+                if (seen & 4u) r.refuse("duplicate_field");
+                seen |= 4u;
+                v.bundle_ref = r.str();
+            } else if (key == "selector") {
+                if (seen & 8u) r.refuse("duplicate_field");
+                seen |= 8u;
+                v.selector = decode_resource_selector(r);
+            } else if (key == "ttl_ms") {
+                if (seen & 16u) r.refuse("duplicate_field");
+                seen |= 16u;
+                v.ttl_ms = r.integer(INT64_MIN, INT64_MAX);
+            } else if (key == "why") {
+                if (seen & 32u) r.refuse("duplicate_field");
+                seen |= 32u;
+                v.why = r.str();
+            } else {
+                r.refuse("unknown_field");
+            }
+            r.skip_ws();
+            if (r.at() != ',') break;
+            ++r.pos;
+        }
+    }
+    if (r.at() != '}') r.refuse("malformed");
+    ++r.pos;
+    --r.depth;
+    if ((seen & 63u) != 63u) r.refuse("missing_field");
+    return v;
+}
+
+inline OASelectorAuthorizationOperatorRemoveBundleArguments decode_oa_selector_authorization_operator_remove_bundle_arguments(Reader& r) {
+    if (r.at() != '{') r.refuse("wrong_type");
+    r.enter();
+    ++r.pos;
+    OASelectorAuthorizationOperatorRemoveBundleArguments v;
+    std::uint32_t seen = 0;
+    r.skip_ws();
+    if (r.at() != '}') {
+        for (;;) {
+            r.skip_ws();
+            if (r.at() != '"') r.refuse("malformed");
+            const std::string key = r.str();
+            r.skip_ws();
+            if (r.at() != ':') r.refuse("malformed");
+            ++r.pos;
+            r.skip_ws();
+            if (key == "expected_revision") {
+                if (seen & 1u) r.refuse("duplicate_field");
+                seen |= 1u;
+                v.expected_revision = r.str();
+            } else if (key == "subject") {
+                if (seen & 2u) r.refuse("duplicate_field");
+                seen |= 2u;
+                v.subject = decode_subject(r);
+            } else if (key == "origin_id") {
+                if (seen & 4u) r.refuse("duplicate_field");
+                seen |= 4u;
+                v.origin_id = r.str();
+            } else {
+                r.refuse("unknown_field");
+            }
+            r.skip_ws();
+            if (r.at() != ',') break;
+            ++r.pos;
+        }
+    }
+    if (r.at() != '}') r.refuse("malformed");
+    ++r.pos;
+    --r.depth;
+    if ((seen & 7u) != 7u) r.refuse("missing_field");
+    return v;
+}
+
+inline OASelectorAuthorizationOperatorApplyPermissionAllowArguments decode_oa_selector_authorization_operator_apply_permission_allow_arguments(Reader& r) {
+    if (r.at() != '{') r.refuse("wrong_type");
+    r.enter();
+    ++r.pos;
+    OASelectorAuthorizationOperatorApplyPermissionAllowArguments v;
+    std::uint32_t seen = 0;
+    r.skip_ws();
+    if (r.at() != '}') {
+        for (;;) {
+            r.skip_ws();
+            if (r.at() != '"') r.refuse("malformed");
+            const std::string key = r.str();
+            r.skip_ws();
+            if (r.at() != ':') r.refuse("malformed");
+            ++r.pos;
+            r.skip_ws();
+            if (key == "expected_revision") {
+                if (seen & 1u) r.refuse("duplicate_field");
+                seen |= 1u;
+                v.expected_revision = r.str();
+            } else if (key == "question_id") {
+                if (seen & 2u) r.refuse("duplicate_field");
+                seen |= 2u;
+                v.question_id = r.str();
+            } else {
+                r.refuse("unknown_field");
+            }
+            r.skip_ws();
+            if (r.at() != ',') break;
+            ++r.pos;
+        }
+    }
+    if (r.at() != '}') r.refuse("malformed");
+    ++r.pos;
+    --r.depth;
+    if ((seen & 3u) != 3u) r.refuse("missing_field");
+    return v;
+}
+
+inline OASelectorAuthorizationOperatorUndoPermissionEffectArguments decode_oa_selector_authorization_operator_undo_permission_effect_arguments(Reader& r) {
+    if (r.at() != '{') r.refuse("wrong_type");
+    r.enter();
+    ++r.pos;
+    OASelectorAuthorizationOperatorUndoPermissionEffectArguments v;
+    std::uint32_t seen = 0;
+    r.skip_ws();
+    if (r.at() != '}') {
+        for (;;) {
+            r.skip_ws();
+            if (r.at() != '"') r.refuse("malformed");
+            const std::string key = r.str();
+            r.skip_ws();
+            if (r.at() != ':') r.refuse("malformed");
+            ++r.pos;
+            r.skip_ws();
+            if (key == "expected_revision") {
+                if (seen & 1u) r.refuse("duplicate_field");
+                seen |= 1u;
+                v.expected_revision = r.str();
+            } else if (key == "question_id") {
+                if (seen & 2u) r.refuse("duplicate_field");
+                seen |= 2u;
+                v.question_id = r.str();
             } else {
                 r.refuse("unknown_field");
             }
@@ -3093,6 +7959,41 @@ inline OAServiceError decode_oa_service_error(Reader& r) {
     return v;
 }
 
+inline OAAuthorizationListActionDescriptionsResult decode_oa_authorization_list_action_descriptions_result(Reader& r) {
+    if (r.at() != '{') r.refuse("wrong_type");
+    r.enter();
+    ++r.pos;
+    OAAuthorizationListActionDescriptionsResult v;
+    std::uint32_t seen = 0;
+    r.skip_ws();
+    if (r.at() != '}') {
+        for (;;) {
+            r.skip_ws();
+            if (r.at() != '"') r.refuse("malformed");
+            const std::string key = r.str();
+            r.skip_ws();
+            if (r.at() != ':') r.refuse("malformed");
+            ++r.pos;
+            r.skip_ws();
+            if (key == "value") {
+                if (seen & 1u) r.refuse("duplicate_field");
+                seen |= 1u;
+                v.value = decode_description_page(r);
+            } else {
+                r.refuse("unknown_field");
+            }
+            r.skip_ws();
+            if (r.at() != ',') break;
+            ++r.pos;
+        }
+    }
+    if (r.at() != '}') r.refuse("malformed");
+    ++r.pos;
+    --r.depth;
+    if ((seen & 1u) != 1u) r.refuse("missing_field");
+    return v;
+}
+
 inline OAAuthorizationDecideResult decode_oa_authorization_decide_result(Reader& r) {
     if (r.at() != '{') r.refuse("wrong_type");
     r.enter();
@@ -3148,6 +8049,76 @@ inline OAAuthorizationDecideForResult decode_oa_authorization_decide_for_result(
                 if (seen & 1u) r.refuse("duplicate_field");
                 seen |= 1u;
                 v.value = decode_decision(r);
+            } else {
+                r.refuse("unknown_field");
+            }
+            r.skip_ws();
+            if (r.at() != ',') break;
+            ++r.pos;
+        }
+    }
+    if (r.at() != '}') r.refuse("malformed");
+    ++r.pos;
+    --r.depth;
+    if ((seen & 1u) != 1u) r.refuse("missing_field");
+    return v;
+}
+
+inline OAAuthorizationOperatorRegisterDescribedActionResult decode_oa_authorization_operator_register_described_action_result(Reader& r) {
+    if (r.at() != '{') r.refuse("wrong_type");
+    r.enter();
+    ++r.pos;
+    OAAuthorizationOperatorRegisterDescribedActionResult v;
+    std::uint32_t seen = 0;
+    r.skip_ws();
+    if (r.at() != '}') {
+        for (;;) {
+            r.skip_ws();
+            if (r.at() != '"') r.refuse("malformed");
+            const std::string key = r.str();
+            r.skip_ws();
+            if (r.at() != ':') r.refuse("malformed");
+            ++r.pos;
+            r.skip_ws();
+            if (key == "value") {
+                if (seen & 1u) r.refuse("duplicate_field");
+                seen |= 1u;
+                v.value = decode_description_edit(r);
+            } else {
+                r.refuse("unknown_field");
+            }
+            r.skip_ws();
+            if (r.at() != ',') break;
+            ++r.pos;
+        }
+    }
+    if (r.at() != '}') r.refuse("malformed");
+    ++r.pos;
+    --r.depth;
+    if ((seen & 1u) != 1u) r.refuse("missing_field");
+    return v;
+}
+
+inline OAAuthorizationOperatorApplyFirstUseAllowResult decode_oa_authorization_operator_apply_first_use_allow_result(Reader& r) {
+    if (r.at() != '{') r.refuse("wrong_type");
+    r.enter();
+    ++r.pos;
+    OAAuthorizationOperatorApplyFirstUseAllowResult v;
+    std::uint32_t seen = 0;
+    r.skip_ws();
+    if (r.at() != '}') {
+        for (;;) {
+            r.skip_ws();
+            if (r.at() != '"') r.refuse("malformed");
+            const std::string key = r.str();
+            r.skip_ws();
+            if (r.at() != ':') r.refuse("malformed");
+            ++r.pos;
+            r.skip_ws();
+            if (key == "value") {
+                if (seen & 1u) r.refuse("duplicate_field");
+                seen |= 1u;
+                v.value = decode_policy_edit(r);
             } else {
                 r.refuse("unknown_field");
             }
@@ -3268,11 +8239,116 @@ inline OAAuthorizationOperatorRevokeRuleResult decode_oa_authorization_operator_
     return v;
 }
 
+inline OAAuthorizationOperatorStopAnswererResult decode_oa_authorization_operator_stop_answerer_result(Reader& r) {
+    if (r.at() != '{') r.refuse("wrong_type");
+    r.enter();
+    ++r.pos;
+    OAAuthorizationOperatorStopAnswererResult v;
+    std::uint32_t seen = 0;
+    r.skip_ws();
+    if (r.at() != '}') {
+        for (;;) {
+            r.skip_ws();
+            if (r.at() != '"') r.refuse("malformed");
+            const std::string key = r.str();
+            r.skip_ws();
+            if (r.at() != ':') r.refuse("malformed");
+            ++r.pos;
+            r.skip_ws();
+            if (key == "value") {
+                if (seen & 1u) r.refuse("duplicate_field");
+                seen |= 1u;
+                v.value = decode_policy_edit(r);
+            } else {
+                r.refuse("unknown_field");
+            }
+            r.skip_ws();
+            if (r.at() != ',') break;
+            ++r.pos;
+        }
+    }
+    if (r.at() != '}') r.refuse("malformed");
+    ++r.pos;
+    --r.depth;
+    if ((seen & 1u) != 1u) r.refuse("missing_field");
+    return v;
+}
+
+inline OAAuthorizationOperatorRevokeAnswerPermitsResult decode_oa_authorization_operator_revoke_answer_permits_result(Reader& r) {
+    if (r.at() != '{') r.refuse("wrong_type");
+    r.enter();
+    ++r.pos;
+    OAAuthorizationOperatorRevokeAnswerPermitsResult v;
+    std::uint32_t seen = 0;
+    r.skip_ws();
+    if (r.at() != '}') {
+        for (;;) {
+            r.skip_ws();
+            if (r.at() != '"') r.refuse("malformed");
+            const std::string key = r.str();
+            r.skip_ws();
+            if (r.at() != ':') r.refuse("malformed");
+            ++r.pos;
+            r.skip_ws();
+            if (key == "value") {
+                if (seen & 1u) r.refuse("duplicate_field");
+                seen |= 1u;
+                v.value = decode_policy_edit(r);
+            } else {
+                r.refuse("unknown_field");
+            }
+            r.skip_ws();
+            if (r.at() != ',') break;
+            ++r.pos;
+        }
+    }
+    if (r.at() != '}') r.refuse("malformed");
+    ++r.pos;
+    --r.depth;
+    if ((seen & 1u) != 1u) r.refuse("missing_field");
+    return v;
+}
+
 inline OAAuthorizationOperatorSetRuleForResult decode_oa_authorization_operator_set_rule_for_result(Reader& r) {
     if (r.at() != '{') r.refuse("wrong_type");
     r.enter();
     ++r.pos;
     OAAuthorizationOperatorSetRuleForResult v;
+    std::uint32_t seen = 0;
+    r.skip_ws();
+    if (r.at() != '}') {
+        for (;;) {
+            r.skip_ws();
+            if (r.at() != '"') r.refuse("malformed");
+            const std::string key = r.str();
+            r.skip_ws();
+            if (r.at() != ':') r.refuse("malformed");
+            ++r.pos;
+            r.skip_ws();
+            if (key == "value") {
+                if (seen & 1u) r.refuse("duplicate_field");
+                seen |= 1u;
+                v.value = decode_policy_edit(r);
+            } else {
+                r.refuse("unknown_field");
+            }
+            r.skip_ws();
+            if (r.at() != ',') break;
+            ++r.pos;
+        }
+    }
+    if (r.at() != '}') r.refuse("malformed");
+    ++r.pos;
+    --r.depth;
+    if ((seen & 1u) != 1u) r.refuse("missing_field");
+    return v;
+}
+
+inline OAAuthorizationOperatorSetRulesForResult decode_oa_authorization_operator_set_rules_for_result(Reader& r) {
+    if (r.at() != '{') r.refuse("wrong_type");
+    r.enter();
+    ++r.pos;
+    OAAuthorizationOperatorSetRulesForResult v;
     std::uint32_t seen = 0;
     r.skip_ws();
     if (r.at() != '}') {
@@ -3408,6 +8484,588 @@ inline OAAuthorizationOperatorRetireActionResult decode_oa_authorization_operato
     return v;
 }
 
+inline OAAuthorizationOperatorExplainForResult decode_oa_authorization_operator_explain_for_result(Reader& r) {
+    if (r.at() != '{') r.refuse("wrong_type");
+    r.enter();
+    ++r.pos;
+    OAAuthorizationOperatorExplainForResult v;
+    std::uint32_t seen = 0;
+    r.skip_ws();
+    if (r.at() != '}') {
+        for (;;) {
+            r.skip_ws();
+            if (r.at() != '"') r.refuse("malformed");
+            const std::string key = r.str();
+            r.skip_ws();
+            if (r.at() != ':') r.refuse("malformed");
+            ++r.pos;
+            r.skip_ws();
+            if (key == "value") {
+                if (seen & 1u) r.refuse("duplicate_field");
+                seen |= 1u;
+                v.value = decode_decision_explanation(r);
+            } else {
+                r.refuse("unknown_field");
+            }
+            r.skip_ws();
+            if (r.at() != ',') break;
+            ++r.pos;
+        }
+    }
+    if (r.at() != '}') r.refuse("malformed");
+    ++r.pos;
+    --r.depth;
+    if ((seen & 1u) != 1u) r.refuse("missing_field");
+    return v;
+}
+
+inline OAAuthorizationOperatorListDefaultsResult decode_oa_authorization_operator_list_defaults_result(Reader& r) {
+    if (r.at() != '{') r.refuse("wrong_type");
+    r.enter();
+    ++r.pos;
+    OAAuthorizationOperatorListDefaultsResult v;
+    std::uint32_t seen = 0;
+    r.skip_ws();
+    if (r.at() != '}') {
+        for (;;) {
+            r.skip_ws();
+            if (r.at() != '"') r.refuse("malformed");
+            const std::string key = r.str();
+            r.skip_ws();
+            if (r.at() != ':') r.refuse("malformed");
+            ++r.pos;
+            r.skip_ws();
+            if (key == "value") {
+                if (seen & 1u) r.refuse("duplicate_field");
+                seen |= 1u;
+                v.value = decode_default_page(r);
+            } else {
+                r.refuse("unknown_field");
+            }
+            r.skip_ws();
+            if (r.at() != ',') break;
+            ++r.pos;
+        }
+    }
+    if (r.at() != '}') r.refuse("malformed");
+    ++r.pos;
+    --r.depth;
+    if ((seen & 1u) != 1u) r.refuse("missing_field");
+    return v;
+}
+
+inline OAAuthorizationOperatorSetDefaultResult decode_oa_authorization_operator_set_default_result(Reader& r) {
+    if (r.at() != '{') r.refuse("wrong_type");
+    r.enter();
+    ++r.pos;
+    OAAuthorizationOperatorSetDefaultResult v;
+    std::uint32_t seen = 0;
+    r.skip_ws();
+    if (r.at() != '}') {
+        for (;;) {
+            r.skip_ws();
+            if (r.at() != '"') r.refuse("malformed");
+            const std::string key = r.str();
+            r.skip_ws();
+            if (r.at() != ':') r.refuse("malformed");
+            ++r.pos;
+            r.skip_ws();
+            if (key == "value") {
+                if (seen & 1u) r.refuse("duplicate_field");
+                seen |= 1u;
+                v.value = decode_default_edit(r);
+            } else {
+                r.refuse("unknown_field");
+            }
+            r.skip_ws();
+            if (r.at() != ',') break;
+            ++r.pos;
+        }
+    }
+    if (r.at() != '}') r.refuse("malformed");
+    ++r.pos;
+    --r.depth;
+    if ((seen & 1u) != 1u) r.refuse("missing_field");
+    return v;
+}
+
+inline OASelectorAuthorizationListPermissionDefinitionsResult decode_oa_selector_authorization_list_permission_definitions_result(Reader& r) {
+    if (r.at() != '{') r.refuse("wrong_type");
+    r.enter();
+    ++r.pos;
+    OASelectorAuthorizationListPermissionDefinitionsResult v;
+    std::uint32_t seen = 0;
+    r.skip_ws();
+    if (r.at() != '}') {
+        for (;;) {
+            r.skip_ws();
+            if (r.at() != '"') r.refuse("malformed");
+            const std::string key = r.str();
+            r.skip_ws();
+            if (r.at() != ':') r.refuse("malformed");
+            ++r.pos;
+            r.skip_ws();
+            if (key == "value") {
+                if (seen & 1u) r.refuse("duplicate_field");
+                seen |= 1u;
+                v.value = decode_permission_definition_page(r);
+            } else {
+                r.refuse("unknown_field");
+            }
+            r.skip_ws();
+            if (r.at() != ',') break;
+            ++r.pos;
+        }
+    }
+    if (r.at() != '}') r.refuse("malformed");
+    ++r.pos;
+    --r.depth;
+    if ((seen & 1u) != 1u) r.refuse("missing_field");
+    return v;
+}
+
+inline OASelectorAuthorizationListPermissionBundlesResult decode_oa_selector_authorization_list_permission_bundles_result(Reader& r) {
+    if (r.at() != '{') r.refuse("wrong_type");
+    r.enter();
+    ++r.pos;
+    OASelectorAuthorizationListPermissionBundlesResult v;
+    std::uint32_t seen = 0;
+    r.skip_ws();
+    if (r.at() != '}') {
+        for (;;) {
+            r.skip_ws();
+            if (r.at() != '"') r.refuse("malformed");
+            const std::string key = r.str();
+            r.skip_ws();
+            if (r.at() != ':') r.refuse("malformed");
+            ++r.pos;
+            r.skip_ws();
+            if (key == "value") {
+                if (seen & 1u) r.refuse("duplicate_field");
+                seen |= 1u;
+                v.value = decode_permission_bundle_page(r);
+            } else {
+                r.refuse("unknown_field");
+            }
+            r.skip_ws();
+            if (r.at() != ',') break;
+            ++r.pos;
+        }
+    }
+    if (r.at() != '}') r.refuse("malformed");
+    ++r.pos;
+    --r.depth;
+    if ((seen & 1u) != 1u) r.refuse("missing_field");
+    return v;
+}
+
+inline OASelectorAuthorizationCheckBatchResult decode_oa_selector_authorization_check_batch_result(Reader& r) {
+    if (r.at() != '{') r.refuse("wrong_type");
+    r.enter();
+    ++r.pos;
+    OASelectorAuthorizationCheckBatchResult v;
+    std::uint32_t seen = 0;
+    r.skip_ws();
+    if (r.at() != '}') {
+        for (;;) {
+            r.skip_ws();
+            if (r.at() != '"') r.refuse("malformed");
+            const std::string key = r.str();
+            r.skip_ws();
+            if (r.at() != ':') r.refuse("malformed");
+            ++r.pos;
+            r.skip_ws();
+            if (key == "value") {
+                if (seen & 1u) r.refuse("duplicate_field");
+                seen |= 1u;
+                v.value = decode_batch_decision(r);
+            } else {
+                r.refuse("unknown_field");
+            }
+            r.skip_ws();
+            if (r.at() != ',') break;
+            ++r.pos;
+        }
+    }
+    if (r.at() != '}') r.refuse("malformed");
+    ++r.pos;
+    --r.depth;
+    if ((seen & 1u) != 1u) r.refuse("missing_field");
+    return v;
+}
+
+inline OASelectorAuthorizationCheckBatchForResult decode_oa_selector_authorization_check_batch_for_result(Reader& r) {
+    if (r.at() != '{') r.refuse("wrong_type");
+    r.enter();
+    ++r.pos;
+    OASelectorAuthorizationCheckBatchForResult v;
+    std::uint32_t seen = 0;
+    r.skip_ws();
+    if (r.at() != '}') {
+        for (;;) {
+            r.skip_ws();
+            if (r.at() != '"') r.refuse("malformed");
+            const std::string key = r.str();
+            r.skip_ws();
+            if (r.at() != ':') r.refuse("malformed");
+            ++r.pos;
+            r.skip_ws();
+            if (key == "value") {
+                if (seen & 1u) r.refuse("duplicate_field");
+                seen |= 1u;
+                v.value = decode_batch_decision(r);
+            } else {
+                r.refuse("unknown_field");
+            }
+            r.skip_ws();
+            if (r.at() != ',') break;
+            ++r.pos;
+        }
+    }
+    if (r.at() != '}') r.refuse("malformed");
+    ++r.pos;
+    --r.depth;
+    if ((seen & 1u) != 1u) r.refuse("missing_field");
+    return v;
+}
+
+inline OASelectorAuthorizationCheckLegacyOperationForResult decode_oa_selector_authorization_check_legacy_operation_for_result(Reader& r) {
+    if (r.at() != '{') r.refuse("wrong_type");
+    r.enter();
+    ++r.pos;
+    OASelectorAuthorizationCheckLegacyOperationForResult v;
+    std::uint32_t seen = 0;
+    r.skip_ws();
+    if (r.at() != '}') {
+        for (;;) {
+            r.skip_ws();
+            if (r.at() != '"') r.refuse("malformed");
+            const std::string key = r.str();
+            r.skip_ws();
+            if (r.at() != ':') r.refuse("malformed");
+            ++r.pos;
+            r.skip_ws();
+            if (key == "value") {
+                if (seen & 1u) r.refuse("duplicate_field");
+                seen |= 1u;
+                v.value = decode_decision(r);
+            } else {
+                r.refuse("unknown_field");
+            }
+            r.skip_ws();
+            if (r.at() != ',') break;
+            ++r.pos;
+        }
+    }
+    if (r.at() != '}') r.refuse("malformed");
+    ++r.pos;
+    --r.depth;
+    if ((seen & 1u) != 1u) r.refuse("missing_field");
+    return v;
+}
+
+inline OASelectorAuthorizationOperatorListSelectorRulesResult decode_oa_selector_authorization_operator_list_selector_rules_result(Reader& r) {
+    if (r.at() != '{') r.refuse("wrong_type");
+    r.enter();
+    ++r.pos;
+    OASelectorAuthorizationOperatorListSelectorRulesResult v;
+    std::uint32_t seen = 0;
+    r.skip_ws();
+    if (r.at() != '}') {
+        for (;;) {
+            r.skip_ws();
+            if (r.at() != '"') r.refuse("malformed");
+            const std::string key = r.str();
+            r.skip_ws();
+            if (r.at() != ':') r.refuse("malformed");
+            ++r.pos;
+            r.skip_ws();
+            if (key == "value") {
+                if (seen & 1u) r.refuse("duplicate_field");
+                seen |= 1u;
+                v.value = decode_selector_rule_page(r);
+            } else {
+                r.refuse("unknown_field");
+            }
+            r.skip_ws();
+            if (r.at() != ',') break;
+            ++r.pos;
+        }
+    }
+    if (r.at() != '}') r.refuse("malformed");
+    ++r.pos;
+    --r.depth;
+    if ((seen & 1u) != 1u) r.refuse("missing_field");
+    return v;
+}
+
+inline OASelectorAuthorizationOperatorReadSelectorRuleResult decode_oa_selector_authorization_operator_read_selector_rule_result(Reader& r) {
+    if (r.at() != '{') r.refuse("wrong_type");
+    r.enter();
+    ++r.pos;
+    OASelectorAuthorizationOperatorReadSelectorRuleResult v;
+    std::uint32_t seen = 0;
+    r.skip_ws();
+    if (r.at() != '}') {
+        for (;;) {
+            r.skip_ws();
+            if (r.at() != '"') r.refuse("malformed");
+            const std::string key = r.str();
+            r.skip_ws();
+            if (r.at() != ':') r.refuse("malformed");
+            ++r.pos;
+            r.skip_ws();
+            if (key == "value") {
+                if (seen & 1u) r.refuse("duplicate_field");
+                seen |= 1u;
+                v.value = decode_selector_rule_read(r);
+            } else {
+                r.refuse("unknown_field");
+            }
+            r.skip_ws();
+            if (r.at() != ',') break;
+            ++r.pos;
+        }
+    }
+    if (r.at() != '}') r.refuse("malformed");
+    ++r.pos;
+    --r.depth;
+    if ((seen & 1u) != 1u) r.refuse("missing_field");
+    return v;
+}
+
+inline OASelectorAuthorizationOperatorSetSelectorRuleResult decode_oa_selector_authorization_operator_set_selector_rule_result(Reader& r) {
+    if (r.at() != '{') r.refuse("wrong_type");
+    r.enter();
+    ++r.pos;
+    OASelectorAuthorizationOperatorSetSelectorRuleResult v;
+    std::uint32_t seen = 0;
+    r.skip_ws();
+    if (r.at() != '}') {
+        for (;;) {
+            r.skip_ws();
+            if (r.at() != '"') r.refuse("malformed");
+            const std::string key = r.str();
+            r.skip_ws();
+            if (r.at() != ':') r.refuse("malformed");
+            ++r.pos;
+            r.skip_ws();
+            if (key == "value") {
+                if (seen & 1u) r.refuse("duplicate_field");
+                seen |= 1u;
+                v.value = decode_selector_edit(r);
+            } else {
+                r.refuse("unknown_field");
+            }
+            r.skip_ws();
+            if (r.at() != ',') break;
+            ++r.pos;
+        }
+    }
+    if (r.at() != '}') r.refuse("malformed");
+    ++r.pos;
+    --r.depth;
+    if ((seen & 1u) != 1u) r.refuse("missing_field");
+    return v;
+}
+
+inline OASelectorAuthorizationOperatorRemoveSelectorRuleResult decode_oa_selector_authorization_operator_remove_selector_rule_result(Reader& r) {
+    if (r.at() != '{') r.refuse("wrong_type");
+    r.enter();
+    ++r.pos;
+    OASelectorAuthorizationOperatorRemoveSelectorRuleResult v;
+    std::uint32_t seen = 0;
+    r.skip_ws();
+    if (r.at() != '}') {
+        for (;;) {
+            r.skip_ws();
+            if (r.at() != '"') r.refuse("malformed");
+            const std::string key = r.str();
+            r.skip_ws();
+            if (r.at() != ':') r.refuse("malformed");
+            ++r.pos;
+            r.skip_ws();
+            if (key == "value") {
+                if (seen & 1u) r.refuse("duplicate_field");
+                seen |= 1u;
+                v.value = decode_selector_edit(r);
+            } else {
+                r.refuse("unknown_field");
+            }
+            r.skip_ws();
+            if (r.at() != ',') break;
+            ++r.pos;
+        }
+    }
+    if (r.at() != '}') r.refuse("malformed");
+    ++r.pos;
+    --r.depth;
+    if ((seen & 1u) != 1u) r.refuse("missing_field");
+    return v;
+}
+
+inline OASelectorAuthorizationOperatorApplyBundleResult decode_oa_selector_authorization_operator_apply_bundle_result(Reader& r) {
+    if (r.at() != '{') r.refuse("wrong_type");
+    r.enter();
+    ++r.pos;
+    OASelectorAuthorizationOperatorApplyBundleResult v;
+    std::uint32_t seen = 0;
+    r.skip_ws();
+    if (r.at() != '}') {
+        for (;;) {
+            r.skip_ws();
+            if (r.at() != '"') r.refuse("malformed");
+            const std::string key = r.str();
+            r.skip_ws();
+            if (r.at() != ':') r.refuse("malformed");
+            ++r.pos;
+            r.skip_ws();
+            if (key == "value") {
+                if (seen & 1u) r.refuse("duplicate_field");
+                seen |= 1u;
+                v.value = decode_selector_edit(r);
+            } else {
+                r.refuse("unknown_field");
+            }
+            r.skip_ws();
+            if (r.at() != ',') break;
+            ++r.pos;
+        }
+    }
+    if (r.at() != '}') r.refuse("malformed");
+    ++r.pos;
+    --r.depth;
+    if ((seen & 1u) != 1u) r.refuse("missing_field");
+    return v;
+}
+
+inline OASelectorAuthorizationOperatorRemoveBundleResult decode_oa_selector_authorization_operator_remove_bundle_result(Reader& r) {
+    if (r.at() != '{') r.refuse("wrong_type");
+    r.enter();
+    ++r.pos;
+    OASelectorAuthorizationOperatorRemoveBundleResult v;
+    std::uint32_t seen = 0;
+    r.skip_ws();
+    if (r.at() != '}') {
+        for (;;) {
+            r.skip_ws();
+            if (r.at() != '"') r.refuse("malformed");
+            const std::string key = r.str();
+            r.skip_ws();
+            if (r.at() != ':') r.refuse("malformed");
+            ++r.pos;
+            r.skip_ws();
+            if (key == "value") {
+                if (seen & 1u) r.refuse("duplicate_field");
+                seen |= 1u;
+                v.value = decode_selector_edit(r);
+            } else {
+                r.refuse("unknown_field");
+            }
+            r.skip_ws();
+            if (r.at() != ',') break;
+            ++r.pos;
+        }
+    }
+    if (r.at() != '}') r.refuse("malformed");
+    ++r.pos;
+    --r.depth;
+    if ((seen & 1u) != 1u) r.refuse("missing_field");
+    return v;
+}
+
+inline OASelectorAuthorizationOperatorApplyPermissionAllowResult decode_oa_selector_authorization_operator_apply_permission_allow_result(Reader& r) {
+    if (r.at() != '{') r.refuse("wrong_type");
+    r.enter();
+    ++r.pos;
+    OASelectorAuthorizationOperatorApplyPermissionAllowResult v;
+    std::uint32_t seen = 0;
+    r.skip_ws();
+    if (r.at() != '}') {
+        for (;;) {
+            r.skip_ws();
+            if (r.at() != '"') r.refuse("malformed");
+            const std::string key = r.str();
+            r.skip_ws();
+            if (r.at() != ':') r.refuse("malformed");
+            ++r.pos;
+            r.skip_ws();
+            if (key == "value") {
+                if (seen & 1u) r.refuse("duplicate_field");
+                seen |= 1u;
+                v.value = decode_selector_edit(r);
+            } else {
+                r.refuse("unknown_field");
+            }
+            r.skip_ws();
+            if (r.at() != ',') break;
+            ++r.pos;
+        }
+    }
+    if (r.at() != '}') r.refuse("malformed");
+    ++r.pos;
+    --r.depth;
+    if ((seen & 1u) != 1u) r.refuse("missing_field");
+    return v;
+}
+
+inline OASelectorAuthorizationOperatorUndoPermissionEffectResult decode_oa_selector_authorization_operator_undo_permission_effect_result(Reader& r) {
+    if (r.at() != '{') r.refuse("wrong_type");
+    r.enter();
+    ++r.pos;
+    OASelectorAuthorizationOperatorUndoPermissionEffectResult v;
+    std::uint32_t seen = 0;
+    r.skip_ws();
+    if (r.at() != '}') {
+        for (;;) {
+            r.skip_ws();
+            if (r.at() != '"') r.refuse("malformed");
+            const std::string key = r.str();
+            r.skip_ws();
+            if (r.at() != ':') r.refuse("malformed");
+            ++r.pos;
+            r.skip_ws();
+            if (key == "value") {
+                if (seen & 1u) r.refuse("duplicate_field");
+                seen |= 1u;
+                v.value = decode_selector_edit(r);
+            } else {
+                r.refuse("unknown_field");
+            }
+            r.skip_ws();
+            if (r.at() != ',') break;
+            ++r.pos;
+        }
+    }
+    if (r.at() != '}') r.refuse("malformed");
+    ++r.pos;
+    --r.depth;
+    if ((seen & 1u) != 1u) r.refuse("missing_field");
+    return v;
+}
+
+inline std::string encode_binary(const std::vector<std::uint8_t>& value){
+ const char* alphabet="ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+ std::string out;
+ for(std::size_t i=0;i<value.size();i+=3){auto n=value.size()-i;std::uint32_t v=std::uint32_t(value[i])<<16;if(n>1)v|=std::uint32_t(value[i+1])<<8;if(n>2)v|=value[i+2];out+=alphabet[v>>18];out+=alphabet[(v>>12)&63];out+=n>1?alphabet[(v>>6)&63]:'=';out+=n>2?alphabet[v&63]:'=';}
+ return out;
+}
+inline std::vector<std::uint8_t> decode_binary(const std::string& text){
+ auto refuse=[](const char* word){throw Refusal(word,0);};
+ const std::string alphabet="ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+ if(text.size()%4)refuse("bad_binary");
+ std::vector<std::uint8_t> out;
+ for(std::size_t i=0;i<text.size();i+=4){std::uint32_t v=0;int pad=0;
+  for(int j=0;j<4;j++){auto c=text[i+j];std::size_t digit=0;
+   if(c=='='){if(j<2||i+4!=text.size())refuse("bad_binary");pad++;}
+   else{if(pad)refuse("bad_binary");digit=alphabet.find(c);if(digit==std::string::npos)refuse("bad_binary");}
+   v=(v<<6)|static_cast<std::uint32_t>(digit);
+  }
+  out.push_back(static_cast<std::uint8_t>(v>>16));if(pad<2)out.push_back(static_cast<std::uint8_t>(v>>8));if(!pad)out.push_back(static_cast<std::uint8_t>(v));
+ }
+ if(encode_binary(out)!=text)refuse("bad_binary");return out;
+}
+
 }  // namespace detail
 
 inline std::string encode(const Request& v) {
@@ -3428,7 +9086,7 @@ inline Request decode(std::string_view data) {
 
 namespace detail {
 // kRefusals is in the order two of them are chosen between.
-inline const std::vector<std::string> kRefusals = {"malformed", "bad_string", "number_spelling", "wrong_type", "depth_exceeded", "duplicate_key", "duplicate_field", "unknown_field", "missing_field", "bad_enum", "trailing_bytes"};
+inline const std::vector<std::string> kRefusals = {"malformed", "bad_string", "number_spelling", "wrong_type", "depth_exceeded", "duplicate_key", "duplicate_field", "unknown_field", "missing_field", "bad_enum", "bad_binary", "trailing_bytes"};
 
 inline int refusal_rank(std::string_view word) {
     for (std::size_t i = 0; i < kRefusals.size(); ++i)
@@ -3490,10 +9148,18 @@ template<class... Services>std::string describe_endpoint(std::string_view frame,
  }catch(const Refusal&e){ServiceError error(e.word,"");return detail::service_reply(v,"",&error);}
 }
 struct Authorization{virtual ~Authorization()=default;
+virtual DescriptionPage list_action_descriptions(const std::string& cursor,const std::int64_t& limit)=0;
 virtual Decision decide(const std::string& action,const std::string& resource)=0;
 virtual Decision decide_for(const Subject& subject,const std::string& action,const std::string& resource)=0;
 };
 template<class Transport>struct AuthorizationClient:Authorization{Transport& transport_;explicit AuthorizationClient(Transport&t):transport_(t){}
+DescriptionPage list_action_descriptions(const std::string& cursor,const std::int64_t& limit)override{detail::OAAuthorizationListActionDescriptionsArguments args;
+args.cursor=cursor;
+args.limit=limit;
+detail::OAServiceFrame v;v.version=1;v.service="abstraction.rights/authorization@1";v.method="ListActionDescriptions";detail::enc_oa_authorization_list_action_descriptions_arguments(v.arguments,args,1);std::string frame;detail::enc_oa_service_frame(frame,v,0);detail::service_payload(frame);
+auto response=transport_.exchange_frame(frame);auto payload=detail::service_response(response,v.service,v.method);detail::Reader r{payload};r.depth=1;r.skip_ws();auto result=detail::decode_oa_authorization_list_action_descriptions_result(r);r.skip_ws();if(r.pos!=r.buf.size())r.refuse("trailing_bytes");
+return result.value;
+}
 Decision decide(const std::string& action,const std::string& resource)override{detail::OAAuthorizationDecideArguments args;
 args.action=action;
 args.resource=resource;
@@ -3517,6 +9183,8 @@ template<class H,class=decltype(static_cast<Authorization&>(*static_cast<H*>(nul
 // This dispatcher's service as abstraction.facade/endpoint@1 Describe lists it.
 DescribedService describe_service()const{DescribedService s{"abstraction.rights/authorization@1",true,std::string()};if(ready_hook_){s.ready=ready_hook_(ready_self_,s.why);if(s.ready)s.why.clear();}return s;}
 void write_frame(std::string_view frame)override{auto v=detail::service_payload(frame);if(v.service!="abstraction.rights/authorization@1")throw DispatchError("unknown_service");
+if(v.method=="ListActionDescriptions"){
+throw DispatchError("wrong_mode");}
 if(v.method=="Decide"){
 throw DispatchError("wrong_mode");}
 if(v.method=="DecideFor"){
@@ -3524,6 +9192,8 @@ throw DispatchError("wrong_mode");}
 throw DispatchError("unknown_method");}
 std::string exchange_frame(std::string_view frame)override{auto v=detail::service_payload(frame);if(v.service==kEndpointContract)return describe_endpoint(frame,std::string(),std::string(),*this);if(v.service!="abstraction.rights/authorization@1"){ServiceError e("unknown_service","");return detail::service_reply(v,"",&e);}
 try{
+if(v.method=="ListActionDescriptions"){
+detail::Reader r{v.arguments};r.depth=1;r.skip_ws();auto args=detail::decode_oa_authorization_list_action_descriptions_arguments(r);r.skip_ws();if(r.pos!=r.buf.size())r.refuse("trailing_bytes");auto payload=invoke_list_action_descriptions(args);return detail::service_reply(v,payload);}
 if(v.method=="Decide"){
 detail::Reader r{v.arguments};r.depth=1;r.skip_ws();auto args=detail::decode_oa_authorization_decide_arguments(r);r.skip_ws();if(r.pos!=r.buf.size())r.refuse("trailing_bytes");auto payload=invoke_decide(args);return detail::service_reply(v,payload);}
 if(v.method=="DecideFor"){
@@ -3531,6 +9201,17 @@ detail::Reader r{v.arguments};r.depth=1;r.skip_ws();auto args=detail::decode_oa_
 throw ServiceError("unknown_method","");}catch(const ServiceError&e){return detail::service_reply(v,"",&e);}catch(const Refusal&e){ServiceError error(e.word,"");return detail::service_reply(v,"",&error);}
 }
 private:
+Raw invoke_list_action_descriptions(const detail::OAAuthorizationListActionDescriptionsArguments&args){
+DescriptionPage result{};
+try{
+result=handler.list_action_descriptions(args.cursor,args.limit);
+}catch(const ServiceError&){throw;}catch(...){throw ServiceError("handler_error","handler failed");}
+try{
+detail::OAAuthorizationListActionDescriptionsResult value;
+value.value=result;
+Raw payload;detail::enc_oa_authorization_list_action_descriptions_result(payload,value,1);detail::Reader r{payload};r.depth=1;r.skip_ws();detail::decode_oa_authorization_list_action_descriptions_result(r);r.skip_ws();if(r.pos!=r.buf.size())r.refuse("trailing_bytes");return payload;
+}catch(...){throw ServiceError("invalid_result","");}
+}
 Raw invoke_decide(const detail::OAAuthorizationDecideArguments&args){
 Decision result{};
 try{
@@ -3558,15 +9239,37 @@ void* ready_self_=nullptr;
 bool(*ready_hook_)(void*,std::string&)=nullptr;
 };
 struct AuthorizationOperator{virtual ~AuthorizationOperator()=default;
+virtual DescriptionEdit register_described_action(const std::string& expected_revision,const ActionDescription& description)=0;
+virtual PolicyEdit apply_first_use_allow(const std::string& expected_revision,const std::string& question_id)=0;
 virtual PolicyPage list_policy(const std::string& cursor,const std::int64_t& limit)=0;
 virtual PolicyEdit set_rule(const std::string& expected_revision,const PolicyRule& rule)=0;
 virtual PolicyEdit revoke_rule(const std::string& expected_revision,const Subject& subject,const std::string& action,const std::string& resource)=0;
+virtual PolicyEdit stop_answerer(const std::string& expected_revision,const Subject& answerer,const bool& also_revoke_grants)=0;
+virtual PolicyEdit revoke_answer_permits(const std::string& expected_revision,const Subject& answerer,const Subject& target,const std::vector<std::string>& actions,const std::string& resource,const std::string& question_id)=0;
 virtual PolicyEdit set_rule_for(const std::string& expected_revision,const PolicyRule& rule,const std::int64_t& ttl_ms,const std::string& why)=0;
+virtual PolicyEdit set_rules_for(const std::string& expected_revision,const std::vector<PolicyRule>& rules,const std::int64_t& ttl_ms,const std::string& why)=0;
 virtual RuleRead read_rule(const Subject& subject,const std::string& action,const std::string& resource)=0;
 virtual ActionEdit register_action(const std::string& expected_revision,const std::string& action)=0;
 virtual ActionEdit retire_action(const std::string& expected_revision,const std::string& action)=0;
+virtual DecisionExplanation explain_for(const Subject& subject,const std::string& action,const std::string& resource)=0;
+virtual DefaultPage list_defaults()=0;
+virtual DefaultEdit set_default(const std::string& expected_revision,const std::string& name,const bool& on)=0;
 };
 template<class Transport>struct AuthorizationOperatorClient:AuthorizationOperator{Transport& transport_;explicit AuthorizationOperatorClient(Transport&t):transport_(t){}
+DescriptionEdit register_described_action(const std::string& expected_revision,const ActionDescription& description)override{detail::OAAuthorizationOperatorRegisterDescribedActionArguments args;
+args.expected_revision=expected_revision;
+args.description=description;
+detail::OAServiceFrame v;v.version=1;v.service="abstraction.rights/operator@1";v.method="RegisterDescribedAction";detail::enc_oa_authorization_operator_register_described_action_arguments(v.arguments,args,1);std::string frame;detail::enc_oa_service_frame(frame,v,0);detail::service_payload(frame);
+auto response=transport_.exchange_frame(frame);auto payload=detail::service_response(response,v.service,v.method);detail::Reader r{payload};r.depth=1;r.skip_ws();auto result=detail::decode_oa_authorization_operator_register_described_action_result(r);r.skip_ws();if(r.pos!=r.buf.size())r.refuse("trailing_bytes");
+return result.value;
+}
+PolicyEdit apply_first_use_allow(const std::string& expected_revision,const std::string& question_id)override{detail::OAAuthorizationOperatorApplyFirstUseAllowArguments args;
+args.expected_revision=expected_revision;
+args.question_id=question_id;
+detail::OAServiceFrame v;v.version=1;v.service="abstraction.rights/operator@1";v.method="ApplyFirstUseAllow";detail::enc_oa_authorization_operator_apply_first_use_allow_arguments(v.arguments,args,1);std::string frame;detail::enc_oa_service_frame(frame,v,0);detail::service_payload(frame);
+auto response=transport_.exchange_frame(frame);auto payload=detail::service_response(response,v.service,v.method);detail::Reader r{payload};r.depth=1;r.skip_ws();auto result=detail::decode_oa_authorization_operator_apply_first_use_allow_result(r);r.skip_ws();if(r.pos!=r.buf.size())r.refuse("trailing_bytes");
+return result.value;
+}
 PolicyPage list_policy(const std::string& cursor,const std::int64_t& limit)override{detail::OAAuthorizationOperatorListPolicyArguments args;
 args.cursor=cursor;
 args.limit=limit;
@@ -3590,6 +9293,25 @@ detail::OAServiceFrame v;v.version=1;v.service="abstraction.rights/operator@1";v
 auto response=transport_.exchange_frame(frame);auto payload=detail::service_response(response,v.service,v.method);detail::Reader r{payload};r.depth=1;r.skip_ws();auto result=detail::decode_oa_authorization_operator_revoke_rule_result(r);r.skip_ws();if(r.pos!=r.buf.size())r.refuse("trailing_bytes");
 return result.value;
 }
+PolicyEdit stop_answerer(const std::string& expected_revision,const Subject& answerer,const bool& also_revoke_grants)override{detail::OAAuthorizationOperatorStopAnswererArguments args;
+args.expected_revision=expected_revision;
+args.answerer=answerer;
+args.also_revoke_grants=also_revoke_grants;
+detail::OAServiceFrame v;v.version=1;v.service="abstraction.rights/operator@1";v.method="StopAnswerer";detail::enc_oa_authorization_operator_stop_answerer_arguments(v.arguments,args,1);std::string frame;detail::enc_oa_service_frame(frame,v,0);detail::service_payload(frame);
+auto response=transport_.exchange_frame(frame);auto payload=detail::service_response(response,v.service,v.method);detail::Reader r{payload};r.depth=1;r.skip_ws();auto result=detail::decode_oa_authorization_operator_stop_answerer_result(r);r.skip_ws();if(r.pos!=r.buf.size())r.refuse("trailing_bytes");
+return result.value;
+}
+PolicyEdit revoke_answer_permits(const std::string& expected_revision,const Subject& answerer,const Subject& target,const std::vector<std::string>& actions,const std::string& resource,const std::string& question_id)override{detail::OAAuthorizationOperatorRevokeAnswerPermitsArguments args;
+args.expected_revision=expected_revision;
+args.answerer=answerer;
+args.target=target;
+args.actions=actions;
+args.resource=resource;
+args.question_id=question_id;
+detail::OAServiceFrame v;v.version=1;v.service="abstraction.rights/operator@1";v.method="RevokeAnswerPermits";detail::enc_oa_authorization_operator_revoke_answer_permits_arguments(v.arguments,args,1);std::string frame;detail::enc_oa_service_frame(frame,v,0);detail::service_payload(frame);
+auto response=transport_.exchange_frame(frame);auto payload=detail::service_response(response,v.service,v.method);detail::Reader r{payload};r.depth=1;r.skip_ws();auto result=detail::decode_oa_authorization_operator_revoke_answer_permits_result(r);r.skip_ws();if(r.pos!=r.buf.size())r.refuse("trailing_bytes");
+return result.value;
+}
 PolicyEdit set_rule_for(const std::string& expected_revision,const PolicyRule& rule,const std::int64_t& ttl_ms,const std::string& why)override{detail::OAAuthorizationOperatorSetRuleForArguments args;
 args.expected_revision=expected_revision;
 args.rule=rule;
@@ -3597,6 +9319,15 @@ args.ttl_ms=ttl_ms;
 args.why=why;
 detail::OAServiceFrame v;v.version=1;v.service="abstraction.rights/operator@1";v.method="SetRuleFor";detail::enc_oa_authorization_operator_set_rule_for_arguments(v.arguments,args,1);std::string frame;detail::enc_oa_service_frame(frame,v,0);detail::service_payload(frame);
 auto response=transport_.exchange_frame(frame);auto payload=detail::service_response(response,v.service,v.method);detail::Reader r{payload};r.depth=1;r.skip_ws();auto result=detail::decode_oa_authorization_operator_set_rule_for_result(r);r.skip_ws();if(r.pos!=r.buf.size())r.refuse("trailing_bytes");
+return result.value;
+}
+PolicyEdit set_rules_for(const std::string& expected_revision,const std::vector<PolicyRule>& rules,const std::int64_t& ttl_ms,const std::string& why)override{detail::OAAuthorizationOperatorSetRulesForArguments args;
+args.expected_revision=expected_revision;
+args.rules=rules;
+args.ttl_ms=ttl_ms;
+args.why=why;
+detail::OAServiceFrame v;v.version=1;v.service="abstraction.rights/operator@1";v.method="SetRulesFor";detail::enc_oa_authorization_operator_set_rules_for_arguments(v.arguments,args,1);std::string frame;detail::enc_oa_service_frame(frame,v,0);detail::service_payload(frame);
+auto response=transport_.exchange_frame(frame);auto payload=detail::service_response(response,v.service,v.method);detail::Reader r{payload};r.depth=1;r.skip_ws();auto result=detail::decode_oa_authorization_operator_set_rules_for_result(r);r.skip_ws();if(r.pos!=r.buf.size())r.refuse("trailing_bytes");
 return result.value;
 }
 RuleRead read_rule(const Subject& subject,const std::string& action,const std::string& resource)override{detail::OAAuthorizationOperatorReadRuleArguments args;
@@ -3621,6 +9352,27 @@ detail::OAServiceFrame v;v.version=1;v.service="abstraction.rights/operator@1";v
 auto response=transport_.exchange_frame(frame);auto payload=detail::service_response(response,v.service,v.method);detail::Reader r{payload};r.depth=1;r.skip_ws();auto result=detail::decode_oa_authorization_operator_retire_action_result(r);r.skip_ws();if(r.pos!=r.buf.size())r.refuse("trailing_bytes");
 return result.value;
 }
+DecisionExplanation explain_for(const Subject& subject,const std::string& action,const std::string& resource)override{detail::OAAuthorizationOperatorExplainForArguments args;
+args.subject=subject;
+args.action=action;
+args.resource=resource;
+detail::OAServiceFrame v;v.version=1;v.service="abstraction.rights/operator@1";v.method="ExplainFor";detail::enc_oa_authorization_operator_explain_for_arguments(v.arguments,args,1);std::string frame;detail::enc_oa_service_frame(frame,v,0);detail::service_payload(frame);
+auto response=transport_.exchange_frame(frame);auto payload=detail::service_response(response,v.service,v.method);detail::Reader r{payload};r.depth=1;r.skip_ws();auto result=detail::decode_oa_authorization_operator_explain_for_result(r);r.skip_ws();if(r.pos!=r.buf.size())r.refuse("trailing_bytes");
+return result.value;
+}
+DefaultPage list_defaults()override{detail::OAAuthorizationOperatorListDefaultsArguments args;
+detail::OAServiceFrame v;v.version=1;v.service="abstraction.rights/operator@1";v.method="ListDefaults";detail::enc_oa_authorization_operator_list_defaults_arguments(v.arguments,args,1);std::string frame;detail::enc_oa_service_frame(frame,v,0);detail::service_payload(frame);
+auto response=transport_.exchange_frame(frame);auto payload=detail::service_response(response,v.service,v.method);detail::Reader r{payload};r.depth=1;r.skip_ws();auto result=detail::decode_oa_authorization_operator_list_defaults_result(r);r.skip_ws();if(r.pos!=r.buf.size())r.refuse("trailing_bytes");
+return result.value;
+}
+DefaultEdit set_default(const std::string& expected_revision,const std::string& name,const bool& on)override{detail::OAAuthorizationOperatorSetDefaultArguments args;
+args.expected_revision=expected_revision;
+args.name=name;
+args.on=on;
+detail::OAServiceFrame v;v.version=1;v.service="abstraction.rights/operator@1";v.method="SetDefault";detail::enc_oa_authorization_operator_set_default_arguments(v.arguments,args,1);std::string frame;detail::enc_oa_service_frame(frame,v,0);detail::service_payload(frame);
+auto response=transport_.exchange_frame(frame);auto payload=detail::service_response(response,v.service,v.method);detail::Reader r{payload};r.depth=1;r.skip_ws();auto result=detail::decode_oa_authorization_operator_set_default_result(r);r.skip_ws();if(r.pos!=r.buf.size())r.refuse("trailing_bytes");
+return result.value;
+}
 };
 struct AuthorizationOperatorService{inline static constexpr std::string_view kWireName="abstraction.rights/operator@1";inline static constexpr std::string_view kCapability="abstraction.rights";template<class Transport>using Client=AuthorizationOperatorClient<Transport>;};
 struct AuthorizationOperatorDispatcher:FrameWriter,FrameExchanger{AuthorizationOperator&handler;explicit AuthorizationOperatorDispatcher(AuthorizationOperator&h):handler(h){}
@@ -3629,13 +9381,23 @@ template<class H,class=decltype(static_cast<AuthorizationOperator&>(*static_cast
 // This dispatcher's service as abstraction.facade/endpoint@1 Describe lists it.
 DescribedService describe_service()const{DescribedService s{"abstraction.rights/operator@1",true,std::string()};if(ready_hook_){s.ready=ready_hook_(ready_self_,s.why);if(s.ready)s.why.clear();}return s;}
 void write_frame(std::string_view frame)override{auto v=detail::service_payload(frame);if(v.service!="abstraction.rights/operator@1")throw DispatchError("unknown_service");
+if(v.method=="RegisterDescribedAction"){
+throw DispatchError("wrong_mode");}
+if(v.method=="ApplyFirstUseAllow"){
+throw DispatchError("wrong_mode");}
 if(v.method=="ListPolicy"){
 throw DispatchError("wrong_mode");}
 if(v.method=="SetRule"){
 throw DispatchError("wrong_mode");}
 if(v.method=="RevokeRule"){
 throw DispatchError("wrong_mode");}
+if(v.method=="StopAnswerer"){
+throw DispatchError("wrong_mode");}
+if(v.method=="RevokeAnswerPermits"){
+throw DispatchError("wrong_mode");}
 if(v.method=="SetRuleFor"){
+throw DispatchError("wrong_mode");}
+if(v.method=="SetRulesFor"){
 throw DispatchError("wrong_mode");}
 if(v.method=="ReadRule"){
 throw DispatchError("wrong_mode");}
@@ -3643,26 +9405,70 @@ if(v.method=="RegisterAction"){
 throw DispatchError("wrong_mode");}
 if(v.method=="RetireAction"){
 throw DispatchError("wrong_mode");}
+if(v.method=="ExplainFor"){
+throw DispatchError("wrong_mode");}
+if(v.method=="ListDefaults"){
+throw DispatchError("wrong_mode");}
+if(v.method=="SetDefault"){
+throw DispatchError("wrong_mode");}
 throw DispatchError("unknown_method");}
 std::string exchange_frame(std::string_view frame)override{auto v=detail::service_payload(frame);if(v.service==kEndpointContract)return describe_endpoint(frame,std::string(),std::string(),*this);if(v.service!="abstraction.rights/operator@1"){ServiceError e("unknown_service","");return detail::service_reply(v,"",&e);}
 try{
+if(v.method=="RegisterDescribedAction"){
+detail::Reader r{v.arguments};r.depth=1;r.skip_ws();auto args=detail::decode_oa_authorization_operator_register_described_action_arguments(r);r.skip_ws();if(r.pos!=r.buf.size())r.refuse("trailing_bytes");auto payload=invoke_register_described_action(args);return detail::service_reply(v,payload);}
+if(v.method=="ApplyFirstUseAllow"){
+detail::Reader r{v.arguments};r.depth=1;r.skip_ws();auto args=detail::decode_oa_authorization_operator_apply_first_use_allow_arguments(r);r.skip_ws();if(r.pos!=r.buf.size())r.refuse("trailing_bytes");auto payload=invoke_apply_first_use_allow(args);return detail::service_reply(v,payload);}
 if(v.method=="ListPolicy"){
 detail::Reader r{v.arguments};r.depth=1;r.skip_ws();auto args=detail::decode_oa_authorization_operator_list_policy_arguments(r);r.skip_ws();if(r.pos!=r.buf.size())r.refuse("trailing_bytes");auto payload=invoke_list_policy(args);return detail::service_reply(v,payload);}
 if(v.method=="SetRule"){
 detail::Reader r{v.arguments};r.depth=1;r.skip_ws();auto args=detail::decode_oa_authorization_operator_set_rule_arguments(r);r.skip_ws();if(r.pos!=r.buf.size())r.refuse("trailing_bytes");auto payload=invoke_set_rule(args);return detail::service_reply(v,payload);}
 if(v.method=="RevokeRule"){
 detail::Reader r{v.arguments};r.depth=1;r.skip_ws();auto args=detail::decode_oa_authorization_operator_revoke_rule_arguments(r);r.skip_ws();if(r.pos!=r.buf.size())r.refuse("trailing_bytes");auto payload=invoke_revoke_rule(args);return detail::service_reply(v,payload);}
+if(v.method=="StopAnswerer"){
+detail::Reader r{v.arguments};r.depth=1;r.skip_ws();auto args=detail::decode_oa_authorization_operator_stop_answerer_arguments(r);r.skip_ws();if(r.pos!=r.buf.size())r.refuse("trailing_bytes");auto payload=invoke_stop_answerer(args);return detail::service_reply(v,payload);}
+if(v.method=="RevokeAnswerPermits"){
+detail::Reader r{v.arguments};r.depth=1;r.skip_ws();auto args=detail::decode_oa_authorization_operator_revoke_answer_permits_arguments(r);r.skip_ws();if(r.pos!=r.buf.size())r.refuse("trailing_bytes");auto payload=invoke_revoke_answer_permits(args);return detail::service_reply(v,payload);}
 if(v.method=="SetRuleFor"){
 detail::Reader r{v.arguments};r.depth=1;r.skip_ws();auto args=detail::decode_oa_authorization_operator_set_rule_for_arguments(r);r.skip_ws();if(r.pos!=r.buf.size())r.refuse("trailing_bytes");auto payload=invoke_set_rule_for(args);return detail::service_reply(v,payload);}
+if(v.method=="SetRulesFor"){
+detail::Reader r{v.arguments};r.depth=1;r.skip_ws();auto args=detail::decode_oa_authorization_operator_set_rules_for_arguments(r);r.skip_ws();if(r.pos!=r.buf.size())r.refuse("trailing_bytes");auto payload=invoke_set_rules_for(args);return detail::service_reply(v,payload);}
 if(v.method=="ReadRule"){
 detail::Reader r{v.arguments};r.depth=1;r.skip_ws();auto args=detail::decode_oa_authorization_operator_read_rule_arguments(r);r.skip_ws();if(r.pos!=r.buf.size())r.refuse("trailing_bytes");auto payload=invoke_read_rule(args);return detail::service_reply(v,payload);}
 if(v.method=="RegisterAction"){
 detail::Reader r{v.arguments};r.depth=1;r.skip_ws();auto args=detail::decode_oa_authorization_operator_register_action_arguments(r);r.skip_ws();if(r.pos!=r.buf.size())r.refuse("trailing_bytes");auto payload=invoke_register_action(args);return detail::service_reply(v,payload);}
 if(v.method=="RetireAction"){
 detail::Reader r{v.arguments};r.depth=1;r.skip_ws();auto args=detail::decode_oa_authorization_operator_retire_action_arguments(r);r.skip_ws();if(r.pos!=r.buf.size())r.refuse("trailing_bytes");auto payload=invoke_retire_action(args);return detail::service_reply(v,payload);}
+if(v.method=="ExplainFor"){
+detail::Reader r{v.arguments};r.depth=1;r.skip_ws();auto args=detail::decode_oa_authorization_operator_explain_for_arguments(r);r.skip_ws();if(r.pos!=r.buf.size())r.refuse("trailing_bytes");auto payload=invoke_explain_for(args);return detail::service_reply(v,payload);}
+if(v.method=="ListDefaults"){
+detail::Reader r{v.arguments};r.depth=1;r.skip_ws();auto args=detail::decode_oa_authorization_operator_list_defaults_arguments(r);r.skip_ws();if(r.pos!=r.buf.size())r.refuse("trailing_bytes");auto payload=invoke_list_defaults(args);return detail::service_reply(v,payload);}
+if(v.method=="SetDefault"){
+detail::Reader r{v.arguments};r.depth=1;r.skip_ws();auto args=detail::decode_oa_authorization_operator_set_default_arguments(r);r.skip_ws();if(r.pos!=r.buf.size())r.refuse("trailing_bytes");auto payload=invoke_set_default(args);return detail::service_reply(v,payload);}
 throw ServiceError("unknown_method","");}catch(const ServiceError&e){return detail::service_reply(v,"",&e);}catch(const Refusal&e){ServiceError error(e.word,"");return detail::service_reply(v,"",&error);}
 }
 private:
+Raw invoke_register_described_action(const detail::OAAuthorizationOperatorRegisterDescribedActionArguments&args){
+DescriptionEdit result{};
+try{
+result=handler.register_described_action(args.expected_revision,args.description);
+}catch(const ServiceError&){throw;}catch(...){throw ServiceError("handler_error","handler failed");}
+try{
+detail::OAAuthorizationOperatorRegisterDescribedActionResult value;
+value.value=result;
+Raw payload;detail::enc_oa_authorization_operator_register_described_action_result(payload,value,1);detail::Reader r{payload};r.depth=1;r.skip_ws();detail::decode_oa_authorization_operator_register_described_action_result(r);r.skip_ws();if(r.pos!=r.buf.size())r.refuse("trailing_bytes");return payload;
+}catch(...){throw ServiceError("invalid_result","");}
+}
+Raw invoke_apply_first_use_allow(const detail::OAAuthorizationOperatorApplyFirstUseAllowArguments&args){
+PolicyEdit result{};
+try{
+result=handler.apply_first_use_allow(args.expected_revision,args.question_id);
+}catch(const ServiceError&){throw;}catch(...){throw ServiceError("handler_error","handler failed");}
+try{
+detail::OAAuthorizationOperatorApplyFirstUseAllowResult value;
+value.value=result;
+Raw payload;detail::enc_oa_authorization_operator_apply_first_use_allow_result(payload,value,1);detail::Reader r{payload};r.depth=1;r.skip_ws();detail::decode_oa_authorization_operator_apply_first_use_allow_result(r);r.skip_ws();if(r.pos!=r.buf.size())r.refuse("trailing_bytes");return payload;
+}catch(...){throw ServiceError("invalid_result","");}
+}
 Raw invoke_list_policy(const detail::OAAuthorizationOperatorListPolicyArguments&args){
 PolicyPage result{};
 try{
@@ -3696,6 +9502,28 @@ value.value=result;
 Raw payload;detail::enc_oa_authorization_operator_revoke_rule_result(payload,value,1);detail::Reader r{payload};r.depth=1;r.skip_ws();detail::decode_oa_authorization_operator_revoke_rule_result(r);r.skip_ws();if(r.pos!=r.buf.size())r.refuse("trailing_bytes");return payload;
 }catch(...){throw ServiceError("invalid_result","");}
 }
+Raw invoke_stop_answerer(const detail::OAAuthorizationOperatorStopAnswererArguments&args){
+PolicyEdit result{};
+try{
+result=handler.stop_answerer(args.expected_revision,args.answerer,args.also_revoke_grants);
+}catch(const ServiceError&){throw;}catch(...){throw ServiceError("handler_error","handler failed");}
+try{
+detail::OAAuthorizationOperatorStopAnswererResult value;
+value.value=result;
+Raw payload;detail::enc_oa_authorization_operator_stop_answerer_result(payload,value,1);detail::Reader r{payload};r.depth=1;r.skip_ws();detail::decode_oa_authorization_operator_stop_answerer_result(r);r.skip_ws();if(r.pos!=r.buf.size())r.refuse("trailing_bytes");return payload;
+}catch(...){throw ServiceError("invalid_result","");}
+}
+Raw invoke_revoke_answer_permits(const detail::OAAuthorizationOperatorRevokeAnswerPermitsArguments&args){
+PolicyEdit result{};
+try{
+result=handler.revoke_answer_permits(args.expected_revision,args.answerer,args.target,args.actions,args.resource,args.question_id);
+}catch(const ServiceError&){throw;}catch(...){throw ServiceError("handler_error","handler failed");}
+try{
+detail::OAAuthorizationOperatorRevokeAnswerPermitsResult value;
+value.value=result;
+Raw payload;detail::enc_oa_authorization_operator_revoke_answer_permits_result(payload,value,1);detail::Reader r{payload};r.depth=1;r.skip_ws();detail::decode_oa_authorization_operator_revoke_answer_permits_result(r);r.skip_ws();if(r.pos!=r.buf.size())r.refuse("trailing_bytes");return payload;
+}catch(...){throw ServiceError("invalid_result","");}
+}
 Raw invoke_set_rule_for(const detail::OAAuthorizationOperatorSetRuleForArguments&args){
 PolicyEdit result{};
 try{
@@ -3705,6 +9533,17 @@ try{
 detail::OAAuthorizationOperatorSetRuleForResult value;
 value.value=result;
 Raw payload;detail::enc_oa_authorization_operator_set_rule_for_result(payload,value,1);detail::Reader r{payload};r.depth=1;r.skip_ws();detail::decode_oa_authorization_operator_set_rule_for_result(r);r.skip_ws();if(r.pos!=r.buf.size())r.refuse("trailing_bytes");return payload;
+}catch(...){throw ServiceError("invalid_result","");}
+}
+Raw invoke_set_rules_for(const detail::OAAuthorizationOperatorSetRulesForArguments&args){
+PolicyEdit result{};
+try{
+result=handler.set_rules_for(args.expected_revision,args.rules,args.ttl_ms,args.why);
+}catch(const ServiceError&){throw;}catch(...){throw ServiceError("handler_error","handler failed");}
+try{
+detail::OAAuthorizationOperatorSetRulesForResult value;
+value.value=result;
+Raw payload;detail::enc_oa_authorization_operator_set_rules_for_result(payload,value,1);detail::Reader r{payload};r.depth=1;r.skip_ws();detail::decode_oa_authorization_operator_set_rules_for_result(r);r.skip_ws();if(r.pos!=r.buf.size())r.refuse("trailing_bytes");return payload;
 }catch(...){throw ServiceError("invalid_result","");}
 }
 Raw invoke_read_rule(const detail::OAAuthorizationOperatorReadRuleArguments&args){
@@ -3740,9 +9579,678 @@ value.value=result;
 Raw payload;detail::enc_oa_authorization_operator_retire_action_result(payload,value,1);detail::Reader r{payload};r.depth=1;r.skip_ws();detail::decode_oa_authorization_operator_retire_action_result(r);r.skip_ws();if(r.pos!=r.buf.size())r.refuse("trailing_bytes");return payload;
 }catch(...){throw ServiceError("invalid_result","");}
 }
+Raw invoke_explain_for(const detail::OAAuthorizationOperatorExplainForArguments&args){
+DecisionExplanation result{};
+try{
+result=handler.explain_for(args.subject,args.action,args.resource);
+}catch(const ServiceError&){throw;}catch(...){throw ServiceError("handler_error","handler failed");}
+try{
+detail::OAAuthorizationOperatorExplainForResult value;
+value.value=result;
+Raw payload;detail::enc_oa_authorization_operator_explain_for_result(payload,value,1);detail::Reader r{payload};r.depth=1;r.skip_ws();detail::decode_oa_authorization_operator_explain_for_result(r);r.skip_ws();if(r.pos!=r.buf.size())r.refuse("trailing_bytes");return payload;
+}catch(...){throw ServiceError("invalid_result","");}
+}
+Raw invoke_list_defaults(const detail::OAAuthorizationOperatorListDefaultsArguments&args){
+(void)args;
+DefaultPage result{};
+try{
+result=handler.list_defaults();
+}catch(const ServiceError&){throw;}catch(...){throw ServiceError("handler_error","handler failed");}
+try{
+detail::OAAuthorizationOperatorListDefaultsResult value;
+value.value=result;
+Raw payload;detail::enc_oa_authorization_operator_list_defaults_result(payload,value,1);detail::Reader r{payload};r.depth=1;r.skip_ws();detail::decode_oa_authorization_operator_list_defaults_result(r);r.skip_ws();if(r.pos!=r.buf.size())r.refuse("trailing_bytes");return payload;
+}catch(...){throw ServiceError("invalid_result","");}
+}
+Raw invoke_set_default(const detail::OAAuthorizationOperatorSetDefaultArguments&args){
+DefaultEdit result{};
+try{
+result=handler.set_default(args.expected_revision,args.name,args.on);
+}catch(const ServiceError&){throw;}catch(...){throw ServiceError("handler_error","handler failed");}
+try{
+detail::OAAuthorizationOperatorSetDefaultResult value;
+value.value=result;
+Raw payload;detail::enc_oa_authorization_operator_set_default_result(payload,value,1);detail::Reader r{payload};r.depth=1;r.skip_ws();detail::decode_oa_authorization_operator_set_default_result(r);r.skip_ws();if(r.pos!=r.buf.size())r.refuse("trailing_bytes");return payload;
+}catch(...){throw ServiceError("invalid_result","");}
+}
 private:
 void* ready_self_=nullptr;
 bool(*ready_hook_)(void*,std::string&)=nullptr;
 };
+struct SelectorAuthorization{virtual ~SelectorAuthorization()=default;
+virtual PermissionDefinitionPage list_permission_definitions(const std::string& cursor,const std::int64_t& limit)=0;
+virtual PermissionBundlePage list_permission_bundles(const std::string& cursor,const std::int64_t& limit)=0;
+virtual BatchDecision check_batch(const CheckBatchRequest& request)=0;
+virtual BatchDecision check_batch_for(const Subject& subject,const CheckBatchRequest& request)=0;
+virtual Decision check_legacy_operation_for(const Subject& subject,const LegacyOperationRequest& request)=0;
+};
+template<class Transport>struct SelectorAuthorizationClient:SelectorAuthorization{Transport& transport_;explicit SelectorAuthorizationClient(Transport&t):transport_(t){}
+PermissionDefinitionPage list_permission_definitions(const std::string& cursor,const std::int64_t& limit)override{detail::OASelectorAuthorizationListPermissionDefinitionsArguments args;
+args.cursor=cursor;
+args.limit=limit;
+detail::OAServiceFrame v;v.version=1;v.service="abstraction.rights/authorization@2";v.method="ListPermissionDefinitions";detail::enc_oa_selector_authorization_list_permission_definitions_arguments(v.arguments,args,1);std::string frame;detail::enc_oa_service_frame(frame,v,0);detail::service_payload(frame);
+auto response=transport_.exchange_frame(frame);auto payload=detail::service_response(response,v.service,v.method);detail::Reader r{payload};r.depth=1;r.skip_ws();auto result=detail::decode_oa_selector_authorization_list_permission_definitions_result(r);r.skip_ws();if(r.pos!=r.buf.size())r.refuse("trailing_bytes");
+return result.value;
+}
+PermissionBundlePage list_permission_bundles(const std::string& cursor,const std::int64_t& limit)override{detail::OASelectorAuthorizationListPermissionBundlesArguments args;
+args.cursor=cursor;
+args.limit=limit;
+detail::OAServiceFrame v;v.version=1;v.service="abstraction.rights/authorization@2";v.method="ListPermissionBundles";detail::enc_oa_selector_authorization_list_permission_bundles_arguments(v.arguments,args,1);std::string frame;detail::enc_oa_service_frame(frame,v,0);detail::service_payload(frame);
+auto response=transport_.exchange_frame(frame);auto payload=detail::service_response(response,v.service,v.method);detail::Reader r{payload};r.depth=1;r.skip_ws();auto result=detail::decode_oa_selector_authorization_list_permission_bundles_result(r);r.skip_ws();if(r.pos!=r.buf.size())r.refuse("trailing_bytes");
+return result.value;
+}
+BatchDecision check_batch(const CheckBatchRequest& request)override{detail::OASelectorAuthorizationCheckBatchArguments args;
+args.request=request;
+detail::OAServiceFrame v;v.version=1;v.service="abstraction.rights/authorization@2";v.method="CheckBatch";detail::enc_oa_selector_authorization_check_batch_arguments(v.arguments,args,1);std::string frame;detail::enc_oa_service_frame(frame,v,0);detail::service_payload(frame);
+auto response=transport_.exchange_frame(frame);auto payload=detail::service_response(response,v.service,v.method);detail::Reader r{payload};r.depth=1;r.skip_ws();auto result=detail::decode_oa_selector_authorization_check_batch_result(r);r.skip_ws();if(r.pos!=r.buf.size())r.refuse("trailing_bytes");
+return result.value;
+}
+BatchDecision check_batch_for(const Subject& subject,const CheckBatchRequest& request)override{detail::OASelectorAuthorizationCheckBatchForArguments args;
+args.subject=subject;
+args.request=request;
+detail::OAServiceFrame v;v.version=1;v.service="abstraction.rights/authorization@2";v.method="CheckBatchFor";detail::enc_oa_selector_authorization_check_batch_for_arguments(v.arguments,args,1);std::string frame;detail::enc_oa_service_frame(frame,v,0);detail::service_payload(frame);
+auto response=transport_.exchange_frame(frame);auto payload=detail::service_response(response,v.service,v.method);detail::Reader r{payload};r.depth=1;r.skip_ws();auto result=detail::decode_oa_selector_authorization_check_batch_for_result(r);r.skip_ws();if(r.pos!=r.buf.size())r.refuse("trailing_bytes");
+return result.value;
+}
+Decision check_legacy_operation_for(const Subject& subject,const LegacyOperationRequest& request)override{detail::OASelectorAuthorizationCheckLegacyOperationForArguments args;
+args.subject=subject;
+args.request=request;
+detail::OAServiceFrame v;v.version=1;v.service="abstraction.rights/authorization@2";v.method="CheckLegacyOperationFor";detail::enc_oa_selector_authorization_check_legacy_operation_for_arguments(v.arguments,args,1);std::string frame;detail::enc_oa_service_frame(frame,v,0);detail::service_payload(frame);
+auto response=transport_.exchange_frame(frame);auto payload=detail::service_response(response,v.service,v.method);detail::Reader r{payload};r.depth=1;r.skip_ws();auto result=detail::decode_oa_selector_authorization_check_legacy_operation_for_result(r);r.skip_ws();if(r.pos!=r.buf.size())r.refuse("trailing_bytes");
+return result.value;
+}
+};
+struct SelectorAuthorizationService{inline static constexpr std::string_view kWireName="abstraction.rights/authorization@2";inline static constexpr std::string_view kCapability="abstraction.rights";template<class Transport>using Client=SelectorAuthorizationClient<Transport>;};
+struct SelectorAuthorizationDispatcher:FrameWriter,FrameExchanger{SelectorAuthorization&handler;explicit SelectorAuthorizationDispatcher(SelectorAuthorization&h):handler(h){}
+// A handler whose own type has ready(), returning a pair of bool and std::string, reports its readiness through describe_service.
+template<class H,class=decltype(static_cast<SelectorAuthorization&>(*static_cast<H*>(nullptr)))>explicit SelectorAuthorizationDispatcher(H&h):handler(h),ready_self_(&h),ready_hook_(detail::ready_hook<H>(0)){}
+// This dispatcher's service as abstraction.facade/endpoint@1 Describe lists it.
+DescribedService describe_service()const{DescribedService s{"abstraction.rights/authorization@2",true,std::string()};if(ready_hook_){s.ready=ready_hook_(ready_self_,s.why);if(s.ready)s.why.clear();}return s;}
+void write_frame(std::string_view frame)override{auto v=detail::service_payload(frame);if(v.service!="abstraction.rights/authorization@2")throw DispatchError("unknown_service");
+if(v.method=="ListPermissionDefinitions"){
+throw DispatchError("wrong_mode");}
+if(v.method=="ListPermissionBundles"){
+throw DispatchError("wrong_mode");}
+if(v.method=="CheckBatch"){
+throw DispatchError("wrong_mode");}
+if(v.method=="CheckBatchFor"){
+throw DispatchError("wrong_mode");}
+if(v.method=="CheckLegacyOperationFor"){
+throw DispatchError("wrong_mode");}
+throw DispatchError("unknown_method");}
+std::string exchange_frame(std::string_view frame)override{auto v=detail::service_payload(frame);if(v.service==kEndpointContract)return describe_endpoint(frame,std::string(),std::string(),*this);if(v.service!="abstraction.rights/authorization@2"){ServiceError e("unknown_service","");return detail::service_reply(v,"",&e);}
+try{
+if(v.method=="ListPermissionDefinitions"){
+detail::Reader r{v.arguments};r.depth=1;r.skip_ws();auto args=detail::decode_oa_selector_authorization_list_permission_definitions_arguments(r);r.skip_ws();if(r.pos!=r.buf.size())r.refuse("trailing_bytes");auto payload=invoke_list_permission_definitions(args);return detail::service_reply(v,payload);}
+if(v.method=="ListPermissionBundles"){
+detail::Reader r{v.arguments};r.depth=1;r.skip_ws();auto args=detail::decode_oa_selector_authorization_list_permission_bundles_arguments(r);r.skip_ws();if(r.pos!=r.buf.size())r.refuse("trailing_bytes");auto payload=invoke_list_permission_bundles(args);return detail::service_reply(v,payload);}
+if(v.method=="CheckBatch"){
+detail::Reader r{v.arguments};r.depth=1;r.skip_ws();auto args=detail::decode_oa_selector_authorization_check_batch_arguments(r);r.skip_ws();if(r.pos!=r.buf.size())r.refuse("trailing_bytes");auto payload=invoke_check_batch(args);return detail::service_reply(v,payload);}
+if(v.method=="CheckBatchFor"){
+detail::Reader r{v.arguments};r.depth=1;r.skip_ws();auto args=detail::decode_oa_selector_authorization_check_batch_for_arguments(r);r.skip_ws();if(r.pos!=r.buf.size())r.refuse("trailing_bytes");auto payload=invoke_check_batch_for(args);return detail::service_reply(v,payload);}
+if(v.method=="CheckLegacyOperationFor"){
+detail::Reader r{v.arguments};r.depth=1;r.skip_ws();auto args=detail::decode_oa_selector_authorization_check_legacy_operation_for_arguments(r);r.skip_ws();if(r.pos!=r.buf.size())r.refuse("trailing_bytes");auto payload=invoke_check_legacy_operation_for(args);return detail::service_reply(v,payload);}
+throw ServiceError("unknown_method","");}catch(const ServiceError&e){return detail::service_reply(v,"",&e);}catch(const Refusal&e){ServiceError error(e.word,"");return detail::service_reply(v,"",&error);}
+}
+private:
+Raw invoke_list_permission_definitions(const detail::OASelectorAuthorizationListPermissionDefinitionsArguments&args){
+PermissionDefinitionPage result{};
+try{
+result=handler.list_permission_definitions(args.cursor,args.limit);
+}catch(const ServiceError&){throw;}catch(...){throw ServiceError("handler_error","handler failed");}
+try{
+detail::OASelectorAuthorizationListPermissionDefinitionsResult value;
+value.value=result;
+Raw payload;detail::enc_oa_selector_authorization_list_permission_definitions_result(payload,value,1);detail::Reader r{payload};r.depth=1;r.skip_ws();detail::decode_oa_selector_authorization_list_permission_definitions_result(r);r.skip_ws();if(r.pos!=r.buf.size())r.refuse("trailing_bytes");return payload;
+}catch(...){throw ServiceError("invalid_result","");}
+}
+Raw invoke_list_permission_bundles(const detail::OASelectorAuthorizationListPermissionBundlesArguments&args){
+PermissionBundlePage result{};
+try{
+result=handler.list_permission_bundles(args.cursor,args.limit);
+}catch(const ServiceError&){throw;}catch(...){throw ServiceError("handler_error","handler failed");}
+try{
+detail::OASelectorAuthorizationListPermissionBundlesResult value;
+value.value=result;
+Raw payload;detail::enc_oa_selector_authorization_list_permission_bundles_result(payload,value,1);detail::Reader r{payload};r.depth=1;r.skip_ws();detail::decode_oa_selector_authorization_list_permission_bundles_result(r);r.skip_ws();if(r.pos!=r.buf.size())r.refuse("trailing_bytes");return payload;
+}catch(...){throw ServiceError("invalid_result","");}
+}
+Raw invoke_check_batch(const detail::OASelectorAuthorizationCheckBatchArguments&args){
+BatchDecision result{};
+try{
+result=handler.check_batch(args.request);
+}catch(const ServiceError&){throw;}catch(...){throw ServiceError("handler_error","handler failed");}
+try{
+detail::OASelectorAuthorizationCheckBatchResult value;
+value.value=result;
+Raw payload;detail::enc_oa_selector_authorization_check_batch_result(payload,value,1);detail::Reader r{payload};r.depth=1;r.skip_ws();detail::decode_oa_selector_authorization_check_batch_result(r);r.skip_ws();if(r.pos!=r.buf.size())r.refuse("trailing_bytes");return payload;
+}catch(...){throw ServiceError("invalid_result","");}
+}
+Raw invoke_check_batch_for(const detail::OASelectorAuthorizationCheckBatchForArguments&args){
+BatchDecision result{};
+try{
+result=handler.check_batch_for(args.subject,args.request);
+}catch(const ServiceError&){throw;}catch(...){throw ServiceError("handler_error","handler failed");}
+try{
+detail::OASelectorAuthorizationCheckBatchForResult value;
+value.value=result;
+Raw payload;detail::enc_oa_selector_authorization_check_batch_for_result(payload,value,1);detail::Reader r{payload};r.depth=1;r.skip_ws();detail::decode_oa_selector_authorization_check_batch_for_result(r);r.skip_ws();if(r.pos!=r.buf.size())r.refuse("trailing_bytes");return payload;
+}catch(...){throw ServiceError("invalid_result","");}
+}
+Raw invoke_check_legacy_operation_for(const detail::OASelectorAuthorizationCheckLegacyOperationForArguments&args){
+Decision result{};
+try{
+result=handler.check_legacy_operation_for(args.subject,args.request);
+}catch(const ServiceError&){throw;}catch(...){throw ServiceError("handler_error","handler failed");}
+try{
+detail::OASelectorAuthorizationCheckLegacyOperationForResult value;
+value.value=result;
+Raw payload;detail::enc_oa_selector_authorization_check_legacy_operation_for_result(payload,value,1);detail::Reader r{payload};r.depth=1;r.skip_ws();detail::decode_oa_selector_authorization_check_legacy_operation_for_result(r);r.skip_ws();if(r.pos!=r.buf.size())r.refuse("trailing_bytes");return payload;
+}catch(...){throw ServiceError("invalid_result","");}
+}
+private:
+void* ready_self_=nullptr;
+bool(*ready_hook_)(void*,std::string&)=nullptr;
+};
+struct SelectorAuthorizationOperator{virtual ~SelectorAuthorizationOperator()=default;
+virtual SelectorRulePage list_selector_rules(const std::string& cursor,const std::int64_t& limit)=0;
+virtual SelectorRuleRead read_selector_rule(const Subject& subject,const PermissionSelection& selection)=0;
+virtual SelectorEdit set_selector_rule(const std::string& expected_revision,const SelectorRule& rule,const std::int64_t& ttl_ms,const std::string& why)=0;
+virtual SelectorEdit remove_selector_rule(const std::string& expected_revision,const Subject& subject,const PermissionSelection& selection)=0;
+virtual SelectorEdit apply_bundle(const std::string& expected_revision,const Subject& subject,const std::string& bundle_ref,const ResourceSelector& selector,const std::int64_t& ttl_ms,const std::string& why)=0;
+virtual SelectorEdit remove_bundle(const std::string& expected_revision,const Subject& subject,const std::string& origin_id)=0;
+virtual SelectorEdit apply_permission_allow(const std::string& expected_revision,const std::string& question_id)=0;
+virtual SelectorEdit undo_permission_effect(const std::string& expected_revision,const std::string& question_id)=0;
+};
+template<class Transport>struct SelectorAuthorizationOperatorClient:SelectorAuthorizationOperator{Transport& transport_;explicit SelectorAuthorizationOperatorClient(Transport&t):transport_(t){}
+SelectorRulePage list_selector_rules(const std::string& cursor,const std::int64_t& limit)override{detail::OASelectorAuthorizationOperatorListSelectorRulesArguments args;
+args.cursor=cursor;
+args.limit=limit;
+detail::OAServiceFrame v;v.version=1;v.service="abstraction.rights/operator@2";v.method="ListSelectorRules";detail::enc_oa_selector_authorization_operator_list_selector_rules_arguments(v.arguments,args,1);std::string frame;detail::enc_oa_service_frame(frame,v,0);detail::service_payload(frame);
+auto response=transport_.exchange_frame(frame);auto payload=detail::service_response(response,v.service,v.method);detail::Reader r{payload};r.depth=1;r.skip_ws();auto result=detail::decode_oa_selector_authorization_operator_list_selector_rules_result(r);r.skip_ws();if(r.pos!=r.buf.size())r.refuse("trailing_bytes");
+return result.value;
+}
+SelectorRuleRead read_selector_rule(const Subject& subject,const PermissionSelection& selection)override{detail::OASelectorAuthorizationOperatorReadSelectorRuleArguments args;
+args.subject=subject;
+args.selection=selection;
+detail::OAServiceFrame v;v.version=1;v.service="abstraction.rights/operator@2";v.method="ReadSelectorRule";detail::enc_oa_selector_authorization_operator_read_selector_rule_arguments(v.arguments,args,1);std::string frame;detail::enc_oa_service_frame(frame,v,0);detail::service_payload(frame);
+auto response=transport_.exchange_frame(frame);auto payload=detail::service_response(response,v.service,v.method);detail::Reader r{payload};r.depth=1;r.skip_ws();auto result=detail::decode_oa_selector_authorization_operator_read_selector_rule_result(r);r.skip_ws();if(r.pos!=r.buf.size())r.refuse("trailing_bytes");
+return result.value;
+}
+SelectorEdit set_selector_rule(const std::string& expected_revision,const SelectorRule& rule,const std::int64_t& ttl_ms,const std::string& why)override{detail::OASelectorAuthorizationOperatorSetSelectorRuleArguments args;
+args.expected_revision=expected_revision;
+args.rule=rule;
+args.ttl_ms=ttl_ms;
+args.why=why;
+detail::OAServiceFrame v;v.version=1;v.service="abstraction.rights/operator@2";v.method="SetSelectorRule";detail::enc_oa_selector_authorization_operator_set_selector_rule_arguments(v.arguments,args,1);std::string frame;detail::enc_oa_service_frame(frame,v,0);detail::service_payload(frame);
+auto response=transport_.exchange_frame(frame);auto payload=detail::service_response(response,v.service,v.method);detail::Reader r{payload};r.depth=1;r.skip_ws();auto result=detail::decode_oa_selector_authorization_operator_set_selector_rule_result(r);r.skip_ws();if(r.pos!=r.buf.size())r.refuse("trailing_bytes");
+return result.value;
+}
+SelectorEdit remove_selector_rule(const std::string& expected_revision,const Subject& subject,const PermissionSelection& selection)override{detail::OASelectorAuthorizationOperatorRemoveSelectorRuleArguments args;
+args.expected_revision=expected_revision;
+args.subject=subject;
+args.selection=selection;
+detail::OAServiceFrame v;v.version=1;v.service="abstraction.rights/operator@2";v.method="RemoveSelectorRule";detail::enc_oa_selector_authorization_operator_remove_selector_rule_arguments(v.arguments,args,1);std::string frame;detail::enc_oa_service_frame(frame,v,0);detail::service_payload(frame);
+auto response=transport_.exchange_frame(frame);auto payload=detail::service_response(response,v.service,v.method);detail::Reader r{payload};r.depth=1;r.skip_ws();auto result=detail::decode_oa_selector_authorization_operator_remove_selector_rule_result(r);r.skip_ws();if(r.pos!=r.buf.size())r.refuse("trailing_bytes");
+return result.value;
+}
+SelectorEdit apply_bundle(const std::string& expected_revision,const Subject& subject,const std::string& bundle_ref,const ResourceSelector& selector,const std::int64_t& ttl_ms,const std::string& why)override{detail::OASelectorAuthorizationOperatorApplyBundleArguments args;
+args.expected_revision=expected_revision;
+args.subject=subject;
+args.bundle_ref=bundle_ref;
+args.selector=selector;
+args.ttl_ms=ttl_ms;
+args.why=why;
+detail::OAServiceFrame v;v.version=1;v.service="abstraction.rights/operator@2";v.method="ApplyBundle";detail::enc_oa_selector_authorization_operator_apply_bundle_arguments(v.arguments,args,1);std::string frame;detail::enc_oa_service_frame(frame,v,0);detail::service_payload(frame);
+auto response=transport_.exchange_frame(frame);auto payload=detail::service_response(response,v.service,v.method);detail::Reader r{payload};r.depth=1;r.skip_ws();auto result=detail::decode_oa_selector_authorization_operator_apply_bundle_result(r);r.skip_ws();if(r.pos!=r.buf.size())r.refuse("trailing_bytes");
+return result.value;
+}
+SelectorEdit remove_bundle(const std::string& expected_revision,const Subject& subject,const std::string& origin_id)override{detail::OASelectorAuthorizationOperatorRemoveBundleArguments args;
+args.expected_revision=expected_revision;
+args.subject=subject;
+args.origin_id=origin_id;
+detail::OAServiceFrame v;v.version=1;v.service="abstraction.rights/operator@2";v.method="RemoveBundle";detail::enc_oa_selector_authorization_operator_remove_bundle_arguments(v.arguments,args,1);std::string frame;detail::enc_oa_service_frame(frame,v,0);detail::service_payload(frame);
+auto response=transport_.exchange_frame(frame);auto payload=detail::service_response(response,v.service,v.method);detail::Reader r{payload};r.depth=1;r.skip_ws();auto result=detail::decode_oa_selector_authorization_operator_remove_bundle_result(r);r.skip_ws();if(r.pos!=r.buf.size())r.refuse("trailing_bytes");
+return result.value;
+}
+SelectorEdit apply_permission_allow(const std::string& expected_revision,const std::string& question_id)override{detail::OASelectorAuthorizationOperatorApplyPermissionAllowArguments args;
+args.expected_revision=expected_revision;
+args.question_id=question_id;
+detail::OAServiceFrame v;v.version=1;v.service="abstraction.rights/operator@2";v.method="ApplyPermissionAllow";detail::enc_oa_selector_authorization_operator_apply_permission_allow_arguments(v.arguments,args,1);std::string frame;detail::enc_oa_service_frame(frame,v,0);detail::service_payload(frame);
+auto response=transport_.exchange_frame(frame);auto payload=detail::service_response(response,v.service,v.method);detail::Reader r{payload};r.depth=1;r.skip_ws();auto result=detail::decode_oa_selector_authorization_operator_apply_permission_allow_result(r);r.skip_ws();if(r.pos!=r.buf.size())r.refuse("trailing_bytes");
+return result.value;
+}
+SelectorEdit undo_permission_effect(const std::string& expected_revision,const std::string& question_id)override{detail::OASelectorAuthorizationOperatorUndoPermissionEffectArguments args;
+args.expected_revision=expected_revision;
+args.question_id=question_id;
+detail::OAServiceFrame v;v.version=1;v.service="abstraction.rights/operator@2";v.method="UndoPermissionEffect";detail::enc_oa_selector_authorization_operator_undo_permission_effect_arguments(v.arguments,args,1);std::string frame;detail::enc_oa_service_frame(frame,v,0);detail::service_payload(frame);
+auto response=transport_.exchange_frame(frame);auto payload=detail::service_response(response,v.service,v.method);detail::Reader r{payload};r.depth=1;r.skip_ws();auto result=detail::decode_oa_selector_authorization_operator_undo_permission_effect_result(r);r.skip_ws();if(r.pos!=r.buf.size())r.refuse("trailing_bytes");
+return result.value;
+}
+};
+struct SelectorAuthorizationOperatorService{inline static constexpr std::string_view kWireName="abstraction.rights/operator@2";inline static constexpr std::string_view kCapability="abstraction.rights";template<class Transport>using Client=SelectorAuthorizationOperatorClient<Transport>;};
+struct SelectorAuthorizationOperatorDispatcher:FrameWriter,FrameExchanger{SelectorAuthorizationOperator&handler;explicit SelectorAuthorizationOperatorDispatcher(SelectorAuthorizationOperator&h):handler(h){}
+// A handler whose own type has ready(), returning a pair of bool and std::string, reports its readiness through describe_service.
+template<class H,class=decltype(static_cast<SelectorAuthorizationOperator&>(*static_cast<H*>(nullptr)))>explicit SelectorAuthorizationOperatorDispatcher(H&h):handler(h),ready_self_(&h),ready_hook_(detail::ready_hook<H>(0)){}
+// This dispatcher's service as abstraction.facade/endpoint@1 Describe lists it.
+DescribedService describe_service()const{DescribedService s{"abstraction.rights/operator@2",true,std::string()};if(ready_hook_){s.ready=ready_hook_(ready_self_,s.why);if(s.ready)s.why.clear();}return s;}
+void write_frame(std::string_view frame)override{auto v=detail::service_payload(frame);if(v.service!="abstraction.rights/operator@2")throw DispatchError("unknown_service");
+if(v.method=="ListSelectorRules"){
+throw DispatchError("wrong_mode");}
+if(v.method=="ReadSelectorRule"){
+throw DispatchError("wrong_mode");}
+if(v.method=="SetSelectorRule"){
+throw DispatchError("wrong_mode");}
+if(v.method=="RemoveSelectorRule"){
+throw DispatchError("wrong_mode");}
+if(v.method=="ApplyBundle"){
+throw DispatchError("wrong_mode");}
+if(v.method=="RemoveBundle"){
+throw DispatchError("wrong_mode");}
+if(v.method=="ApplyPermissionAllow"){
+throw DispatchError("wrong_mode");}
+if(v.method=="UndoPermissionEffect"){
+throw DispatchError("wrong_mode");}
+throw DispatchError("unknown_method");}
+std::string exchange_frame(std::string_view frame)override{auto v=detail::service_payload(frame);if(v.service==kEndpointContract)return describe_endpoint(frame,std::string(),std::string(),*this);if(v.service!="abstraction.rights/operator@2"){ServiceError e("unknown_service","");return detail::service_reply(v,"",&e);}
+try{
+if(v.method=="ListSelectorRules"){
+detail::Reader r{v.arguments};r.depth=1;r.skip_ws();auto args=detail::decode_oa_selector_authorization_operator_list_selector_rules_arguments(r);r.skip_ws();if(r.pos!=r.buf.size())r.refuse("trailing_bytes");auto payload=invoke_list_selector_rules(args);return detail::service_reply(v,payload);}
+if(v.method=="ReadSelectorRule"){
+detail::Reader r{v.arguments};r.depth=1;r.skip_ws();auto args=detail::decode_oa_selector_authorization_operator_read_selector_rule_arguments(r);r.skip_ws();if(r.pos!=r.buf.size())r.refuse("trailing_bytes");auto payload=invoke_read_selector_rule(args);return detail::service_reply(v,payload);}
+if(v.method=="SetSelectorRule"){
+detail::Reader r{v.arguments};r.depth=1;r.skip_ws();auto args=detail::decode_oa_selector_authorization_operator_set_selector_rule_arguments(r);r.skip_ws();if(r.pos!=r.buf.size())r.refuse("trailing_bytes");auto payload=invoke_set_selector_rule(args);return detail::service_reply(v,payload);}
+if(v.method=="RemoveSelectorRule"){
+detail::Reader r{v.arguments};r.depth=1;r.skip_ws();auto args=detail::decode_oa_selector_authorization_operator_remove_selector_rule_arguments(r);r.skip_ws();if(r.pos!=r.buf.size())r.refuse("trailing_bytes");auto payload=invoke_remove_selector_rule(args);return detail::service_reply(v,payload);}
+if(v.method=="ApplyBundle"){
+detail::Reader r{v.arguments};r.depth=1;r.skip_ws();auto args=detail::decode_oa_selector_authorization_operator_apply_bundle_arguments(r);r.skip_ws();if(r.pos!=r.buf.size())r.refuse("trailing_bytes");auto payload=invoke_apply_bundle(args);return detail::service_reply(v,payload);}
+if(v.method=="RemoveBundle"){
+detail::Reader r{v.arguments};r.depth=1;r.skip_ws();auto args=detail::decode_oa_selector_authorization_operator_remove_bundle_arguments(r);r.skip_ws();if(r.pos!=r.buf.size())r.refuse("trailing_bytes");auto payload=invoke_remove_bundle(args);return detail::service_reply(v,payload);}
+if(v.method=="ApplyPermissionAllow"){
+detail::Reader r{v.arguments};r.depth=1;r.skip_ws();auto args=detail::decode_oa_selector_authorization_operator_apply_permission_allow_arguments(r);r.skip_ws();if(r.pos!=r.buf.size())r.refuse("trailing_bytes");auto payload=invoke_apply_permission_allow(args);return detail::service_reply(v,payload);}
+if(v.method=="UndoPermissionEffect"){
+detail::Reader r{v.arguments};r.depth=1;r.skip_ws();auto args=detail::decode_oa_selector_authorization_operator_undo_permission_effect_arguments(r);r.skip_ws();if(r.pos!=r.buf.size())r.refuse("trailing_bytes");auto payload=invoke_undo_permission_effect(args);return detail::service_reply(v,payload);}
+throw ServiceError("unknown_method","");}catch(const ServiceError&e){return detail::service_reply(v,"",&e);}catch(const Refusal&e){ServiceError error(e.word,"");return detail::service_reply(v,"",&error);}
+}
+private:
+Raw invoke_list_selector_rules(const detail::OASelectorAuthorizationOperatorListSelectorRulesArguments&args){
+SelectorRulePage result{};
+try{
+result=handler.list_selector_rules(args.cursor,args.limit);
+}catch(const ServiceError&){throw;}catch(...){throw ServiceError("handler_error","handler failed");}
+try{
+detail::OASelectorAuthorizationOperatorListSelectorRulesResult value;
+value.value=result;
+Raw payload;detail::enc_oa_selector_authorization_operator_list_selector_rules_result(payload,value,1);detail::Reader r{payload};r.depth=1;r.skip_ws();detail::decode_oa_selector_authorization_operator_list_selector_rules_result(r);r.skip_ws();if(r.pos!=r.buf.size())r.refuse("trailing_bytes");return payload;
+}catch(...){throw ServiceError("invalid_result","");}
+}
+Raw invoke_read_selector_rule(const detail::OASelectorAuthorizationOperatorReadSelectorRuleArguments&args){
+SelectorRuleRead result{};
+try{
+result=handler.read_selector_rule(args.subject,args.selection);
+}catch(const ServiceError&){throw;}catch(...){throw ServiceError("handler_error","handler failed");}
+try{
+detail::OASelectorAuthorizationOperatorReadSelectorRuleResult value;
+value.value=result;
+Raw payload;detail::enc_oa_selector_authorization_operator_read_selector_rule_result(payload,value,1);detail::Reader r{payload};r.depth=1;r.skip_ws();detail::decode_oa_selector_authorization_operator_read_selector_rule_result(r);r.skip_ws();if(r.pos!=r.buf.size())r.refuse("trailing_bytes");return payload;
+}catch(...){throw ServiceError("invalid_result","");}
+}
+Raw invoke_set_selector_rule(const detail::OASelectorAuthorizationOperatorSetSelectorRuleArguments&args){
+SelectorEdit result{};
+try{
+result=handler.set_selector_rule(args.expected_revision,args.rule,args.ttl_ms,args.why);
+}catch(const ServiceError&){throw;}catch(...){throw ServiceError("handler_error","handler failed");}
+try{
+detail::OASelectorAuthorizationOperatorSetSelectorRuleResult value;
+value.value=result;
+Raw payload;detail::enc_oa_selector_authorization_operator_set_selector_rule_result(payload,value,1);detail::Reader r{payload};r.depth=1;r.skip_ws();detail::decode_oa_selector_authorization_operator_set_selector_rule_result(r);r.skip_ws();if(r.pos!=r.buf.size())r.refuse("trailing_bytes");return payload;
+}catch(...){throw ServiceError("invalid_result","");}
+}
+Raw invoke_remove_selector_rule(const detail::OASelectorAuthorizationOperatorRemoveSelectorRuleArguments&args){
+SelectorEdit result{};
+try{
+result=handler.remove_selector_rule(args.expected_revision,args.subject,args.selection);
+}catch(const ServiceError&){throw;}catch(...){throw ServiceError("handler_error","handler failed");}
+try{
+detail::OASelectorAuthorizationOperatorRemoveSelectorRuleResult value;
+value.value=result;
+Raw payload;detail::enc_oa_selector_authorization_operator_remove_selector_rule_result(payload,value,1);detail::Reader r{payload};r.depth=1;r.skip_ws();detail::decode_oa_selector_authorization_operator_remove_selector_rule_result(r);r.skip_ws();if(r.pos!=r.buf.size())r.refuse("trailing_bytes");return payload;
+}catch(...){throw ServiceError("invalid_result","");}
+}
+Raw invoke_apply_bundle(const detail::OASelectorAuthorizationOperatorApplyBundleArguments&args){
+SelectorEdit result{};
+try{
+result=handler.apply_bundle(args.expected_revision,args.subject,args.bundle_ref,args.selector,args.ttl_ms,args.why);
+}catch(const ServiceError&){throw;}catch(...){throw ServiceError("handler_error","handler failed");}
+try{
+detail::OASelectorAuthorizationOperatorApplyBundleResult value;
+value.value=result;
+Raw payload;detail::enc_oa_selector_authorization_operator_apply_bundle_result(payload,value,1);detail::Reader r{payload};r.depth=1;r.skip_ws();detail::decode_oa_selector_authorization_operator_apply_bundle_result(r);r.skip_ws();if(r.pos!=r.buf.size())r.refuse("trailing_bytes");return payload;
+}catch(...){throw ServiceError("invalid_result","");}
+}
+Raw invoke_remove_bundle(const detail::OASelectorAuthorizationOperatorRemoveBundleArguments&args){
+SelectorEdit result{};
+try{
+result=handler.remove_bundle(args.expected_revision,args.subject,args.origin_id);
+}catch(const ServiceError&){throw;}catch(...){throw ServiceError("handler_error","handler failed");}
+try{
+detail::OASelectorAuthorizationOperatorRemoveBundleResult value;
+value.value=result;
+Raw payload;detail::enc_oa_selector_authorization_operator_remove_bundle_result(payload,value,1);detail::Reader r{payload};r.depth=1;r.skip_ws();detail::decode_oa_selector_authorization_operator_remove_bundle_result(r);r.skip_ws();if(r.pos!=r.buf.size())r.refuse("trailing_bytes");return payload;
+}catch(...){throw ServiceError("invalid_result","");}
+}
+Raw invoke_apply_permission_allow(const detail::OASelectorAuthorizationOperatorApplyPermissionAllowArguments&args){
+SelectorEdit result{};
+try{
+result=handler.apply_permission_allow(args.expected_revision,args.question_id);
+}catch(const ServiceError&){throw;}catch(...){throw ServiceError("handler_error","handler failed");}
+try{
+detail::OASelectorAuthorizationOperatorApplyPermissionAllowResult value;
+value.value=result;
+Raw payload;detail::enc_oa_selector_authorization_operator_apply_permission_allow_result(payload,value,1);detail::Reader r{payload};r.depth=1;r.skip_ws();detail::decode_oa_selector_authorization_operator_apply_permission_allow_result(r);r.skip_ws();if(r.pos!=r.buf.size())r.refuse("trailing_bytes");return payload;
+}catch(...){throw ServiceError("invalid_result","");}
+}
+Raw invoke_undo_permission_effect(const detail::OASelectorAuthorizationOperatorUndoPermissionEffectArguments&args){
+SelectorEdit result{};
+try{
+result=handler.undo_permission_effect(args.expected_revision,args.question_id);
+}catch(const ServiceError&){throw;}catch(...){throw ServiceError("handler_error","handler failed");}
+try{
+detail::OASelectorAuthorizationOperatorUndoPermissionEffectResult value;
+value.value=result;
+Raw payload;detail::enc_oa_selector_authorization_operator_undo_permission_effect_result(payload,value,1);detail::Reader r{payload};r.depth=1;r.skip_ws();detail::decode_oa_selector_authorization_operator_undo_permission_effect_result(r);r.skip_ws();if(r.pos!=r.buf.size())r.refuse("trailing_bytes");return payload;
+}catch(...){throw ServiceError("invalid_result","");}
+}
+private:
+void* ready_self_=nullptr;
+bool(*ready_hook_)(void*,std::string&)=nullptr;
+};
+
+namespace detail {
+inline Request decode_request_at(std::string_view in,int depth,int limit,std::size_t& consumed){detail::Reader r{in};if(depth<0||limit<1)r.refuse("depth_exceeded");r.depth=depth;r.limit=limit<detail::kDepthLimit?limit:detail::kDepthLimit;r.skip_ws();auto v=detail::decode_request(r);consumed=r.pos;return v;}
+inline std::string encode_request_at(const Request& v,int depth){detail::Reader r{""};if(depth<0||depth>=detail::kDepthLimit)r.refuse("depth_exceeded");std::string out;detail::enc_request(out,v,depth);std::size_t n=0;decode_request_at(out,depth,detail::kDepthLimit,n);return out;}
+}  // namespace detail
+inline std::string encode_request(const Request& v){return detail::encode_request_at(v,0)+"\n";}
+inline Request decode_request(std::string_view in){std::size_t n=0;auto v=detail::decode_request_at(in,0,detail::kDepthLimit,n);detail::Reader r{in};r.pos=n;r.skip_ws();if(r.pos!=in.size())r.refuse("trailing_bytes");return v;}
+
+namespace detail {
+inline AppMetadata decode_app_metadata_at(std::string_view in,int depth,int limit,std::size_t& consumed){detail::Reader r{in};if(depth<0||limit<1)r.refuse("depth_exceeded");r.depth=depth;r.limit=limit<detail::kDepthLimit?limit:detail::kDepthLimit;r.skip_ws();auto v=detail::decode_app_metadata(r);consumed=r.pos;return v;}
+inline std::string encode_app_metadata_at(const AppMetadata& v,int depth){detail::Reader r{""};if(depth<0||depth>=detail::kDepthLimit)r.refuse("depth_exceeded");std::string out;detail::enc_app_metadata(out,v,depth);std::size_t n=0;decode_app_metadata_at(out,depth,detail::kDepthLimit,n);return out;}
+}  // namespace detail
+inline std::string encode_app_metadata(const AppMetadata& v){return detail::encode_app_metadata_at(v,0)+"\n";}
+inline AppMetadata decode_app_metadata(std::string_view in){std::size_t n=0;auto v=detail::decode_app_metadata_at(in,0,detail::kDepthLimit,n);detail::Reader r{in};r.pos=n;r.skip_ws();if(r.pos!=in.size())r.refuse("trailing_bytes");return v;}
+
+namespace detail {
+inline HoldMetadata decode_hold_metadata_at(std::string_view in,int depth,int limit,std::size_t& consumed){detail::Reader r{in};if(depth<0||limit<1)r.refuse("depth_exceeded");r.depth=depth;r.limit=limit<detail::kDepthLimit?limit:detail::kDepthLimit;r.skip_ws();auto v=detail::decode_hold_metadata(r);consumed=r.pos;return v;}
+inline std::string encode_hold_metadata_at(const HoldMetadata& v,int depth){detail::Reader r{""};if(depth<0||depth>=detail::kDepthLimit)r.refuse("depth_exceeded");std::string out;detail::enc_hold_metadata(out,v,depth);std::size_t n=0;decode_hold_metadata_at(out,depth,detail::kDepthLimit,n);return out;}
+}  // namespace detail
+inline std::string encode_hold_metadata(const HoldMetadata& v){return detail::encode_hold_metadata_at(v,0)+"\n";}
+inline HoldMetadata decode_hold_metadata(std::string_view in){std::size_t n=0;auto v=detail::decode_hold_metadata_at(in,0,detail::kDepthLimit,n);detail::Reader r{in};r.pos=n;r.skip_ws();if(r.pos!=in.size())r.refuse("trailing_bytes");return v;}
+
+namespace detail {
+inline ResponseMetadata decode_response_metadata_at(std::string_view in,int depth,int limit,std::size_t& consumed){detail::Reader r{in};if(depth<0||limit<1)r.refuse("depth_exceeded");r.depth=depth;r.limit=limit<detail::kDepthLimit?limit:detail::kDepthLimit;r.skip_ws();auto v=detail::decode_response_metadata(r);consumed=r.pos;return v;}
+inline std::string encode_response_metadata_at(const ResponseMetadata& v,int depth){detail::Reader r{""};if(depth<0||depth>=detail::kDepthLimit)r.refuse("depth_exceeded");std::string out;detail::enc_response_metadata(out,v,depth);std::size_t n=0;decode_response_metadata_at(out,depth,detail::kDepthLimit,n);return out;}
+}  // namespace detail
+inline std::string encode_response_metadata(const ResponseMetadata& v){return detail::encode_response_metadata_at(v,0)+"\n";}
+inline ResponseMetadata decode_response_metadata(std::string_view in){std::size_t n=0;auto v=detail::decode_response_metadata_at(in,0,detail::kDepthLimit,n);detail::Reader r{in};r.pos=n;r.skip_ws();if(r.pos!=in.size())r.refuse("trailing_bytes");return v;}
+
+namespace detail {
+inline Subject decode_subject_at(std::string_view in,int depth,int limit,std::size_t& consumed){detail::Reader r{in};if(depth<0||limit<1)r.refuse("depth_exceeded");r.depth=depth;r.limit=limit<detail::kDepthLimit?limit:detail::kDepthLimit;r.skip_ws();auto v=detail::decode_subject(r);consumed=r.pos;return v;}
+inline std::string encode_subject_at(const Subject& v,int depth){detail::Reader r{""};if(depth<0||depth>=detail::kDepthLimit)r.refuse("depth_exceeded");std::string out;detail::enc_subject(out,v,depth);std::size_t n=0;decode_subject_at(out,depth,detail::kDepthLimit,n);return out;}
+}  // namespace detail
+inline std::string encode_subject(const Subject& v){return detail::encode_subject_at(v,0)+"\n";}
+inline Subject decode_subject(std::string_view in){std::size_t n=0;auto v=detail::decode_subject_at(in,0,detail::kDepthLimit,n);detail::Reader r{in};r.pos=n;r.skip_ws();if(r.pos!=in.size())r.refuse("trailing_bytes");return v;}
+
+namespace detail {
+inline Decision decode_decision_at(std::string_view in,int depth,int limit,std::size_t& consumed){detail::Reader r{in};if(depth<0||limit<1)r.refuse("depth_exceeded");r.depth=depth;r.limit=limit<detail::kDepthLimit?limit:detail::kDepthLimit;r.skip_ws();auto v=detail::decode_decision(r);consumed=r.pos;return v;}
+inline std::string encode_decision_at(const Decision& v,int depth){detail::Reader r{""};if(depth<0||depth>=detail::kDepthLimit)r.refuse("depth_exceeded");std::string out;detail::enc_decision(out,v,depth);std::size_t n=0;decode_decision_at(out,depth,detail::kDepthLimit,n);return out;}
+}  // namespace detail
+inline std::string encode_decision(const Decision& v){return detail::encode_decision_at(v,0)+"\n";}
+inline Decision decode_decision(std::string_view in){std::size_t n=0;auto v=detail::decode_decision_at(in,0,detail::kDepthLimit,n);detail::Reader r{in};r.pos=n;r.skip_ws();if(r.pos!=in.size())r.refuse("trailing_bytes");return v;}
+
+namespace detail {
+inline PolicyRule decode_policy_rule_at(std::string_view in,int depth,int limit,std::size_t& consumed){detail::Reader r{in};if(depth<0||limit<1)r.refuse("depth_exceeded");r.depth=depth;r.limit=limit<detail::kDepthLimit?limit:detail::kDepthLimit;r.skip_ws();auto v=detail::decode_policy_rule(r);consumed=r.pos;return v;}
+inline std::string encode_policy_rule_at(const PolicyRule& v,int depth){detail::Reader r{""};if(depth<0||depth>=detail::kDepthLimit)r.refuse("depth_exceeded");std::string out;detail::enc_policy_rule(out,v,depth);std::size_t n=0;decode_policy_rule_at(out,depth,detail::kDepthLimit,n);return out;}
+}  // namespace detail
+inline std::string encode_policy_rule(const PolicyRule& v){return detail::encode_policy_rule_at(v,0)+"\n";}
+inline PolicyRule decode_policy_rule(std::string_view in){std::size_t n=0;auto v=detail::decode_policy_rule_at(in,0,detail::kDepthLimit,n);detail::Reader r{in};r.pos=n;r.skip_ws();if(r.pos!=in.size())r.refuse("trailing_bytes");return v;}
+
+namespace detail {
+inline PolicyPage decode_policy_page_at(std::string_view in,int depth,int limit,std::size_t& consumed){detail::Reader r{in};if(depth<0||limit<1)r.refuse("depth_exceeded");r.depth=depth;r.limit=limit<detail::kDepthLimit?limit:detail::kDepthLimit;r.skip_ws();auto v=detail::decode_policy_page(r);consumed=r.pos;return v;}
+inline std::string encode_policy_page_at(const PolicyPage& v,int depth){detail::Reader r{""};if(depth<0||depth>=detail::kDepthLimit)r.refuse("depth_exceeded");std::string out;detail::enc_policy_page(out,v,depth);std::size_t n=0;decode_policy_page_at(out,depth,detail::kDepthLimit,n);return out;}
+}  // namespace detail
+inline std::string encode_policy_page(const PolicyPage& v){return detail::encode_policy_page_at(v,0)+"\n";}
+inline PolicyPage decode_policy_page(std::string_view in){std::size_t n=0;auto v=detail::decode_policy_page_at(in,0,detail::kDepthLimit,n);detail::Reader r{in};r.pos=n;r.skip_ws();if(r.pos!=in.size())r.refuse("trailing_bytes");return v;}
+
+namespace detail {
+inline PolicyEdit decode_policy_edit_at(std::string_view in,int depth,int limit,std::size_t& consumed){detail::Reader r{in};if(depth<0||limit<1)r.refuse("depth_exceeded");r.depth=depth;r.limit=limit<detail::kDepthLimit?limit:detail::kDepthLimit;r.skip_ws();auto v=detail::decode_policy_edit(r);consumed=r.pos;return v;}
+inline std::string encode_policy_edit_at(const PolicyEdit& v,int depth){detail::Reader r{""};if(depth<0||depth>=detail::kDepthLimit)r.refuse("depth_exceeded");std::string out;detail::enc_policy_edit(out,v,depth);std::size_t n=0;decode_policy_edit_at(out,depth,detail::kDepthLimit,n);return out;}
+}  // namespace detail
+inline std::string encode_policy_edit(const PolicyEdit& v){return detail::encode_policy_edit_at(v,0)+"\n";}
+inline PolicyEdit decode_policy_edit(std::string_view in){std::size_t n=0;auto v=detail::decode_policy_edit_at(in,0,detail::kDepthLimit,n);detail::Reader r{in};r.pos=n;r.skip_ws();if(r.pos!=in.size())r.refuse("trailing_bytes");return v;}
+
+namespace detail {
+inline RuleRecord decode_rule_record_at(std::string_view in,int depth,int limit,std::size_t& consumed){detail::Reader r{in};if(depth<0||limit<1)r.refuse("depth_exceeded");r.depth=depth;r.limit=limit<detail::kDepthLimit?limit:detail::kDepthLimit;r.skip_ws();auto v=detail::decode_rule_record(r);consumed=r.pos;return v;}
+inline std::string encode_rule_record_at(const RuleRecord& v,int depth){detail::Reader r{""};if(depth<0||depth>=detail::kDepthLimit)r.refuse("depth_exceeded");std::string out;detail::enc_rule_record(out,v,depth);std::size_t n=0;decode_rule_record_at(out,depth,detail::kDepthLimit,n);return out;}
+}  // namespace detail
+inline std::string encode_rule_record(const RuleRecord& v){return detail::encode_rule_record_at(v,0)+"\n";}
+inline RuleRecord decode_rule_record(std::string_view in){std::size_t n=0;auto v=detail::decode_rule_record_at(in,0,detail::kDepthLimit,n);detail::Reader r{in};r.pos=n;r.skip_ws();if(r.pos!=in.size())r.refuse("trailing_bytes");return v;}
+
+namespace detail {
+inline RuleRead decode_rule_read_at(std::string_view in,int depth,int limit,std::size_t& consumed){detail::Reader r{in};if(depth<0||limit<1)r.refuse("depth_exceeded");r.depth=depth;r.limit=limit<detail::kDepthLimit?limit:detail::kDepthLimit;r.skip_ws();auto v=detail::decode_rule_read(r);consumed=r.pos;return v;}
+inline std::string encode_rule_read_at(const RuleRead& v,int depth){detail::Reader r{""};if(depth<0||depth>=detail::kDepthLimit)r.refuse("depth_exceeded");std::string out;detail::enc_rule_read(out,v,depth);std::size_t n=0;decode_rule_read_at(out,depth,detail::kDepthLimit,n);return out;}
+}  // namespace detail
+inline std::string encode_rule_read(const RuleRead& v){return detail::encode_rule_read_at(v,0)+"\n";}
+inline RuleRead decode_rule_read(std::string_view in){std::size_t n=0;auto v=detail::decode_rule_read_at(in,0,detail::kDepthLimit,n);detail::Reader r{in};r.pos=n;r.skip_ws();if(r.pos!=in.size())r.refuse("trailing_bytes");return v;}
+
+namespace detail {
+inline CatalogEntry decode_catalog_entry_at(std::string_view in,int depth,int limit,std::size_t& consumed){detail::Reader r{in};if(depth<0||limit<1)r.refuse("depth_exceeded");r.depth=depth;r.limit=limit<detail::kDepthLimit?limit:detail::kDepthLimit;r.skip_ws();auto v=detail::decode_catalog_entry(r);consumed=r.pos;return v;}
+inline std::string encode_catalog_entry_at(const CatalogEntry& v,int depth){detail::Reader r{""};if(depth<0||depth>=detail::kDepthLimit)r.refuse("depth_exceeded");std::string out;detail::enc_catalog_entry(out,v,depth);std::size_t n=0;decode_catalog_entry_at(out,depth,detail::kDepthLimit,n);return out;}
+}  // namespace detail
+inline std::string encode_catalog_entry(const CatalogEntry& v){return detail::encode_catalog_entry_at(v,0)+"\n";}
+inline CatalogEntry decode_catalog_entry(std::string_view in){std::size_t n=0;auto v=detail::decode_catalog_entry_at(in,0,detail::kDepthLimit,n);detail::Reader r{in};r.pos=n;r.skip_ws();if(r.pos!=in.size())r.refuse("trailing_bytes");return v;}
+
+namespace detail {
+inline ActionDescription decode_action_description_at(std::string_view in,int depth,int limit,std::size_t& consumed){detail::Reader r{in};if(depth<0||limit<1)r.refuse("depth_exceeded");r.depth=depth;r.limit=limit<detail::kDepthLimit?limit:detail::kDepthLimit;r.skip_ws();auto v=detail::decode_action_description(r);consumed=r.pos;return v;}
+inline std::string encode_action_description_at(const ActionDescription& v,int depth){detail::Reader r{""};if(depth<0||depth>=detail::kDepthLimit)r.refuse("depth_exceeded");std::string out;detail::enc_action_description(out,v,depth);std::size_t n=0;decode_action_description_at(out,depth,detail::kDepthLimit,n);return out;}
+}  // namespace detail
+inline std::string encode_action_description(const ActionDescription& v){return detail::encode_action_description_at(v,0)+"\n";}
+inline ActionDescription decode_action_description(std::string_view in){std::size_t n=0;auto v=detail::decode_action_description_at(in,0,detail::kDepthLimit,n);detail::Reader r{in};r.pos=n;r.skip_ws();if(r.pos!=in.size())r.refuse("trailing_bytes");return v;}
+
+namespace detail {
+inline PermissionDefinition decode_permission_definition_at(std::string_view in,int depth,int limit,std::size_t& consumed){detail::Reader r{in};if(depth<0||limit<1)r.refuse("depth_exceeded");r.depth=depth;r.limit=limit<detail::kDepthLimit?limit:detail::kDepthLimit;r.skip_ws();auto v=detail::decode_permission_definition(r);consumed=r.pos;return v;}
+inline std::string encode_permission_definition_at(const PermissionDefinition& v,int depth){detail::Reader r{""};if(depth<0||depth>=detail::kDepthLimit)r.refuse("depth_exceeded");std::string out;detail::enc_permission_definition(out,v,depth);std::size_t n=0;decode_permission_definition_at(out,depth,detail::kDepthLimit,n);return out;}
+}  // namespace detail
+inline std::string encode_permission_definition(const PermissionDefinition& v){return detail::encode_permission_definition_at(v,0)+"\n";}
+inline PermissionDefinition decode_permission_definition(std::string_view in){std::size_t n=0;auto v=detail::decode_permission_definition_at(in,0,detail::kDepthLimit,n);detail::Reader r{in};r.pos=n;r.skip_ws();if(r.pos!=in.size())r.refuse("trailing_bytes");return v;}
+
+namespace detail {
+inline DescribedAction decode_described_action_at(std::string_view in,int depth,int limit,std::size_t& consumed){detail::Reader r{in};if(depth<0||limit<1)r.refuse("depth_exceeded");r.depth=depth;r.limit=limit<detail::kDepthLimit?limit:detail::kDepthLimit;r.skip_ws();auto v=detail::decode_described_action(r);consumed=r.pos;return v;}
+inline std::string encode_described_action_at(const DescribedAction& v,int depth){detail::Reader r{""};if(depth<0||depth>=detail::kDepthLimit)r.refuse("depth_exceeded");std::string out;detail::enc_described_action(out,v,depth);std::size_t n=0;decode_described_action_at(out,depth,detail::kDepthLimit,n);return out;}
+}  // namespace detail
+inline std::string encode_described_action(const DescribedAction& v){return detail::encode_described_action_at(v,0)+"\n";}
+inline DescribedAction decode_described_action(std::string_view in){std::size_t n=0;auto v=detail::decode_described_action_at(in,0,detail::kDepthLimit,n);detail::Reader r{in};r.pos=n;r.skip_ws();if(r.pos!=in.size())r.refuse("trailing_bytes");return v;}
+
+namespace detail {
+inline ActionEdit decode_action_edit_at(std::string_view in,int depth,int limit,std::size_t& consumed){detail::Reader r{in};if(depth<0||limit<1)r.refuse("depth_exceeded");r.depth=depth;r.limit=limit<detail::kDepthLimit?limit:detail::kDepthLimit;r.skip_ws();auto v=detail::decode_action_edit(r);consumed=r.pos;return v;}
+inline std::string encode_action_edit_at(const ActionEdit& v,int depth){detail::Reader r{""};if(depth<0||depth>=detail::kDepthLimit)r.refuse("depth_exceeded");std::string out;detail::enc_action_edit(out,v,depth);std::size_t n=0;decode_action_edit_at(out,depth,detail::kDepthLimit,n);return out;}
+}  // namespace detail
+inline std::string encode_action_edit(const ActionEdit& v){return detail::encode_action_edit_at(v,0)+"\n";}
+inline ActionEdit decode_action_edit(std::string_view in){std::size_t n=0;auto v=detail::decode_action_edit_at(in,0,detail::kDepthLimit,n);detail::Reader r{in};r.pos=n;r.skip_ws();if(r.pos!=in.size())r.refuse("trailing_bytes");return v;}
+
+namespace detail {
+inline DescriptionEdit decode_description_edit_at(std::string_view in,int depth,int limit,std::size_t& consumed){detail::Reader r{in};if(depth<0||limit<1)r.refuse("depth_exceeded");r.depth=depth;r.limit=limit<detail::kDepthLimit?limit:detail::kDepthLimit;r.skip_ws();auto v=detail::decode_description_edit(r);consumed=r.pos;return v;}
+inline std::string encode_description_edit_at(const DescriptionEdit& v,int depth){detail::Reader r{""};if(depth<0||depth>=detail::kDepthLimit)r.refuse("depth_exceeded");std::string out;detail::enc_description_edit(out,v,depth);std::size_t n=0;decode_description_edit_at(out,depth,detail::kDepthLimit,n);return out;}
+}  // namespace detail
+inline std::string encode_description_edit(const DescriptionEdit& v){return detail::encode_description_edit_at(v,0)+"\n";}
+inline DescriptionEdit decode_description_edit(std::string_view in){std::size_t n=0;auto v=detail::decode_description_edit_at(in,0,detail::kDepthLimit,n);detail::Reader r{in};r.pos=n;r.skip_ws();if(r.pos!=in.size())r.refuse("trailing_bytes");return v;}
+
+namespace detail {
+inline DescriptionPage decode_description_page_at(std::string_view in,int depth,int limit,std::size_t& consumed){detail::Reader r{in};if(depth<0||limit<1)r.refuse("depth_exceeded");r.depth=depth;r.limit=limit<detail::kDepthLimit?limit:detail::kDepthLimit;r.skip_ws();auto v=detail::decode_description_page(r);consumed=r.pos;return v;}
+inline std::string encode_description_page_at(const DescriptionPage& v,int depth){detail::Reader r{""};if(depth<0||depth>=detail::kDepthLimit)r.refuse("depth_exceeded");std::string out;detail::enc_description_page(out,v,depth);std::size_t n=0;decode_description_page_at(out,depth,detail::kDepthLimit,n);return out;}
+}  // namespace detail
+inline std::string encode_description_page(const DescriptionPage& v){return detail::encode_description_page_at(v,0)+"\n";}
+inline DescriptionPage decode_description_page(std::string_view in){std::size_t n=0;auto v=detail::decode_description_page_at(in,0,detail::kDepthLimit,n);detail::Reader r{in};r.pos=n;r.skip_ws();if(r.pos!=in.size())r.refuse("trailing_bytes");return v;}
+
+namespace detail {
+inline AccountDefault decode_account_default_at(std::string_view in,int depth,int limit,std::size_t& consumed){detail::Reader r{in};if(depth<0||limit<1)r.refuse("depth_exceeded");r.depth=depth;r.limit=limit<detail::kDepthLimit?limit:detail::kDepthLimit;r.skip_ws();auto v=detail::decode_account_default(r);consumed=r.pos;return v;}
+inline std::string encode_account_default_at(const AccountDefault& v,int depth){detail::Reader r{""};if(depth<0||depth>=detail::kDepthLimit)r.refuse("depth_exceeded");std::string out;detail::enc_account_default(out,v,depth);std::size_t n=0;decode_account_default_at(out,depth,detail::kDepthLimit,n);return out;}
+}  // namespace detail
+inline std::string encode_account_default(const AccountDefault& v){return detail::encode_account_default_at(v,0)+"\n";}
+inline AccountDefault decode_account_default(std::string_view in){std::size_t n=0;auto v=detail::decode_account_default_at(in,0,detail::kDepthLimit,n);detail::Reader r{in};r.pos=n;r.skip_ws();if(r.pos!=in.size())r.refuse("trailing_bytes");return v;}
+
+namespace detail {
+inline DefaultPage decode_default_page_at(std::string_view in,int depth,int limit,std::size_t& consumed){detail::Reader r{in};if(depth<0||limit<1)r.refuse("depth_exceeded");r.depth=depth;r.limit=limit<detail::kDepthLimit?limit:detail::kDepthLimit;r.skip_ws();auto v=detail::decode_default_page(r);consumed=r.pos;return v;}
+inline std::string encode_default_page_at(const DefaultPage& v,int depth){detail::Reader r{""};if(depth<0||depth>=detail::kDepthLimit)r.refuse("depth_exceeded");std::string out;detail::enc_default_page(out,v,depth);std::size_t n=0;decode_default_page_at(out,depth,detail::kDepthLimit,n);return out;}
+}  // namespace detail
+inline std::string encode_default_page(const DefaultPage& v){return detail::encode_default_page_at(v,0)+"\n";}
+inline DefaultPage decode_default_page(std::string_view in){std::size_t n=0;auto v=detail::decode_default_page_at(in,0,detail::kDepthLimit,n);detail::Reader r{in};r.pos=n;r.skip_ws();if(r.pos!=in.size())r.refuse("trailing_bytes");return v;}
+
+namespace detail {
+inline DefaultEdit decode_default_edit_at(std::string_view in,int depth,int limit,std::size_t& consumed){detail::Reader r{in};if(depth<0||limit<1)r.refuse("depth_exceeded");r.depth=depth;r.limit=limit<detail::kDepthLimit?limit:detail::kDepthLimit;r.skip_ws();auto v=detail::decode_default_edit(r);consumed=r.pos;return v;}
+inline std::string encode_default_edit_at(const DefaultEdit& v,int depth){detail::Reader r{""};if(depth<0||depth>=detail::kDepthLimit)r.refuse("depth_exceeded");std::string out;detail::enc_default_edit(out,v,depth);std::size_t n=0;decode_default_edit_at(out,depth,detail::kDepthLimit,n);return out;}
+}  // namespace detail
+inline std::string encode_default_edit(const DefaultEdit& v){return detail::encode_default_edit_at(v,0)+"\n";}
+inline DefaultEdit decode_default_edit(std::string_view in){std::size_t n=0;auto v=detail::decode_default_edit_at(in,0,detail::kDepthLimit,n);detail::Reader r{in};r.pos=n;r.skip_ws();if(r.pos!=in.size())r.refuse("trailing_bytes");return v;}
+
+namespace detail {
+inline DecisionExplanation decode_decision_explanation_at(std::string_view in,int depth,int limit,std::size_t& consumed){detail::Reader r{in};if(depth<0||limit<1)r.refuse("depth_exceeded");r.depth=depth;r.limit=limit<detail::kDepthLimit?limit:detail::kDepthLimit;r.skip_ws();auto v=detail::decode_decision_explanation(r);consumed=r.pos;return v;}
+inline std::string encode_decision_explanation_at(const DecisionExplanation& v,int depth){detail::Reader r{""};if(depth<0||depth>=detail::kDepthLimit)r.refuse("depth_exceeded");std::string out;detail::enc_decision_explanation(out,v,depth);std::size_t n=0;decode_decision_explanation_at(out,depth,detail::kDepthLimit,n);return out;}
+}  // namespace detail
+inline std::string encode_decision_explanation(const DecisionExplanation& v){return detail::encode_decision_explanation_at(v,0)+"\n";}
+inline DecisionExplanation decode_decision_explanation(std::string_view in){std::size_t n=0;auto v=detail::decode_decision_explanation_at(in,0,detail::kDepthLimit,n);detail::Reader r{in};r.pos=n;r.skip_ws();if(r.pos!=in.size())r.refuse("trailing_bytes");return v;}
+
+namespace detail {
+inline PermissionKey decode_permission_key_at(std::string_view in,int depth,int limit,std::size_t& consumed){detail::Reader r{in};if(depth<0||limit<1)r.refuse("depth_exceeded");r.depth=depth;r.limit=limit<detail::kDepthLimit?limit:detail::kDepthLimit;r.skip_ws();auto v=detail::decode_permission_key(r);consumed=r.pos;return v;}
+inline std::string encode_permission_key_at(const PermissionKey& v,int depth){detail::Reader r{""};if(depth<0||depth>=detail::kDepthLimit)r.refuse("depth_exceeded");std::string out;detail::enc_permission_key(out,v,depth);std::size_t n=0;decode_permission_key_at(out,depth,detail::kDepthLimit,n);return out;}
+}  // namespace detail
+inline std::string encode_permission_key(const PermissionKey& v){return detail::encode_permission_key_at(v,0)+"\n";}
+inline PermissionKey decode_permission_key(std::string_view in){std::size_t n=0;auto v=detail::decode_permission_key_at(in,0,detail::kDepthLimit,n);detail::Reader r{in};r.pos=n;r.skip_ws();if(r.pos!=in.size())r.refuse("trailing_bytes");return v;}
+
+namespace detail {
+inline ResourceSelector decode_resource_selector_at(std::string_view in,int depth,int limit,std::size_t& consumed){detail::Reader r{in};if(depth<0||limit<1)r.refuse("depth_exceeded");r.depth=depth;r.limit=limit<detail::kDepthLimit?limit:detail::kDepthLimit;r.skip_ws();auto v=detail::decode_resource_selector(r);consumed=r.pos;return v;}
+inline std::string encode_resource_selector_at(const ResourceSelector& v,int depth){detail::Reader r{""};if(depth<0||depth>=detail::kDepthLimit)r.refuse("depth_exceeded");std::string out;detail::enc_resource_selector(out,v,depth);std::size_t n=0;decode_resource_selector_at(out,depth,detail::kDepthLimit,n);return out;}
+}  // namespace detail
+inline std::string encode_resource_selector(const ResourceSelector& v){return detail::encode_resource_selector_at(v,0)+"\n";}
+inline ResourceSelector decode_resource_selector(std::string_view in){std::size_t n=0;auto v=detail::decode_resource_selector_at(in,0,detail::kDepthLimit,n);detail::Reader r{in};r.pos=n;r.skip_ws();if(r.pos!=in.size())r.refuse("trailing_bytes");return v;}
+
+namespace detail {
+inline PermissionSelection decode_permission_selection_at(std::string_view in,int depth,int limit,std::size_t& consumed){detail::Reader r{in};if(depth<0||limit<1)r.refuse("depth_exceeded");r.depth=depth;r.limit=limit<detail::kDepthLimit?limit:detail::kDepthLimit;r.skip_ws();auto v=detail::decode_permission_selection(r);consumed=r.pos;return v;}
+inline std::string encode_permission_selection_at(const PermissionSelection& v,int depth){detail::Reader r{""};if(depth<0||depth>=detail::kDepthLimit)r.refuse("depth_exceeded");std::string out;detail::enc_permission_selection(out,v,depth);std::size_t n=0;decode_permission_selection_at(out,depth,detail::kDepthLimit,n);return out;}
+}  // namespace detail
+inline std::string encode_permission_selection(const PermissionSelection& v){return detail::encode_permission_selection_at(v,0)+"\n";}
+inline PermissionSelection decode_permission_selection(std::string_view in){std::size_t n=0;auto v=detail::decode_permission_selection_at(in,0,detail::kDepthLimit,n);detail::Reader r{in};r.pos=n;r.skip_ws();if(r.pos!=in.size())r.refuse("trailing_bytes");return v;}
+
+namespace detail {
+inline ConcreteResource decode_concrete_resource_at(std::string_view in,int depth,int limit,std::size_t& consumed){detail::Reader r{in};if(depth<0||limit<1)r.refuse("depth_exceeded");r.depth=depth;r.limit=limit<detail::kDepthLimit?limit:detail::kDepthLimit;r.skip_ws();auto v=detail::decode_concrete_resource(r);consumed=r.pos;return v;}
+inline std::string encode_concrete_resource_at(const ConcreteResource& v,int depth){detail::Reader r{""};if(depth<0||depth>=detail::kDepthLimit)r.refuse("depth_exceeded");std::string out;detail::enc_concrete_resource(out,v,depth);std::size_t n=0;decode_concrete_resource_at(out,depth,detail::kDepthLimit,n);return out;}
+}  // namespace detail
+inline std::string encode_concrete_resource(const ConcreteResource& v){return detail::encode_concrete_resource_at(v,0)+"\n";}
+inline ConcreteResource decode_concrete_resource(std::string_view in){std::size_t n=0;auto v=detail::decode_concrete_resource_at(in,0,detail::kDepthLimit,n);detail::Reader r{in};r.pos=n;r.skip_ws();if(r.pos!=in.size())r.refuse("trailing_bytes");return v;}
+
+namespace detail {
+inline CheckBatchRequest decode_check_batch_request_at(std::string_view in,int depth,int limit,std::size_t& consumed){detail::Reader r{in};if(depth<0||limit<1)r.refuse("depth_exceeded");r.depth=depth;r.limit=limit<detail::kDepthLimit?limit:detail::kDepthLimit;r.skip_ws();auto v=detail::decode_check_batch_request(r);consumed=r.pos;return v;}
+inline std::string encode_check_batch_request_at(const CheckBatchRequest& v,int depth){detail::Reader r{""};if(depth<0||depth>=detail::kDepthLimit)r.refuse("depth_exceeded");std::string out;detail::enc_check_batch_request(out,v,depth);std::size_t n=0;decode_check_batch_request_at(out,depth,detail::kDepthLimit,n);return out;}
+}  // namespace detail
+inline std::string encode_check_batch_request(const CheckBatchRequest& v){return detail::encode_check_batch_request_at(v,0)+"\n";}
+inline CheckBatchRequest decode_check_batch_request(std::string_view in){std::size_t n=0;auto v=detail::decode_check_batch_request_at(in,0,detail::kDepthLimit,n);detail::Reader r{in};r.pos=n;r.skip_ws();if(r.pos!=in.size())r.refuse("trailing_bytes");return v;}
+
+namespace detail {
+inline BatchDecision decode_batch_decision_at(std::string_view in,int depth,int limit,std::size_t& consumed){detail::Reader r{in};if(depth<0||limit<1)r.refuse("depth_exceeded");r.depth=depth;r.limit=limit<detail::kDepthLimit?limit:detail::kDepthLimit;r.skip_ws();auto v=detail::decode_batch_decision(r);consumed=r.pos;return v;}
+inline std::string encode_batch_decision_at(const BatchDecision& v,int depth){detail::Reader r{""};if(depth<0||depth>=detail::kDepthLimit)r.refuse("depth_exceeded");std::string out;detail::enc_batch_decision(out,v,depth);std::size_t n=0;decode_batch_decision_at(out,depth,detail::kDepthLimit,n);return out;}
+}  // namespace detail
+inline std::string encode_batch_decision(const BatchDecision& v){return detail::encode_batch_decision_at(v,0)+"\n";}
+inline BatchDecision decode_batch_decision(std::string_view in){std::size_t n=0;auto v=detail::decode_batch_decision_at(in,0,detail::kDepthLimit,n);detail::Reader r{in};r.pos=n;r.skip_ws();if(r.pos!=in.size())r.refuse("trailing_bytes");return v;}
+
+namespace detail {
+inline SelectorPermissionDefinition decode_selector_permission_definition_at(std::string_view in,int depth,int limit,std::size_t& consumed){detail::Reader r{in};if(depth<0||limit<1)r.refuse("depth_exceeded");r.depth=depth;r.limit=limit<detail::kDepthLimit?limit:detail::kDepthLimit;r.skip_ws();auto v=detail::decode_selector_permission_definition(r);consumed=r.pos;return v;}
+inline std::string encode_selector_permission_definition_at(const SelectorPermissionDefinition& v,int depth){detail::Reader r{""};if(depth<0||depth>=detail::kDepthLimit)r.refuse("depth_exceeded");std::string out;detail::enc_selector_permission_definition(out,v,depth);std::size_t n=0;decode_selector_permission_definition_at(out,depth,detail::kDepthLimit,n);return out;}
+}  // namespace detail
+inline std::string encode_selector_permission_definition(const SelectorPermissionDefinition& v){return detail::encode_selector_permission_definition_at(v,0)+"\n";}
+inline SelectorPermissionDefinition decode_selector_permission_definition(std::string_view in){std::size_t n=0;auto v=detail::decode_selector_permission_definition_at(in,0,detail::kDepthLimit,n);detail::Reader r{in};r.pos=n;r.skip_ws();if(r.pos!=in.size())r.refuse("trailing_bytes");return v;}
+
+namespace detail {
+inline PermissionDefinitionPage decode_permission_definition_page_at(std::string_view in,int depth,int limit,std::size_t& consumed){detail::Reader r{in};if(depth<0||limit<1)r.refuse("depth_exceeded");r.depth=depth;r.limit=limit<detail::kDepthLimit?limit:detail::kDepthLimit;r.skip_ws();auto v=detail::decode_permission_definition_page(r);consumed=r.pos;return v;}
+inline std::string encode_permission_definition_page_at(const PermissionDefinitionPage& v,int depth){detail::Reader r{""};if(depth<0||depth>=detail::kDepthLimit)r.refuse("depth_exceeded");std::string out;detail::enc_permission_definition_page(out,v,depth);std::size_t n=0;decode_permission_definition_page_at(out,depth,detail::kDepthLimit,n);return out;}
+}  // namespace detail
+inline std::string encode_permission_definition_page(const PermissionDefinitionPage& v){return detail::encode_permission_definition_page_at(v,0)+"\n";}
+inline PermissionDefinitionPage decode_permission_definition_page(std::string_view in){std::size_t n=0;auto v=detail::decode_permission_definition_page_at(in,0,detail::kDepthLimit,n);detail::Reader r{in};r.pos=n;r.skip_ws();if(r.pos!=in.size())r.refuse("trailing_bytes");return v;}
+
+namespace detail {
+inline PermissionBundleDefinition decode_permission_bundle_definition_at(std::string_view in,int depth,int limit,std::size_t& consumed){detail::Reader r{in};if(depth<0||limit<1)r.refuse("depth_exceeded");r.depth=depth;r.limit=limit<detail::kDepthLimit?limit:detail::kDepthLimit;r.skip_ws();auto v=detail::decode_permission_bundle_definition(r);consumed=r.pos;return v;}
+inline std::string encode_permission_bundle_definition_at(const PermissionBundleDefinition& v,int depth){detail::Reader r{""};if(depth<0||depth>=detail::kDepthLimit)r.refuse("depth_exceeded");std::string out;detail::enc_permission_bundle_definition(out,v,depth);std::size_t n=0;decode_permission_bundle_definition_at(out,depth,detail::kDepthLimit,n);return out;}
+}  // namespace detail
+inline std::string encode_permission_bundle_definition(const PermissionBundleDefinition& v){return detail::encode_permission_bundle_definition_at(v,0)+"\n";}
+inline PermissionBundleDefinition decode_permission_bundle_definition(std::string_view in){std::size_t n=0;auto v=detail::decode_permission_bundle_definition_at(in,0,detail::kDepthLimit,n);detail::Reader r{in};r.pos=n;r.skip_ws();if(r.pos!=in.size())r.refuse("trailing_bytes");return v;}
+
+namespace detail {
+inline PermissionBundlePage decode_permission_bundle_page_at(std::string_view in,int depth,int limit,std::size_t& consumed){detail::Reader r{in};if(depth<0||limit<1)r.refuse("depth_exceeded");r.depth=depth;r.limit=limit<detail::kDepthLimit?limit:detail::kDepthLimit;r.skip_ws();auto v=detail::decode_permission_bundle_page(r);consumed=r.pos;return v;}
+inline std::string encode_permission_bundle_page_at(const PermissionBundlePage& v,int depth){detail::Reader r{""};if(depth<0||depth>=detail::kDepthLimit)r.refuse("depth_exceeded");std::string out;detail::enc_permission_bundle_page(out,v,depth);std::size_t n=0;decode_permission_bundle_page_at(out,depth,detail::kDepthLimit,n);return out;}
+}  // namespace detail
+inline std::string encode_permission_bundle_page(const PermissionBundlePage& v){return detail::encode_permission_bundle_page_at(v,0)+"\n";}
+inline PermissionBundlePage decode_permission_bundle_page(std::string_view in){std::size_t n=0;auto v=detail::decode_permission_bundle_page_at(in,0,detail::kDepthLimit,n);detail::Reader r{in};r.pos=n;r.skip_ws();if(r.pos!=in.size())r.refuse("trailing_bytes");return v;}
+
+namespace detail {
+inline BundleExpansion decode_bundle_expansion_at(std::string_view in,int depth,int limit,std::size_t& consumed){detail::Reader r{in};if(depth<0||limit<1)r.refuse("depth_exceeded");r.depth=depth;r.limit=limit<detail::kDepthLimit?limit:detail::kDepthLimit;r.skip_ws();auto v=detail::decode_bundle_expansion(r);consumed=r.pos;return v;}
+inline std::string encode_bundle_expansion_at(const BundleExpansion& v,int depth){detail::Reader r{""};if(depth<0||depth>=detail::kDepthLimit)r.refuse("depth_exceeded");std::string out;detail::enc_bundle_expansion(out,v,depth);std::size_t n=0;decode_bundle_expansion_at(out,depth,detail::kDepthLimit,n);return out;}
+}  // namespace detail
+inline std::string encode_bundle_expansion(const BundleExpansion& v){return detail::encode_bundle_expansion_at(v,0)+"\n";}
+inline BundleExpansion decode_bundle_expansion(std::string_view in){std::size_t n=0;auto v=detail::decode_bundle_expansion_at(in,0,detail::kDepthLimit,n);detail::Reader r{in};r.pos=n;r.skip_ws();if(r.pos!=in.size())r.refuse("trailing_bytes");return v;}
+
+namespace detail {
+inline PermissionEffect decode_permission_effect_at(std::string_view in,int depth,int limit,std::size_t& consumed){detail::Reader r{in};if(depth<0||limit<1)r.refuse("depth_exceeded");r.depth=depth;r.limit=limit<detail::kDepthLimit?limit:detail::kDepthLimit;r.skip_ws();auto v=detail::decode_permission_effect(r);consumed=r.pos;return v;}
+inline std::string encode_permission_effect_at(const PermissionEffect& v,int depth){detail::Reader r{""};if(depth<0||depth>=detail::kDepthLimit)r.refuse("depth_exceeded");std::string out;detail::enc_permission_effect(out,v,depth);std::size_t n=0;decode_permission_effect_at(out,depth,detail::kDepthLimit,n);return out;}
+}  // namespace detail
+inline std::string encode_permission_effect(const PermissionEffect& v){return detail::encode_permission_effect_at(v,0)+"\n";}
+inline PermissionEffect decode_permission_effect(std::string_view in){std::size_t n=0;auto v=detail::decode_permission_effect_at(in,0,detail::kDepthLimit,n);detail::Reader r{in};r.pos=n;r.skip_ws();if(r.pos!=in.size())r.refuse("trailing_bytes");return v;}
+
+namespace detail {
+inline SelectorRule decode_selector_rule_at(std::string_view in,int depth,int limit,std::size_t& consumed){detail::Reader r{in};if(depth<0||limit<1)r.refuse("depth_exceeded");r.depth=depth;r.limit=limit<detail::kDepthLimit?limit:detail::kDepthLimit;r.skip_ws();auto v=detail::decode_selector_rule(r);consumed=r.pos;return v;}
+inline std::string encode_selector_rule_at(const SelectorRule& v,int depth){detail::Reader r{""};if(depth<0||depth>=detail::kDepthLimit)r.refuse("depth_exceeded");std::string out;detail::enc_selector_rule(out,v,depth);std::size_t n=0;decode_selector_rule_at(out,depth,detail::kDepthLimit,n);return out;}
+}  // namespace detail
+inline std::string encode_selector_rule(const SelectorRule& v){return detail::encode_selector_rule_at(v,0)+"\n";}
+inline SelectorRule decode_selector_rule(std::string_view in){std::size_t n=0;auto v=detail::decode_selector_rule_at(in,0,detail::kDepthLimit,n);detail::Reader r{in};r.pos=n;r.skip_ws();if(r.pos!=in.size())r.refuse("trailing_bytes");return v;}
+
+namespace detail {
+inline BundleOrigin decode_bundle_origin_at(std::string_view in,int depth,int limit,std::size_t& consumed){detail::Reader r{in};if(depth<0||limit<1)r.refuse("depth_exceeded");r.depth=depth;r.limit=limit<detail::kDepthLimit?limit:detail::kDepthLimit;r.skip_ws();auto v=detail::decode_bundle_origin(r);consumed=r.pos;return v;}
+inline std::string encode_bundle_origin_at(const BundleOrigin& v,int depth){detail::Reader r{""};if(depth<0||depth>=detail::kDepthLimit)r.refuse("depth_exceeded");std::string out;detail::enc_bundle_origin(out,v,depth);std::size_t n=0;decode_bundle_origin_at(out,depth,detail::kDepthLimit,n);return out;}
+}  // namespace detail
+inline std::string encode_bundle_origin(const BundleOrigin& v){return detail::encode_bundle_origin_at(v,0)+"\n";}
+inline BundleOrigin decode_bundle_origin(std::string_view in){std::size_t n=0;auto v=detail::decode_bundle_origin_at(in,0,detail::kDepthLimit,n);detail::Reader r{in};r.pos=n;r.skip_ws();if(r.pos!=in.size())r.refuse("trailing_bytes");return v;}
+
+namespace detail {
+inline SelectorRuleRecord decode_selector_rule_record_at(std::string_view in,int depth,int limit,std::size_t& consumed){detail::Reader r{in};if(depth<0||limit<1)r.refuse("depth_exceeded");r.depth=depth;r.limit=limit<detail::kDepthLimit?limit:detail::kDepthLimit;r.skip_ws();auto v=detail::decode_selector_rule_record(r);consumed=r.pos;return v;}
+inline std::string encode_selector_rule_record_at(const SelectorRuleRecord& v,int depth){detail::Reader r{""};if(depth<0||depth>=detail::kDepthLimit)r.refuse("depth_exceeded");std::string out;detail::enc_selector_rule_record(out,v,depth);std::size_t n=0;decode_selector_rule_record_at(out,depth,detail::kDepthLimit,n);return out;}
+}  // namespace detail
+inline std::string encode_selector_rule_record(const SelectorRuleRecord& v){return detail::encode_selector_rule_record_at(v,0)+"\n";}
+inline SelectorRuleRecord decode_selector_rule_record(std::string_view in){std::size_t n=0;auto v=detail::decode_selector_rule_record_at(in,0,detail::kDepthLimit,n);detail::Reader r{in};r.pos=n;r.skip_ws();if(r.pos!=in.size())r.refuse("trailing_bytes");return v;}
+
+namespace detail {
+inline SelectorRulePage decode_selector_rule_page_at(std::string_view in,int depth,int limit,std::size_t& consumed){detail::Reader r{in};if(depth<0||limit<1)r.refuse("depth_exceeded");r.depth=depth;r.limit=limit<detail::kDepthLimit?limit:detail::kDepthLimit;r.skip_ws();auto v=detail::decode_selector_rule_page(r);consumed=r.pos;return v;}
+inline std::string encode_selector_rule_page_at(const SelectorRulePage& v,int depth){detail::Reader r{""};if(depth<0||depth>=detail::kDepthLimit)r.refuse("depth_exceeded");std::string out;detail::enc_selector_rule_page(out,v,depth);std::size_t n=0;decode_selector_rule_page_at(out,depth,detail::kDepthLimit,n);return out;}
+}  // namespace detail
+inline std::string encode_selector_rule_page(const SelectorRulePage& v){return detail::encode_selector_rule_page_at(v,0)+"\n";}
+inline SelectorRulePage decode_selector_rule_page(std::string_view in){std::size_t n=0;auto v=detail::decode_selector_rule_page_at(in,0,detail::kDepthLimit,n);detail::Reader r{in};r.pos=n;r.skip_ws();if(r.pos!=in.size())r.refuse("trailing_bytes");return v;}
+
+namespace detail {
+inline SelectorRuleRead decode_selector_rule_read_at(std::string_view in,int depth,int limit,std::size_t& consumed){detail::Reader r{in};if(depth<0||limit<1)r.refuse("depth_exceeded");r.depth=depth;r.limit=limit<detail::kDepthLimit?limit:detail::kDepthLimit;r.skip_ws();auto v=detail::decode_selector_rule_read(r);consumed=r.pos;return v;}
+inline std::string encode_selector_rule_read_at(const SelectorRuleRead& v,int depth){detail::Reader r{""};if(depth<0||depth>=detail::kDepthLimit)r.refuse("depth_exceeded");std::string out;detail::enc_selector_rule_read(out,v,depth);std::size_t n=0;decode_selector_rule_read_at(out,depth,detail::kDepthLimit,n);return out;}
+}  // namespace detail
+inline std::string encode_selector_rule_read(const SelectorRuleRead& v){return detail::encode_selector_rule_read_at(v,0)+"\n";}
+inline SelectorRuleRead decode_selector_rule_read(std::string_view in){std::size_t n=0;auto v=detail::decode_selector_rule_read_at(in,0,detail::kDepthLimit,n);detail::Reader r{in};r.pos=n;r.skip_ws();if(r.pos!=in.size())r.refuse("trailing_bytes");return v;}
+
+namespace detail {
+inline SelectorEdit decode_selector_edit_at(std::string_view in,int depth,int limit,std::size_t& consumed){detail::Reader r{in};if(depth<0||limit<1)r.refuse("depth_exceeded");r.depth=depth;r.limit=limit<detail::kDepthLimit?limit:detail::kDepthLimit;r.skip_ws();auto v=detail::decode_selector_edit(r);consumed=r.pos;return v;}
+inline std::string encode_selector_edit_at(const SelectorEdit& v,int depth){detail::Reader r{""};if(depth<0||depth>=detail::kDepthLimit)r.refuse("depth_exceeded");std::string out;detail::enc_selector_edit(out,v,depth);std::size_t n=0;decode_selector_edit_at(out,depth,detail::kDepthLimit,n);return out;}
+}  // namespace detail
+inline std::string encode_selector_edit(const SelectorEdit& v){return detail::encode_selector_edit_at(v,0)+"\n";}
+inline SelectorEdit decode_selector_edit(std::string_view in){std::size_t n=0;auto v=detail::decode_selector_edit_at(in,0,detail::kDepthLimit,n);detail::Reader r{in};r.pos=n;r.skip_ws();if(r.pos!=in.size())r.refuse("trailing_bytes");return v;}
+
+namespace detail {
+inline LegacyOperationRequest decode_legacy_operation_request_at(std::string_view in,int depth,int limit,std::size_t& consumed){detail::Reader r{in};if(depth<0||limit<1)r.refuse("depth_exceeded");r.depth=depth;r.limit=limit<detail::kDepthLimit?limit:detail::kDepthLimit;r.skip_ws();auto v=detail::decode_legacy_operation_request(r);consumed=r.pos;return v;}
+inline std::string encode_legacy_operation_request_at(const LegacyOperationRequest& v,int depth){detail::Reader r{""};if(depth<0||depth>=detail::kDepthLimit)r.refuse("depth_exceeded");std::string out;detail::enc_legacy_operation_request(out,v,depth);std::size_t n=0;decode_legacy_operation_request_at(out,depth,detail::kDepthLimit,n);return out;}
+}  // namespace detail
+inline std::string encode_legacy_operation_request(const LegacyOperationRequest& v){return detail::encode_legacy_operation_request_at(v,0)+"\n";}
+inline LegacyOperationRequest decode_legacy_operation_request(std::string_view in){std::size_t n=0;auto v=detail::decode_legacy_operation_request_at(in,0,detail::kDepthLimit,n);detail::Reader r{in};r.pos=n;r.skip_ws();if(r.pos!=in.size())r.refuse("trailing_bytes");return v;}
 
 }  // namespace abstraction::rights::api

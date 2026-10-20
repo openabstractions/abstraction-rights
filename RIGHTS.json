@@ -1,0 +1,14 @@
+{
+  "format": "openabstractions-rights@1",
+  "owner": "abstraction.rights",
+  "generated": "Do not edit. Run rights-catalogue --write from the existing compiled catalogue.",
+  "source": "github.com/openabstractions/abstraction-facade/go/grants",
+  "availability": "Compiled catalogue reference: served and selector support use the named receiving-service context. Connected-runtime discovery supplies current availability. Facade Applications is experimental. Definitions grant no access.",
+  "compiled_receivers": {
+    "credentials": true,
+    "application_logs": true
+  },
+  "coverage": "This projection lists no action owned by Rights. Its generic seed names actions defined by other layers. Authorization, operator designation and legacy awake admission retain their existing contracts.",
+  "definitions": [],
+  "bundles": []
+}

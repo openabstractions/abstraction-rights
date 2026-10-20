@@ -8,6 +8,43 @@ interface FrameTransport {
   writeFrame(frame: Uint8Array): Promise<void>;
 }
 
+// One account-wide default the receiving runtime configures: a permit on action
+// for every program of the runtime's own account that has no live rule of its
+// own on the queried target. name is 1..64 bytes of lowercase ASCII letters,
+// digits, '.', '_' and '-'. resource is the one exact resource the default
+// covers; with every_resource it is empty and the default covers every resource
+// of the action. on is the switch: true after a fresh install, until an
+// operator turns it off. set_by and set_at occur together, name the operator
+// subject the rights service established for the last switch edit and its
+// service UTC time, and are absent while the switch was never turned. A
+// per-program rule, a Block included, decides before any default; a configured
+// excluded program, such as a script host, and every other account receive no
+// default. A default writes no rule.
+export interface AccountDefault {
+  name: string;
+  action: string;
+  resource: string;
+  everyResource: boolean;
+  on: boolean;
+  setBy: Subject | null;
+  setAt: string;
+}
+
+// Operator-declared description of a stable app feature. feature_app names the
+// described app, never the grant/decision subject. app_label and description
+// are trimmed control-free UTF-8 text of 1..128 and 1..512 bytes. declared_risk
+// is trimmed 1..32 bytes of display metadata: routine, sensitive,
+// administrative and unknown align existing words; unfamiliar words have
+// unknown interpretation. Risk text changes no authorization, question tier or
+// answerer authority. Metadata establishes no code behavior or vendor trust.
+export interface ActionDescription {
+  action: string;
+  featureApp: Subject;
+  appLabel: string;
+  description: string;
+  declaredRisk: string;
+}
+
 // applied, conflict and unknown carry the revision observed inside the
 // conditional edit. applied and conflict carry the action's registration entry
 // when one exists; a seeded or retired action has none. unknown means
@@ -37,6 +74,8 @@ export interface AppMetadata {
 /** General exact-rule authorization decision point with a bounded, registrable catalogue and persistence. Unknown, absent, unspecified, expired, failed and refused decisions never permit. Explicitly authorized operator configuration registers actions and grants/revokes exact rules; no serialized awake lease is introduced. */
 export declare class AuthorizationClient {
   constructor(transport: FrameTransport);
+  /** Read published descriptive metadata for the current catalogue under same-account receiving Program admission. No rules are exposed. Pages carry one durable revision; continuations bind subject, host epoch and revision and return gap after change/restart. Requested limit is 1..64 and encoded replies are at most 256 KiB. Recheck admission before returning. An earlier authorization@1 service returns unknown_method. */
+  listActionDescriptions(cursor: string, limit: bigint): Promise<DescriptionPage>;
   /** Evaluate the bound receiving account/program against an exact action/resource rule. This result is advisory to the caller; resource services query the decision point themselves. */
   decide(action: string, resource: string): Promise<Decision>;
   /** Evaluate a subject assertion only when the receiving peer is explicitly authorized as an enforcement point for this action/resource. Same account alone grants no relay authority. The designated enforcer is trusted to supply its actual bound subject. Nil or refusing enforcer policy yields forbidden before policy lookup. */
@@ -46,25 +85,73 @@ export declare class AuthorizationClient {
 /** Explicitly authorized administration of the configured decision policy: catalogue registration and retirement, exact rules with expiry and provenance. Receiving same-account Program proof plus a trusted typed-peer operator callback is required; nil refuses. Policy denial is forbidden; callback/storage failure is unavailable. No caller credential, verified flag or provider path is accepted. Resource services remain the receiving enforcement points. Legacy bearer and awake lease behavior is separate. */
 export declare class AuthorizationOperatorClient {
   constructor(transport: FrameTransport);
+  /** Under existing explicit operator authority, atomically register an action and publish/correct its descriptive metadata at the expected durable revision. The service records the receiving publisher and service time. Recheck context and authority after lock waiting. A metadata edit changes no rule, expiry or completed-answer receipt, including first publication on an action with existing rules. A stable action identifies its existing feature; actual changed semantics require a new action/version at the app owner. Metadata is no proof of behavior. An earlier operator@1 service returns unknown_method; never fall back to name-only registration while claiming published description. */
+  registerDescribedAction(expectedRevision: string, description: ActionDescription): Promise<DescriptionEdit>;
+  /** Apply the complete exact permit or paired permits derived by trusted runtime composition from this retained operator Allow and its runtime admission. No caller supplies targets or rules. Authorization, question occurrence and revision are checked while the Book is pinned and the rights edit is locked. Commit complete permits and private durable success proof in the same rights replacement; a first receipt-only commit changes revision when permits already match. A previously completed ID conflicts without rewriting rights, including after revocation or expiry. Failed writes retain the answer for explicit Retry. Missing composition is unavailable; missing, pending, foreign, responder or non-Allow records are invalid. Both IDs and revision are bounded to 128 UTF-8 bytes. An earlier operator@1 service returns unknown_method; callers must not fall back to an untracked permit write. */
+  applyFirstUseAllow(expectedRevision: string, questionId: string): Promise<PolicyEdit>;
   /** Read bounded current rules and catalogue under explicit operator authorization. Every continuation rechecks authorization; no enumeration session is retained for disconnected/slow callers. */
   listPolicy(cursor: string, limit: bigint): Promise<PolicyPage>;
   /** Atomically compare the expected durable revision and set one exact permit/deny rule with no expiry and an empty reason. Revision is bounded to 128 UTF-8 bytes. Operator context and authority are checked again inside the atomic edit after lock waiting. The rule records the operator's established subject and the edit time. An unexpired rule with the same permit is a no-op that keeps its record. Uncatalogued actions and malformed targets are invalid; no resource permission is inferred from the operator request itself. */
   setRule(expectedRevision: string, rule: PolicyRule): Promise<PolicyEdit>;
   /** Atomically remove one exact rule if the revision matches. The next fresh decision observes successful revocation. A failed/uncertain reply claims no successful revocation; inspect current state before another intent. It does not cancel an existing connection-owned awake lease. */
   revokeRule(expectedRevision: string, subject: Subject, action: string, resource: string): Promise<PolicyEdit>;
+  /** Atomically remove an answerer's question.answer/apps enrollment if the revision matches. When also_revoke_grants is true, remove current permits set by that answerer in the same edit; denies and rules set by another program stay. With false, prior permits retain their stored expiry. Stop ends future answers and never exits the answerer's process. Authorization and revision are rechecked after lock waiting. */
+  stopAnswerer(expectedRevision: string, answerer: Subject, alsoRevokeGrants: boolean): Promise<PolicyEdit>;
+  /** Atomically remove any still-current permit among one or two exact targets whose private question ID and setter match this retained first-use answer. Earlier or later grants, person edits, blocks and expired effects stay; zero matches or a revision change conflicts. The asks answer record stays; this method is the permission effect of the Panel's Undo. Authorization is rechecked after lock waiting. */
+  revokeAnswerPermits(expectedRevision: string, answerer: Subject, target: Subject, actions: string[], resource: string, questionId: string): Promise<PolicyEdit>;
   /** As SetRule, recording why and an expiry ttl_ms after the service's edit time. ttl_ms 0 sets no expiry; otherwise it is 1..31536000000. why is 0..256 UTF-8 bytes without control characters. A retained rule with the same permit, reason and expiry is a no-op; any other difference writes, including a new expiry. */
   setRuleFor(expectedRevision: string, rule: PolicyRule, ttlMs: bigint, why: string): Promise<PolicyEdit>;
+  /** Atomically set one or two exact rules with the same target subject, resource and permit, and distinct catalogued actions. The operator's authorized intent may replace a previous opposite rule. All members are validated before one revision and authority check under the rights edit lock; the batch writes all or none with one setter, time, reason and expiry. ttl_ms and why have SetRuleFor's bounds. A prior operator@1 service returns unknown_method. */
+  setRulesFor(expectedRevision: string, rules: PolicyRule[], ttlMs: bigint, why: string): Promise<PolicyEdit>;
   /** Read one exact rule with its provenance and expiry under operator authorization, rechecked after the read. */
   readRule(subject: Subject, action: string, resource: string): Promise<RuleRead>;
   /** Add an action named <owner>/<name> to the catalogue. owner is 1..64 bytes and name 1..63 bytes of lowercase ASCII letters, digits, '.', '_' and '-', each beginning with a letter or digit. Registering an action already in the catalogue applies without writing. A registration records the operator's established subject and the service time. Registration grants nothing: decisions on the action read not_granted until a rule exists. */
   registerAction(expectedRevision: string, action: string): Promise<ActionEdit>;
   /** Remove a registered action and every rule naming it. Retiring a seeded action is invalid. Retiring an action outside the catalogue is unknown. Decisions on a retired action read unknown_action. */
   retireAction(expectedRevision: string, action: string): Promise<ActionEdit>;
+  /** Under operator authorization, rechecked before returning, evaluate subject on one exact action/resource exactly as a decision does and report the step that decided it (RIGHTS-O14). It asks nobody, records nothing and changes no rule or cache. An earlier operator@1 service returns unknown_method. */
+  explainFor(subject: Subject, action: string, resource: string): Promise<DecisionExplanation>;
+  /** Read every configured account-wide default and its switch under operator authorization, rechecked before returning. An earlier operator@1 service returns unknown_method. */
+  listDefaults(): Promise<DefaultPage>;
+  /** Atomically compare the expected durable revision and turn one configured account-wide default on or off, recording the operator subject and service time. An unconfigured name is invalid. Authorization and revision are rechecked after lock waiting. The next fresh decision observes the switch. No rule is written or removed. An earlier operator@1 service returns unknown_method. */
+  setDefault(expectedRevision: string, name: string, on: boolean): Promise<DefaultEdit>;
 }
 
 export declare const AuthorizationOperatorService: Readonly<{ wireName: "abstraction.rights/operator@1"; Client: typeof AuthorizationOperatorClient }>;
 
 export declare const AuthorizationService: Readonly<{ wireName: "abstraction.rights/authorization@1"; Client: typeof AuthorizationClient }>;
+
+export type BatchCheckOutcome = (typeof BatchCheckOutcome)[keyof typeof BatchCheckOutcome];
+export declare const BatchCheckOutcome: Readonly<{ Checked: "checked"; Conflict: "conflict"; Invalid: "invalid"; Forbidden: "forbidden"; Unavailable: "unavailable" }>;
+
+// checked has one revision and ordered evaluated outcomes from one immutable
+// policy snapshot and one clock sample. conflict has the observed revision and
+// no outcomes. Other refusals have empty revision and no outcomes. A batch
+// never mixes revisions or partially succeeds. No authority lease is issued.
+export interface BatchDecision {
+  outcome: BatchCheckOutcome;
+  revision: string;
+  collectionOutcome: DecisionOutcome | null;
+  outcomes: DecisionOutcome[];
+}
+
+// The exact original finite expansion, retained independently of later
+// catalogue changes. All selected member profiles must accept the same
+// canonical target/collection. A new version requires new consent.
+export interface BundleExpansion {
+  bundleRef: string;
+  definitionDigest: string;
+  selector: ResourceSelector;
+  selections: PermissionSelection[];
+}
+
+// Rights-established historical application identity and immutable expansion.
+// An origin explains how rules arose; it does not assert that all original
+// members remain current.
+export interface BundleOrigin {
+  id: string;
+  expansion: BundleExpansion;
+}
 
 // One registered catalogue action. Seeded actions have no entry. registered_by
 // is the subject the rights service established for the registering party: the
@@ -75,6 +162,20 @@ export interface CatalogEntry {
   action: string;
   registeredBy: Subject;
   registeredAt: string;
+}
+
+export interface CheckBatchRequest {
+  expectedRevision: string;
+  collectionAdmission: PermissionKey | null;
+  resources: ConcreteResource[];
+}
+
+// A concrete resource, never a grant selector. Historical captured evidence is
+// accepted only from an explicitly authorized receiving enforcer; no direct
+// caller obtains effect authority from this assertion.
+export interface ConcreteResource {
+  permission: PermissionKey;
+  target: Uint8Array;
 }
 
 // A point-in-time policy decision. Only permitted allows an enforcement point
@@ -88,8 +189,87 @@ export interface Decision {
   policyRevision: string;
 }
 
+// One exact decision for a subject with the step that decided it, from the same
+// evaluation a decision makes. own_rule is the subject's own live exact rule,
+// matched by program identity; typed_block a live typed Block that covers the
+// target; account_default the named account-wide default that permits;
+// default_excluded a named default switched on for the target that the
+// configured exclusion, such as the script-host rule, keeps from this program;
+// none no rule and no default. outcome and policy_revision are those the
+// decision carries. Refusals (invalid, forbidden, unavailable) carry no
+// revision, source or name.
+export interface DecisionExplanation {
+  outcome: DecisionOutcome;
+  policyRevision: string;
+  source: DecisionSource | null;
+  defaultName: string;
+}
+
 export type DecisionOutcome = (typeof DecisionOutcome)[keyof typeof DecisionOutcome];
 export declare const DecisionOutcome: Readonly<{ Permitted: "permitted"; Denied: "denied"; NotGranted: "not_granted"; UnknownAction: "unknown_action"; Invalid: "invalid"; Forbidden: "forbidden"; Unavailable: "unavailable" }>;
+
+export type DecisionSource = (typeof DecisionSource)[keyof typeof DecisionSource];
+export declare const DecisionSource: Readonly<{ None: "none"; OwnRule: "own_rule"; TypedBlock: "typed_block"; AccountDefault: "account_default"; DefaultExcluded: "default_excluded" }>;
+
+// applied and conflict carry the revision and the named default's current state
+// observed inside the conditional edit. Other outcomes carry neither. A stale
+// expected revision always conflicts. Setting a switch to its current state at
+// the matching revision is a no-op that keeps the revision.
+export interface DefaultEdit {
+  outcome: PolicyEditOutcome;
+  revision: string;
+  current: AccountDefault | null;
+}
+
+// Every configured account-wide default, sorted by name, under one durable
+// revision; at most 32 entries. Refusals have an empty revision and no
+// defaults.
+export interface DefaultPage {
+  outcome: PolicyPageOutcome;
+  revision: string;
+  defaults: AccountDefault[];
+}
+
+// One current catalogue action. choices is exactly allow, block, remove_rule,
+// naming existing SetRule permit/deny and RevokeRule choices without authority
+// to invoke them. Description and publication fields occur together or are all
+// absent. description.action equals action. published_by is the operator
+// subject established for publication; feature_app is its administrative
+// declaration, and the imported descriptor's author/vendor remain unverified.
+// published_at is service UTC RFC 3339 with milliseconds. Undescribed names
+// carry no invented app information.
+export interface DescribedAction {
+  action: string;
+  choices: string[];
+  description: ActionDescription | null;
+  publishedBy: Subject | null;
+  publishedAt: string;
+}
+
+// applied/conflict carry the revision and current described catalogue action
+// when present; all other outcomes carry neither. A stale expected revision
+// always conflicts. Identical metadata at the current revision is a no-op. A
+// valid correction changes descriptor publication provenance/time and revision,
+// preserving all grants, denies, targets, expiry and private answer receipts.
+// Registration alone grants nothing.
+export interface DescriptionEdit {
+  outcome: ActionEditOutcome;
+  revision: string;
+  current: DescribedAction | null;
+}
+
+// Sorted current catalogue descriptions, including undescribed names, under one
+// durable revision. 1..64 requested entries and at most 256 KiB encoded reply.
+// Noncomplete pages have a nonempty next cursor and at least one entry; cursors
+// are at most 256 UTF-8 bytes. Refusals have empty revision/actions/next and
+// complete=false. No retained enumeration snapshot or historical replay.
+export interface DescriptionPage {
+  outcome: PolicyPageOutcome;
+  revision: string;
+  actions: DescribedAction[];
+  next: string;
+  complete: boolean;
+}
 
 export declare class DispatchError extends Error {
   constructor(code: string);
@@ -105,6 +285,100 @@ export interface HoldMetadata {
   right: string;
   why: string;
   since: string;
+}
+
+// Old exact authority plus an optional receiver-known concrete effect. Trusted
+// compiled capability equivalence validates the supplied effect against this
+// old operation and its fixed collection. Original legacy authority and live
+// equivalent typed restrictions are evaluated at one snapshot. Missing concrete
+// detail on a coarse view uses conservative collection intersection. This
+// method imports explicit blocks only; it grants no typed permit.
+export interface LegacyOperationRequest {
+  legacyAction: string;
+  legacyResource: string;
+  concreteOperation: ConcreteResource | null;
+}
+
+// Immutable finite expansion identified by namespaced bundle@version and
+// deterministic content digest. This slice permits only member profiles with
+// the same owning target document and collection. Each member validates
+// independently. No mapping language, live role reference, future operation or
+// permission-administration effect is implied.
+export interface PermissionBundleDefinition {
+  bundleRef: string;
+  ownerContract: string;
+  label: string;
+  targetType: string;
+  supportedSelectors: ResourceSelectorKind[];
+  members: PermissionKey[];
+  disclosure: string;
+  definitionDigest: string;
+}
+
+export interface PermissionBundlePage {
+  outcome: PolicyPageOutcome;
+  revision: string;
+  bundles: PermissionBundleDefinition[];
+  next: string;
+  complete: boolean;
+}
+
+// Service-owned definition metadata for one stable exact action. Operations
+// identify owning IDL methods and existing domain effects. resource_profile is
+// an immutable namespaced profile@version bound to a compiled owning validator
+// by trusted composition; unknown profiles/versions are refused. Legacy
+// exact-string profiles retain bounded exact bytes, including literal '*', and
+// describe their resource owner's existing validation. served distinguishes
+// implemented receiving enforcement from defined/unserved operations; unserved
+// definitions admit no first-use request. first_use names only existing exact
+// or consuming paired admission; dynamic tier/answerer facts remain separately
+// service-owned. Disclosure and lifecycle explain data/effects and account,
+// deletion and name-reuse boundaries. Metadata conveys no proof, grant,
+// callback or scope selector. Changed authority requires a new action
+// identity/version. This additive record is available to generated consumers;
+// no service method publishes or registers definitions in this slice.
+export interface PermissionDefinition {
+  action: string;
+  ownerContract: string;
+  operations: string[];
+  resourceProfile: string;
+  resourceType: string;
+  enforcedBy: string[];
+  disclosure: string;
+  lifecycle: string;
+  firstUse: PermissionFirstUse;
+  served: boolean;
+}
+
+export interface PermissionDefinitionPage {
+  outcome: PolicyPageOutcome;
+  revision: string;
+  definitions: SelectorPermissionDefinition[];
+  next: string;
+  complete: boolean;
+}
+
+// Complete typed permit proposal retained by a trusted Asks admission owner.
+// When bundle is present its selections equal this complete list. Native
+// preparation establishes subject and target evidence. Text, a serialized
+// subject or an app-supplied effect grants no authority.
+export interface PermissionEffect {
+  subject: Subject;
+  selections: PermissionSelection[];
+  bundle: BundleExpansion | null;
+}
+
+export type PermissionFirstUse = (typeof PermissionFirstUse)[keyof typeof PermissionFirstUse];
+export declare const PermissionFirstUse: Readonly<{ None: "none"; Exact: "exact"; ConsumingPaired: "consuming_paired" }>;
+
+export interface PermissionKey {
+  action: string;
+  resourceProfile: string;
+}
+
+export interface PermissionSelection {
+  permission: PermissionKey;
+  selector: ResourceSelector;
 }
 
 // Applied/conflict carry the revision and optional exact current rule observed
@@ -163,7 +437,7 @@ export interface PolicyRule {
 
 export declare class Refusal extends Error {
   constructor(word: string, offset: number);
-  word: "malformed" | "bad_string" | "number_spelling" | "wrong_type" | "depth_exceeded" | "duplicate_key" | "duplicate_field" | "unknown_field" | "missing_field" | "bad_enum" | "trailing_bytes";
+  word: "malformed" | "bad_string" | "number_spelling" | "wrong_type" | "depth_exceeded" | "duplicate_key" | "duplicate_field" | "unknown_field" | "missing_field" | "bad_enum" | "bad_binary" | "trailing_bytes";
   offset: number;
 }
 
@@ -182,6 +456,18 @@ export interface Request {
   app: string;
   admin: string;
 }
+
+// One has one bounded canonical owning-IDL document. All omits target and
+// selects the fixed profile collection within the rule subject's
+// account/runtime. Operator inputs are prepared by the trusted owning profile;
+// arbitrary captured identity evidence is refused.
+export interface ResourceSelector {
+  kind: ResourceSelectorKind;
+  target: Uint8Array | null;
+}
+
+export type ResourceSelectorKind = (typeof ResourceSelectorKind)[keyof typeof ResourceSelectorKind];
+export declare const ResourceSelectorKind: Readonly<{ One: "one"; All: "all" }>;
 
 // Own response fields projected without native Seen evidence. Any nonempty
 // code/error is refusal, including unknown codes. This is a common descriptor,
@@ -226,6 +512,88 @@ export interface RuleRecord {
   expires: string;
 }
 
+export declare class SelectorAuthorizationClient {
+  constructor(transport: FrameTransport);
+  listPermissionDefinitions(cursor: string, limit: bigint): Promise<PermissionDefinitionPage>;
+  listPermissionBundles(cursor: string, limit: bigint): Promise<PermissionBundlePage>;
+  checkBatch(request: CheckBatchRequest): Promise<BatchDecision>;
+  checkBatchFor(subject: Subject, request: CheckBatchRequest): Promise<BatchDecision>;
+  checkLegacyOperationFor(subject: Subject, request: LegacyOperationRequest): Promise<Decision>;
+}
+
+/** Existing explicit operator admission, receiving provenance and in-lock authority recheck apply. First-use methods accept no caller-supplied targets: trusted composition resolves and pins the new typed Book occurrence. Existing operator@1 completion records are preserved with their original semantics. */
+export declare class SelectorAuthorizationOperatorClient {
+  constructor(transport: FrameTransport);
+  listSelectorRules(cursor: string, limit: bigint): Promise<SelectorRulePage>;
+  readSelectorRule(subject: Subject, selection: PermissionSelection): Promise<SelectorRuleRead>;
+  setSelectorRule(expectedRevision: string, rule: SelectorRule, ttlMs: bigint, why: string): Promise<SelectorEdit>;
+  removeSelectorRule(expectedRevision: string, subject: Subject, selection: PermissionSelection): Promise<SelectorEdit>;
+  applyBundle(expectedRevision: string, subject: Subject, bundleRef: string, selector: ResourceSelector, ttlMs: bigint, why: string): Promise<SelectorEdit>;
+  removeBundle(expectedRevision: string, subject: Subject, originId: string): Promise<SelectorEdit>;
+  applyPermissionAllow(expectedRevision: string, questionId: string): Promise<SelectorEdit>;
+  undoPermissionEffect(expectedRevision: string, questionId: string): Promise<SelectorEdit>;
+}
+
+export declare const SelectorAuthorizationOperatorService: Readonly<{ wireName: "abstraction.rights/operator@2"; Client: typeof SelectorAuthorizationOperatorClient }>;
+
+export declare const SelectorAuthorizationService: Readonly<{ wireName: "abstraction.rights/authorization@2"; Client: typeof SelectorAuthorizationClient }>;
+
+// Applied/conflict carry the locked observed revision and complete bounded
+// affected state. Stale expected revision always conflicts, including matching
+// desired state. Other refusals carry empty revision/current. Atomic edits have
+// no per-member success. Individual replacement removes that row's active
+// bundle origin; remaining rows keep historical origin.
+export interface SelectorEdit {
+  outcome: PolicyEditOutcome;
+  revision: string;
+  current: SelectorRuleRecord[];
+  bundleOrigin: BundleOrigin | null;
+}
+
+// Full key is definition.action plus definition.resource_profile. Service-owned
+// collection/all_effect state membership and present/future meaning. Only
+// actually served receiving selectors are advertised. Existing
+// PermissionDefinition.first_use remains the legacy projection; new selector
+// first use uses first_use_selectors.
+export interface SelectorPermissionDefinition {
+  definition: PermissionDefinition;
+  label: string;
+  supportedSelectors: ResourceSelectorKind[];
+  firstUseSelectors: ResourceSelectorKind[];
+  collection: string;
+  allEffect: string;
+  requestType: string;
+}
+
+export interface SelectorRule {
+  subject: Subject;
+  selection: PermissionSelection;
+  permit: boolean;
+}
+
+export interface SelectorRulePage {
+  outcome: PolicyPageOutcome;
+  revision: string;
+  records: SelectorRuleRecord[];
+  next: string;
+  complete: boolean;
+}
+
+export interface SelectorRuleRead {
+  outcome: RuleReadOutcome;
+  revision: string;
+  record: SelectorRuleRecord | null;
+}
+
+export interface SelectorRuleRecord {
+  rule: SelectorRule;
+  setBy: Subject;
+  setAt: string;
+  why: string;
+  expires: string;
+  bundleOrigin: BundleOrigin | null;
+}
+
 export declare class ServiceError extends Error {
   constructor(code: string, message?: string);
   code: string;
@@ -245,19 +613,225 @@ export interface Subject {
 
 export declare function decode(data: Uint8Array): Request;
 
+export declare function decodeAccountDefault(data: Uint8Array): AccountDefault;
+
+export declare function decodeActionDescription(data: Uint8Array): ActionDescription;
+
+export declare function decodeActionEdit(data: Uint8Array): ActionEdit;
+
+export declare function decodeAppMetadata(data: Uint8Array): AppMetadata;
+
+export declare function decodeBatchDecision(data: Uint8Array): BatchDecision;
+
+export declare function decodeBundleExpansion(data: Uint8Array): BundleExpansion;
+
+export declare function decodeBundleOrigin(data: Uint8Array): BundleOrigin;
+
+export declare function decodeCatalogEntry(data: Uint8Array): CatalogEntry;
+
+export declare function decodeCheckBatchRequest(data: Uint8Array): CheckBatchRequest;
+
+export declare function decodeConcreteResource(data: Uint8Array): ConcreteResource;
+
+export declare function decodeDecision(data: Uint8Array): Decision;
+
+export declare function decodeDecisionExplanation(data: Uint8Array): DecisionExplanation;
+
+export declare function decodeDefaultEdit(data: Uint8Array): DefaultEdit;
+
+export declare function decodeDefaultPage(data: Uint8Array): DefaultPage;
+
+export declare function decodeDescribedAction(data: Uint8Array): DescribedAction;
+
+export declare function decodeDescriptionEdit(data: Uint8Array): DescriptionEdit;
+
+export declare function decodeDescriptionPage(data: Uint8Array): DescriptionPage;
+
+export declare function decodeHoldMetadata(data: Uint8Array): HoldMetadata;
+
+export declare function decodeLegacyOperationRequest(data: Uint8Array): LegacyOperationRequest;
+
+export declare function decodePermissionBundleDefinition(data: Uint8Array): PermissionBundleDefinition;
+
+export declare function decodePermissionBundlePage(data: Uint8Array): PermissionBundlePage;
+
+export declare function decodePermissionDefinition(data: Uint8Array): PermissionDefinition;
+
+export declare function decodePermissionDefinitionPage(data: Uint8Array): PermissionDefinitionPage;
+
+export declare function decodePermissionEffect(data: Uint8Array): PermissionEffect;
+
+export declare function decodePermissionKey(data: Uint8Array): PermissionKey;
+
+export declare function decodePermissionSelection(data: Uint8Array): PermissionSelection;
+
+export declare function decodePolicyEdit(data: Uint8Array): PolicyEdit;
+
+export declare function decodePolicyPage(data: Uint8Array): PolicyPage;
+
+export declare function decodePolicyRule(data: Uint8Array): PolicyRule;
+
+export declare function decodeRequest(data: Uint8Array): Request;
+
+export declare function decodeResourceSelector(data: Uint8Array): ResourceSelector;
+
+export declare function decodeResponseMetadata(data: Uint8Array): ResponseMetadata;
+
+export declare function decodeRuleRead(data: Uint8Array): RuleRead;
+
+export declare function decodeRuleRecord(data: Uint8Array): RuleRecord;
+
+export declare function decodeSelectorEdit(data: Uint8Array): SelectorEdit;
+
+export declare function decodeSelectorPermissionDefinition(data: Uint8Array): SelectorPermissionDefinition;
+
+export declare function decodeSelectorRule(data: Uint8Array): SelectorRule;
+
+export declare function decodeSelectorRulePage(data: Uint8Array): SelectorRulePage;
+
+export declare function decodeSelectorRuleRead(data: Uint8Array): SelectorRuleRead;
+
+export declare function decodeSelectorRuleRecord(data: Uint8Array): SelectorRuleRecord;
+
+export declare function decodeSubject(data: Uint8Array): Subject;
+
 export declare function encode(v: Request): Uint8Array;
 
+export declare function encodeAccountDefault(v: AccountDefault): Uint8Array;
+
+export declare function encodeActionDescription(v: ActionDescription): Uint8Array;
+
+export declare function encodeActionEdit(v: ActionEdit): Uint8Array;
+
+export declare function encodeAppMetadata(v: AppMetadata): Uint8Array;
+
+export declare function encodeBatchDecision(v: BatchDecision): Uint8Array;
+
+export declare function encodeBundleExpansion(v: BundleExpansion): Uint8Array;
+
+export declare function encodeBundleOrigin(v: BundleOrigin): Uint8Array;
+
+export declare function encodeCatalogEntry(v: CatalogEntry): Uint8Array;
+
+export declare function encodeCheckBatchRequest(v: CheckBatchRequest): Uint8Array;
+
+export declare function encodeConcreteResource(v: ConcreteResource): Uint8Array;
+
+export declare function encodeDecision(v: Decision): Uint8Array;
+
+export declare function encodeDecisionExplanation(v: DecisionExplanation): Uint8Array;
+
+export declare function encodeDefaultEdit(v: DefaultEdit): Uint8Array;
+
+export declare function encodeDefaultPage(v: DefaultPage): Uint8Array;
+
+export declare function encodeDescribedAction(v: DescribedAction): Uint8Array;
+
+export declare function encodeDescriptionEdit(v: DescriptionEdit): Uint8Array;
+
+export declare function encodeDescriptionPage(v: DescriptionPage): Uint8Array;
+
+export declare function encodeHoldMetadata(v: HoldMetadata): Uint8Array;
+
+export declare function encodeLegacyOperationRequest(v: LegacyOperationRequest): Uint8Array;
+
+export declare function encodePermissionBundleDefinition(v: PermissionBundleDefinition): Uint8Array;
+
+export declare function encodePermissionBundlePage(v: PermissionBundlePage): Uint8Array;
+
+export declare function encodePermissionDefinition(v: PermissionDefinition): Uint8Array;
+
+export declare function encodePermissionDefinitionPage(v: PermissionDefinitionPage): Uint8Array;
+
+export declare function encodePermissionEffect(v: PermissionEffect): Uint8Array;
+
+export declare function encodePermissionKey(v: PermissionKey): Uint8Array;
+
+export declare function encodePermissionSelection(v: PermissionSelection): Uint8Array;
+
+export declare function encodePolicyEdit(v: PolicyEdit): Uint8Array;
+
+export declare function encodePolicyPage(v: PolicyPage): Uint8Array;
+
+export declare function encodePolicyRule(v: PolicyRule): Uint8Array;
+
+export declare function encodeRequest(v: Request): Uint8Array;
+
+export declare function encodeResourceSelector(v: ResourceSelector): Uint8Array;
+
+export declare function encodeResponseMetadata(v: ResponseMetadata): Uint8Array;
+
+export declare function encodeRuleRead(v: RuleRead): Uint8Array;
+
+export declare function encodeRuleRecord(v: RuleRecord): Uint8Array;
+
+export declare function encodeSelectorEdit(v: SelectorEdit): Uint8Array;
+
+export declare function encodeSelectorPermissionDefinition(v: SelectorPermissionDefinition): Uint8Array;
+
+export declare function encodeSelectorRule(v: SelectorRule): Uint8Array;
+
+export declare function encodeSelectorRulePage(v: SelectorRulePage): Uint8Array;
+
+export declare function encodeSelectorRuleRead(v: SelectorRuleRead): Uint8Array;
+
+export declare function encodeSelectorRuleRecord(v: SelectorRuleRecord): Uint8Array;
+
+export declare function encodeSubject(v: Subject): Uint8Array;
+
 export declare const knownRights: readonly ["awake"];
+
+export declare function newAccountDefault(): AccountDefault;
+
+export declare function newActionDescription(): ActionDescription;
 
 export declare function newActionEdit(): ActionEdit;
 
 export declare function newAppMetadata(): AppMetadata;
 
+export declare function newBatchDecision(): BatchDecision;
+
+export declare function newBundleExpansion(): BundleExpansion;
+
+export declare function newBundleOrigin(): BundleOrigin;
+
 export declare function newCatalogEntry(): CatalogEntry;
+
+export declare function newCheckBatchRequest(): CheckBatchRequest;
+
+export declare function newConcreteResource(): ConcreteResource;
 
 export declare function newDecision(): Decision;
 
+export declare function newDecisionExplanation(): DecisionExplanation;
+
+export declare function newDefaultEdit(): DefaultEdit;
+
+export declare function newDefaultPage(): DefaultPage;
+
+export declare function newDescribedAction(): DescribedAction;
+
+export declare function newDescriptionEdit(): DescriptionEdit;
+
+export declare function newDescriptionPage(): DescriptionPage;
+
 export declare function newHoldMetadata(): HoldMetadata;
+
+export declare function newLegacyOperationRequest(): LegacyOperationRequest;
+
+export declare function newPermissionBundleDefinition(): PermissionBundleDefinition;
+
+export declare function newPermissionBundlePage(): PermissionBundlePage;
+
+export declare function newPermissionDefinition(): PermissionDefinition;
+
+export declare function newPermissionDefinitionPage(): PermissionDefinitionPage;
+
+export declare function newPermissionEffect(): PermissionEffect;
+
+export declare function newPermissionKey(): PermissionKey;
+
+export declare function newPermissionSelection(): PermissionSelection;
 
 export declare function newPolicyEdit(): PolicyEdit;
 
@@ -267,11 +841,25 @@ export declare function newPolicyRule(): PolicyRule;
 
 export declare function newRequest(): Request;
 
+export declare function newResourceSelector(): ResourceSelector;
+
 export declare function newResponseMetadata(): ResponseMetadata;
 
 export declare function newRuleRead(): RuleRead;
 
 export declare function newRuleRecord(): RuleRecord;
+
+export declare function newSelectorEdit(): SelectorEdit;
+
+export declare function newSelectorPermissionDefinition(): SelectorPermissionDefinition;
+
+export declare function newSelectorRule(): SelectorRule;
+
+export declare function newSelectorRulePage(): SelectorRulePage;
+
+export declare function newSelectorRuleRead(): SelectorRuleRead;
+
+export declare function newSelectorRuleRecord(): SelectorRuleRecord;
 
 export declare function newSubject(): Subject;
 

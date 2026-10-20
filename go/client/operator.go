@@ -103,6 +103,46 @@ func (c *Operator) RevokeRuleContext(ctx context.Context, expected string, subje
 	return checkedPolicyEdit(result, err, subject, action, resource, nil)
 }
 
+func (c *Operator) StopAnswererContext(ctx context.Context, expected string, answerer Subject, alsoRevokeGrants bool) (wire.PolicyEdit, error) {
+	if err := ctx.Err(); err != nil {
+		return wire.PolicyEdit{}, err
+	}
+	answerer = normalizeOperatorSubject(answerer)
+	if !boundedOperatorString(expected, 128) || !validSubject(answerer) {
+		return wire.PolicyEdit{}, errors.New("rights: invalid answerer stop")
+	}
+	result, err := wire.NewAuthorizationOperatorClient(c.transport.WithContext(ctx)).StopAnswerer(expected, answerer, alsoRevokeGrants)
+	return checkedAnswerEdit(result, err)
+}
+
+func (c *Operator) RevokeAnswerPermitsContext(ctx context.Context, expected string, answerer, target Subject, actions []string, resource, questionID string) (wire.PolicyEdit, error) {
+	if err := ctx.Err(); err != nil {
+		return wire.PolicyEdit{}, err
+	}
+	answerer, target = normalizeOperatorSubject(answerer), normalizeOperatorSubject(target)
+	if !boundedOperatorString(expected, 128) || !validSubject(answerer) || !validSubject(target) || !boundedOperatorString(questionID, 128) || len(actions) < 1 || len(actions) > 2 || !boundedOperatorString(resource, 1024) {
+		return wire.PolicyEdit{}, errors.New("rights: invalid answer permit revoke")
+	}
+	for i, action := range actions {
+		if !boundedOperatorString(action, 128) || slices.Contains(actions[:i], action) {
+			return wire.PolicyEdit{}, errors.New("rights: invalid answer actions")
+		}
+	}
+	result, err := wire.NewAuthorizationOperatorClient(c.transport.WithContext(ctx)).RevokeAnswerPermits(expected, answerer, target, actions, resource, questionID)
+	return checkedAnswerEdit(result, err)
+}
+
+func checkedAnswerEdit(result wire.PolicyEdit, err error) (wire.PolicyEdit, error) {
+	if err != nil {
+		return wire.PolicyEdit{}, err
+	}
+	observed := result.Outcome == wire.PolicyEditOutcomeApplied || result.Outcome == wire.PolicyEditOutcomeConflict
+	if observed != boundedOperatorString(result.Revision, 128) || result.Current != nil || !observed && result.Revision != "" {
+		return wire.PolicyEdit{}, errors.New("rights: malformed answer edit")
+	}
+	return result, nil
+}
+
 type RuleRecord = wire.RuleRecord
 type CatalogEntry = wire.CatalogEntry
 
@@ -133,6 +173,27 @@ func validActionName(action string) bool {
 	return ok && part(owner, 64) && part(name, 63)
 }
 
+// ApplyFirstUseAllowContext applies the complete permit derived from a retained
+// runtime operator Allow. Earlier runtimes return unknown_method; no generic
+// setter fallback can preserve its durable completion guarantee.
+func (c *Operator) ApplyFirstUseAllowContext(ctx context.Context, expected, id string) (wire.PolicyEdit, error) {
+	if err := ctx.Err(); err != nil {
+		return wire.PolicyEdit{}, err
+	}
+	if !boundedOperatorString(expected, 128) || !boundedOperatorString(id, 128) {
+		return wire.PolicyEdit{}, errors.New("rights: invalid first-use Allow")
+	}
+	result, err := wire.NewAuthorizationOperatorClient(c.transport.WithContext(ctx)).ApplyFirstUseAllow(expected, id)
+	if err != nil {
+		return wire.PolicyEdit{}, err
+	}
+	observed := result.Outcome == wire.PolicyEditOutcomeApplied || result.Outcome == wire.PolicyEditOutcomeConflict
+	if observed != boundedOperatorString(result.Revision, 128) || !observed && result.Current != nil || result.Current != nil && !validPolicyRule(*result.Current) || result.Outcome == wire.PolicyEditOutcomeApplied && (result.Current == nil || !result.Current.Permit) {
+		return wire.PolicyEdit{}, errors.New("rights: malformed first-use Allow result")
+	}
+	return result, nil
+}
+
 // SetRuleForContext sets one exact rule with a reason and an expiry ttl after the
 // service's edit time. A zero ttl sets no expiry.
 func (c *Operator) SetRuleForContext(ctx context.Context, expected string, rule PolicyRule, ttl time.Duration, why string) (wire.PolicyEdit, error) {
@@ -145,6 +206,44 @@ func (c *Operator) SetRuleForContext(ctx context.Context, expected string, rule 
 	}
 	result, err := wire.NewAuthorizationOperatorClient(c.transport.WithContext(ctx)).SetRuleFor(expected, rule, ttl.Milliseconds(), why)
 	return checkedPolicyEdit(result, err, rule.Subject, rule.Action, rule.Resource, &rule.Permit)
+}
+
+// SetRulesForContext conditionally sets one or two related exact rules in one
+// rights edit, with one provenance stamp and no partial paired permission.
+func (c *Operator) SetRulesForContext(ctx context.Context, expected string, rules []PolicyRule, ttl time.Duration, why string) (wire.PolicyEdit, error) {
+	if err := ctx.Err(); err != nil {
+		return wire.PolicyEdit{}, err
+	}
+	if len(rules) < 1 || len(rules) > 2 || !boundedOperatorString(expected, 128) || ttl < 0 || ttl > maxRuleTTL || ttl%time.Millisecond != 0 || !(why == "" || boundedOperatorString(why, 256)) {
+		return wire.PolicyEdit{}, errors.New("rights: invalid grouped policy edit")
+	}
+	for i := range rules {
+		rules[i].Subject = normalizeOperatorSubject(rules[i].Subject)
+		if !validPolicyRule(rules[i]) || rules[i].Subject.Account != rules[0].Subject.Account || !identity.SameSubjectProgram(rules[i].Subject.Program, rules[0].Subject.Program) || rules[i].Resource != rules[0].Resource || rules[i].Permit != rules[0].Permit || slices.ContainsFunc(rules[:i], func(r PolicyRule) bool { return r.Action == rules[i].Action }) {
+			return wire.PolicyEdit{}, errors.New("rights: invalid grouped policy rules")
+		}
+	}
+	result, err := wire.NewAuthorizationOperatorClient(c.transport.WithContext(ctx)).SetRulesFor(expected, rules, ttl.Milliseconds(), why)
+	if err != nil {
+		return wire.PolicyEdit{}, err
+	}
+	observed := result.Outcome == wire.PolicyEditOutcomeApplied || result.Outcome == wire.PolicyEditOutcomeConflict
+	if observed != boundedOperatorString(result.Revision, 128) || !observed && (result.Revision != "" || result.Current != nil) {
+		return wire.PolicyEdit{}, errors.New("rights: malformed grouped edit")
+	}
+	if result.Current != nil {
+		match := slices.ContainsFunc(rules, func(r PolicyRule) bool {
+			current := result.Current
+			return validPolicyRule(*current) && current.Subject.Account == r.Subject.Account && identity.SameSubjectProgram(current.Subject.Program, r.Subject.Program) && current.Action == r.Action && current.Resource == r.Resource && current.Permit == r.Permit
+		})
+		if !match {
+			return wire.PolicyEdit{}, errors.New("rights: mismatched grouped current rule")
+		}
+	}
+	if result.Outcome == wire.PolicyEditOutcomeApplied && (result.Current == nil || !result.Current.Permit && rules[0].Permit || result.Current.Permit && !rules[0].Permit) {
+		return wire.PolicyEdit{}, errors.New("rights: malformed grouped applied state")
+	}
+	return result, nil
 }
 
 // ReadRuleContext reads one exact rule with the provenance the service recorded.
@@ -163,7 +262,7 @@ func (c *Operator) ReadRuleContext(ctx context.Context, subject Subject, action,
 	switch result.Outcome {
 	case wire.RuleReadOutcomeFound, wire.RuleReadOutcomeExpired:
 		r := result.Record
-		if !boundedOperatorString(result.Revision, 128) || r == nil || !validPolicyRule(r.Rule) || r.Rule.Subject != subject ||
+		if !boundedOperatorString(result.Revision, 128) || r == nil || !validPolicyRule(r.Rule) || r.Rule.Subject.Account != subject.Account || !identity.SameSubjectProgram(r.Rule.Subject.Program, subject.Program) ||
 			r.Rule.Action != action || r.Rule.Resource != resource || !validSubject(r.SetBy) || !validStamp(r.SetAt) ||
 			!(r.Why == "" || boundedOperatorString(r.Why, 256)) || (r.Expires != "" && !validStamp(r.Expires)) ||
 			(result.Outcome == wire.RuleReadOutcomeExpired && r.Expires == "") {
@@ -177,6 +276,130 @@ func (c *Operator) ReadRuleContext(ctx context.Context, subject Subject, action,
 		if result.Revision != "" || result.Record != nil {
 			return wire.RuleRead{}, errors.New("rights: malformed rule refusal")
 		}
+	}
+	return result, nil
+}
+
+// AccountDefault is one account-wide default and its switch (RIGHTS-R22).
+type AccountDefault = wire.AccountDefault
+
+// DefaultPage is ListDefaults' answer: every configured default with its
+// switch, or a refusal.
+type DefaultPage = wire.DefaultPage
+
+// DefaultEdit is SetDefault's answer: the default as it now stands, or a
+// refusal.
+type DefaultEdit = wire.DefaultEdit
+
+// validAccountDefault checks one default as the service reports it.
+func validAccountDefault(d AccountDefault) bool {
+	resource := d.EveryResource && d.Resource == "" || !d.EveryResource && boundedOperatorString(d.Resource, 1024)
+	provenance := d.SetBy == nil && d.SetAt == "" || d.SetBy != nil && validSubject(*d.SetBy) && validStamp(d.SetAt)
+	name := boundedOperatorString(d.Name, 64) && strings.IndexFunc(d.Name, func(r rune) bool {
+		return !(r >= 'a' && r <= 'z' || r >= '0' && r <= '9' || r == '.' || r == '_' || r == '-')
+	}) < 0
+	return name && boundedOperatorString(d.Action, 128) && resource && provenance
+}
+
+// DecisionExplanation is one exact decision for a subject with the step that
+// decided it (RIGHTS-O14).
+type DecisionExplanation = wire.DecisionExplanation
+
+// DecisionSource is the step that decided an explained decision.
+type DecisionSource = wire.DecisionSource
+
+// The steps an explanation names.
+const (
+	DecisionSourceNone            = wire.DecisionSourceNone
+	DecisionSourceOwnRule         = wire.DecisionSourceOwnRule
+	DecisionSourceTypedBlock      = wire.DecisionSourceTypedBlock
+	DecisionSourceAccountDefault  = wire.DecisionSourceAccountDefault
+	DecisionSourceDefaultExcluded = wire.DecisionSourceDefaultExcluded
+)
+
+// DecisionSourceValues returns every step in declaration order.
+func DecisionSourceValues() []DecisionSource { return wire.DecisionSourceValues() }
+
+// ExplainForContext reads one exact decision for subject with the step that
+// decided it: its own rule, a typed Block, an account-wide default, a default
+// the program is excluded from, or none. It asks nobody and records nothing.
+// An earlier runtime returns unknown_method.
+func (c *Operator) ExplainForContext(ctx context.Context, subject Subject, action, resource string) (wire.DecisionExplanation, error) {
+	if err := ctx.Err(); err != nil {
+		return wire.DecisionExplanation{}, err
+	}
+	if !validSubject(subject) || !boundedOperatorString(action, 128) || !boundedOperatorString(resource, 1024) {
+		return wire.DecisionExplanation{}, errors.New("rights: invalid explanation request")
+	}
+	got, err := wire.NewAuthorizationOperatorClient(c.transport.WithContext(ctx)).ExplainFor(subject, action, resource)
+	if err != nil {
+		return wire.DecisionExplanation{}, err
+	}
+	evaluated := got.Outcome == wire.DecisionOutcomePermitted || got.Outcome == wire.DecisionOutcomeDenied ||
+		got.Outcome == wire.DecisionOutcomeNotGranted || got.Outcome == wire.DecisionOutcomeUnknownAction
+	if !evaluated {
+		if got.PolicyRevision != "" || got.Source != nil || got.DefaultName != "" {
+			return wire.DecisionExplanation{}, errors.New("rights: malformed explanation refusal")
+		}
+		return got, nil
+	}
+	if !boundedOperatorString(got.PolicyRevision, 128) || got.Source == nil || len(got.DefaultName) > 64 {
+		return wire.DecisionExplanation{}, errors.New("rights: malformed explanation")
+	}
+	named := *got.Source == wire.DecisionSourceAccountDefault || *got.Source == wire.DecisionSourceDefaultExcluded
+	if named != (got.DefaultName != "") {
+		return wire.DecisionExplanation{}, errors.New("rights: malformed explanation")
+	}
+	return got, nil
+}
+
+// ListDefaultsContext reads every configured account-wide default with its
+// switch. An earlier runtime returns unknown_method.
+func (c *Operator) ListDefaultsContext(ctx context.Context) (wire.DefaultPage, error) {
+	if err := ctx.Err(); err != nil {
+		return wire.DefaultPage{}, err
+	}
+	page, err := wire.NewAuthorizationOperatorClient(c.transport.WithContext(ctx)).ListDefaults()
+	if err != nil {
+		return wire.DefaultPage{}, err
+	}
+	if page.Outcome != wire.PolicyPageOutcomePage {
+		if page.Revision != "" || len(page.Defaults) != 0 {
+			return wire.DefaultPage{}, errors.New("rights: malformed defaults refusal")
+		}
+		return page, nil
+	}
+	if !boundedOperatorString(page.Revision, 128) || len(page.Defaults) > 32 {
+		return wire.DefaultPage{}, errors.New("rights: malformed defaults page")
+	}
+	for i, d := range page.Defaults {
+		if !validAccountDefault(d) || i > 0 && page.Defaults[i-1].Name >= d.Name {
+			return wire.DefaultPage{}, errors.New("rights: invalid account default")
+		}
+	}
+	return page, nil
+}
+
+// SetDefaultContext turns one configured default on or off at the expected
+// revision. A lost reply is uncertain; read the defaults again before another
+// edit.
+func (c *Operator) SetDefaultContext(ctx context.Context, expected, name string, on bool) (wire.DefaultEdit, error) {
+	if err := ctx.Err(); err != nil {
+		return wire.DefaultEdit{}, err
+	}
+	if !boundedOperatorString(expected, 128) || !boundedOperatorString(name, 64) {
+		return wire.DefaultEdit{}, errors.New("rights: invalid default edit")
+	}
+	result, err := wire.NewAuthorizationOperatorClient(c.transport.WithContext(ctx)).SetDefault(expected, name, on)
+	if err != nil {
+		return wire.DefaultEdit{}, err
+	}
+	observed := result.Outcome == wire.PolicyEditOutcomeApplied || result.Outcome == wire.PolicyEditOutcomeConflict
+	if observed != boundedOperatorString(result.Revision, 128) || observed != (result.Current != nil) {
+		return wire.DefaultEdit{}, errors.New("rights: malformed default edit")
+	}
+	if current := result.Current; current != nil && (!validAccountDefault(*current) || current.Name != name || result.Outcome == wire.PolicyEditOutcomeApplied && current.On != on) {
+		return wire.DefaultEdit{}, errors.New("rights: mismatched default")
 	}
 	return result, nil
 }
@@ -228,7 +451,7 @@ func checkedPolicyEdit(result wire.PolicyEdit, err error, subject Subject, actio
 		return wire.PolicyEdit{}, errors.New("rights: malformed edit revision")
 	}
 	if r := result.Current; r != nil {
-		if !validPolicyRule(*r) || r.Subject != subject || r.Action != action || r.Resource != resource {
+		if !validPolicyRule(*r) || r.Subject.Account != subject.Account || !identity.SameSubjectProgram(r.Subject.Program, subject.Program) || r.Action != action || r.Resource != resource {
 			return wire.PolicyEdit{}, errors.New("rights: mismatched current rule")
 		}
 	}

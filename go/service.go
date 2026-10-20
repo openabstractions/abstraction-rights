@@ -17,7 +17,6 @@ import (
 	"sync"
 	"time"
 
-	asks "github.com/openabstractions/abstraction-asks/go"
 	identity "github.com/openabstractions/abstraction-identity"
 	"github.com/openabstractions/abstraction-identity/listen"
 )
@@ -40,7 +39,7 @@ type Service struct {
 	policy   *Policy
 	admin    string
 	l        listen.Listener
-	asks     *asks.Client
+	asks     Asker
 	mu       sync.Mutex
 	closed   bool
 	live     map[listen.Conn]struct{}
@@ -53,9 +52,14 @@ type Service struct {
 	leases AwakeLeases
 }
 
-func Start(endpoint, stateDir, asksEndpoint string) (*Service, error) {
+// Start listens on endpoint with the policy in stateDir. A registration this
+// service cannot decide goes to asker as a Question.
+func Start(endpoint, stateDir string, asker Asker) (*Service, error) {
 	if err := identity.CanEver(listen.Program); err != nil {
 		return nil, fmt.Errorf("rights: every answer here is to a program, and this machine cannot say which one is calling: %w", err)
+	}
+	if asker == nil {
+		return nil, errors.New("rights: registrations need an Asker to put their question to")
 	}
 	policy, err := LoadPolicy(filepath.Join(stateDir, "policy.json"))
 	if err != nil {
@@ -73,7 +77,7 @@ func Start(endpoint, stateDir, asksEndpoint string) (*Service, error) {
 		return nil, err
 	}
 	s := &Service{Endpoint: endpoint, policy: policy, admin: hashOf(admin), l: l,
-		asks: &asks.Client{Endpoint: asksEndpoint}, live: map[listen.Conn]struct{}{}, holds: map[*holder]struct{}{}, awake: keepAwake}
+		asks: asker, live: map[listen.Conn]struct{}{}, holds: map[*holder]struct{}{}, awake: keepAwake}
 	go s.loop()
 	return s, nil
 }
@@ -260,8 +264,8 @@ func (s *Service) register(k *listen.Call, req Request) {
 	reply(k, Response{Secret: secret})
 }
 
-func question(req Request, seen listen.Seen) asks.Ask {
-	return asks.Ask{Asker: req.Name, Key: registerAsk, For: &seen,
+func question(req Request, seen listen.Seen) Question {
+	return Question{Asker: req.Name, Key: registerAsk, For: &seen,
 		Slots: map[string]string{"rights": strings.Join(req.Rights, ", ")}}
 }
 

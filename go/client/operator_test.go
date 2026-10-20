@@ -3,8 +3,42 @@ package client
 import (
 	wire "github.com/openabstractions/abstraction-rights/go/abstraction/rights/api"
 	"os"
+	"path/filepath"
 	"testing"
 )
+
+func TestOperatorEditsMatchProgramIdentity(t *testing.T) {
+	dir := t.TempDir()
+	program, alias, different := filepath.Join(dir, "subject.exe"), filepath.Join(dir, "alias.exe"), filepath.Join(dir, "different.exe")
+	for _, path := range []string{program, different} {
+		if err := os.WriteFile(path, []byte("inert fixture"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.Link(program, alias); err != nil {
+		t.Fatal(err)
+	}
+	s := Subject{Account: "account", Program: program}
+	permit := true
+	rule := PolicyRule{Subject: Subject{Account: s.Account, Program: alias}, Action: "example/content.read", Resource: "output:image", Permit: true}
+	valid := wire.PolicyEdit{Outcome: wire.PolicyEditOutcomeApplied, Revision: "revision", Current: &rule}
+	if _, err := checkedPolicyEdit(valid, nil, s, rule.Action, rule.Resource, &permit); err != nil {
+		t.Fatalf("same-file current rule refused: %v", err)
+	}
+	for _, bad := range []PolicyRule{
+		{Subject: Subject{Account: "other", Program: alias}, Action: rule.Action, Resource: rule.Resource, Permit: true},
+		{Subject: Subject{Account: s.Account, Program: different}, Action: rule.Action, Resource: rule.Resource, Permit: true},
+		{Subject: rule.Subject, Action: "example/content.write", Resource: rule.Resource, Permit: true},
+		{Subject: rule.Subject, Action: rule.Action, Resource: "other", Permit: true},
+		{Subject: rule.Subject, Action: rule.Action, Resource: rule.Resource, Permit: false},
+	} {
+		result := valid
+		result.Current = &bad
+		if _, err := checkedPolicyEdit(result, nil, s, rule.Action, rule.Resource, &permit); err == nil {
+			t.Fatalf("different current rule accepted: %+v", bad)
+		}
+	}
+}
 
 func TestOperatorRefusesForgedEditResults(t *testing.T) {
 	exe, err := os.Executable()

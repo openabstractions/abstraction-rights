@@ -23,22 +23,26 @@ const MaxFrameBytes = 1 << 20
 type AuthorizeEnforcer func(context.Context, *identity.Peer, string, string) bool
 
 type Host struct {
-	enforcer  AuthorizeEnforcer
-	lifecycle sync.Mutex
-	serving   bool
-	listener  listen.Listener
-	owner     string
-	policy    *rights.DecisionPolicy
-	ctx       context.Context
-	cancel    context.CancelFunc
-	once      sync.Once
-	workers   sync.WaitGroup
-	slots     chan struct{}
-	OnError   func(error)
+	enforcer         AuthorizeEnforcer
+	selectorEnforcer AuthorizeSelectorEnforcer
+	lifecycle        sync.Mutex
+	serving          bool
+	listener         listen.Listener
+	owner            string
+	policy           *rights.DecisionPolicy
+	ctx              context.Context
+	cancel           context.CancelFunc
+	once             sync.Once
+	workers          sync.WaitGroup
+	slots            chan struct{}
+	OnError          func(error)
 	// Assign before Serve. Called when admission stops, before calls drain.
-	OnStopped     func()
-	operator      AuthorizeOperator
-	operatorEpoch string
+	OnStopped       func()
+	operator        AuthorizeOperator
+	firstUseAllow   ApplyFirstUseAllow
+	permissionAllow ApplyPermissionAllow
+	permissionUndo  UndoPermissionEffect
+	operatorEpoch   string
 }
 
 // Listen requires explicit provider configuration. It performs no discovery.
@@ -115,7 +119,9 @@ func (h *Host) Serve(ctx context.Context) error {
 				var reply []byte
 				reply, e = wire.ServeEndpoint(call.Frame, "openabstractions", "",
 					&wire.AuthorizationDispatcher{Handler: &receiver{host: h, call: call, ctx: callCtx}},
-					&wire.AuthorizationOperatorDispatcher{Handler: &operatorReceiver{receiver{host: h, call: call, ctx: call.WaitContext()}}})
+					&wire.AuthorizationOperatorDispatcher{Handler: &operatorReceiver{receiver{host: h, call: call, ctx: call.WaitContext()}}},
+					&wire.SelectorAuthorizationDispatcher{Handler: &selectorReceiver{receiver{host: h, call: call, ctx: callCtx}}},
+					&wire.SelectorAuthorizationOperatorDispatcher{Handler: &selectorOperatorReceiver{operatorReceiver{receiver{host: h, call: call, ctx: call.WaitContext()}}}})
 				if e == nil {
 					e = call.Reply(reply)
 				}

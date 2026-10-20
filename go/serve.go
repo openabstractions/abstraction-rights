@@ -9,7 +9,6 @@ import (
 	"os"
 	"os/signal"
 
-	asks "github.com/openabstractions/abstraction-asks/go"
 	identity "github.com/openabstractions/abstraction-identity"
 	logging "github.com/openabstractions/abstraction-logging/go"
 )
@@ -39,7 +38,11 @@ var ErrUsage = errors.New("rights: usage error")
 
 // Serve is this layer's resident half as something another program can call.
 // See asks.Serve for why the body left a main. The CLI `rights` has not moved.
-func Serve(args []string) error {
+//
+// The program that hosts it composes it with the asks layer: asker turns the
+// --asks endpoint into the Asker registrations go to, and defaultAsks is that
+// flag's default (the asks service's installed endpoint).
+func Serve(args []string, asker func(endpoint string) Asker, defaultAsks string) error {
 	if len(args) > 0 && isHelp(args[0]) {
 		_, err := io.WriteString(os.Stdout, rightsUsage)
 		return err
@@ -53,19 +56,19 @@ func Serve(args []string) error {
 	fs.Usage = func() { _, usageErr = fmt.Fprint(fs.Output(), rightsUsage) }
 	endpoint := fs.String("endpoint", DefaultEndpoint(), "where applications connect")
 	state := fs.String("state", DefaultStateDir(), "policy.json and admin.secret live here")
-	asksAt := fs.String("asks", asks.DefaultEndpoint(), "where the asks service listens; registrations are questions put there")
+	asksAt := fs.String("asks", defaultAsks,"where the asks service listens; registrations are questions put there")
 	if err := fs.Parse(args); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
 			return usageErr
 		}
 		return errors.Join(fmt.Errorf("%w: %v", ErrUsage, err), usageErr)
 	}
-	// rightsd can start with no logging runtime running. Its own diagnostics go
+	// The rights service can start with no logging runtime running. Its own diagnostics go
 	// to the explicitly selected environment chain, heard on stderr when nothing
 	// is configured [LOG-S8].
 	slog.SetDefault(slog.New(logging.LegacyDefault("rights")))
 
-	s, err := Start(*endpoint, *state, *asksAt)
+	s, err := Start(*endpoint, *state, asker(*asksAt))
 	if err != nil {
 		return err
 	}
