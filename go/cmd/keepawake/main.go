@@ -16,8 +16,15 @@ const name = "keepawake"
 
 func main() {
 	endpoint := flag.String("endpoint", rights.DefaultEndpoint(), "where the rights service listens")
-	state := flag.String("state", filepath.Join(rights.DefaultStateDir(), "..", name), "where this program keeps its secret")
+	defaultState := ""
+	if d := rights.DefaultStateDir(); d != "" {
+		defaultState = filepath.Join(filepath.Dir(d), name)
+	}
+	state := flag.String("state", defaultState, "where this program keeps its secret")
 	flag.Parse()
+	if !filepath.IsAbs(*state) {
+		fail("no state folder: this account has no configuration folder, so name an absolute one with --state")
+	}
 	why := strings.Join(flag.Args(), " ")
 	if why == "" {
 		why = "asked to at the command line"

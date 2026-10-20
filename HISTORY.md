@@ -3,6 +3,37 @@
 Prior art, provenance and what was tested for [CONTRACT.md](CONTRACT.md),
 kept out of the contract itself per `research/vocabulary/DECISION.md` S7.
 
+## Receiving freshness fence (W1-24b), development 0.8, 2026-10-23
+
+The additive authorization method honors every supplied minimum and carries a
+bounded observation with its decision. Native enablement uses the existing CAS
+file's private profile8 epoch/sequence. Existing content revisions retain their
+content meaning: profile7 metadata migration preserves its SHA, and legacy2..6
+enablement canonicalizes once to profile7 semantics. Restoring identical semantic
+content restores its SHA while advancing order. Old binaries refuse private
+profile8 rather than silently discard metadata. This is a development migration;
+no published 0.4 tag or installed owner store is changed by implementation tests.
+
+The configured facade receiving fixture exercises explicit native enforcer
+admission with the typed client. The runtime's nil-enforcer default remains
+forbidden. Stronger hostile same-account state replacement detection remains open.
+
+## Contract truth pass (W0-02), 2026-10-21
+
+- RIGHTS-A3 names itself the one subject grammar that identity's
+  `SubjectProgram` produces (TD42): outdated rule, no behaviour change.
+- Not built: the "Operator UI and broader enforcement" line is outdated (the
+  Panel edits rules); publisher subjects replace it, naming the missing
+  identity publisher evidence.
+- README: the token service sections are labelled deprecated, each heading
+  names it, and the first names its removal in 0.9.0 by W2-01a (D30, TD57).
+  Status, Requirements and Obtain name the published `go/v*` tags (newest
+  `go/v0.4.1`) and the decision service (rights audit 3.3): outdated rules.
+- README, token service contract: "Nothing here defends one account from
+  another on the same machine" was an outdated rule. The endpoint admits
+  one account (pipe DACL, socket mode 0600), as identity's "Trust domain"
+  section states.
+
 ## Why the shape changed, 2026-09-23
 
 The page carried no rule ids before this date; every obligation sat in prose
@@ -18,7 +49,7 @@ prose. No described behaviour changed in this pass except the one line below.
 The owner required the operator Allow lapse fix before 0.4. A permit could
 land and be revoked before any successful application retry, leaving its
 answered question replaying until Dismiss. `ApplyFirstUseAllow` carries the
-actual question ID to rights; trusted composition pins the runtime Book,
+actual question ID to rights; trusted composition pins the runtime [Book](https://openabstractions.github.io/reference.html#concept-asks.book),
 derives the complete pair and commits durable completion with its permits.
 An answered Allow whose write never landed retains explicit Retry.
 `rights-decisions@4` reads canonical @2/@3 and retains proofs through every
@@ -38,6 +69,22 @@ legacy decision returns its deciding step from the one evaluation
 differ. Regressions: each step, an excluded script host, a typed Block over an
 own permit, a short-alias Block, no revision change, the wire round trip and
 its refusal shape.
+
+## The refusal record, 2026-10-20
+
+Job, credentials, asks and the adopters recognised a rights refusal by its
+text (JOB-A19; OpenCode's `refusalMessage`; credentials D13). RIGHTS-E3
+declares one record every service carries beside a refusing outcome, owned
+here and generated in five languages: `RefusalDetail` with `source`,
+`decision`, `ask` and its optional names. The basis is AIP-193's stable
+reason and domain, the W3C Permissions `prompt` state and Android's
+twice-deny for `ask`, and MSAL's `MsalUiRequiredException` for a refusal
+only the person can lift (`research/release-0.8.0/round4/FINAL-FORMS.md`
+C2). The record's type is `RefusalDetail`, because the generated codecs
+already name their decode error `Refusal`. No service version carries the record
+yet. Regression: `scripts/refusal_record_test.py` reads and writes it in Go,
+Python, JavaScript, Rust and C++, refuses `blocked` as a decision word, and
+carries `${jndi:...}` back byte-identical.
 
 ## Account-wide defaults, 2026-10-07
 

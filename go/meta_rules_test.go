@@ -22,6 +22,17 @@ type metaFixture struct {
 	appA, appB, appC wire.Subject
 }
 
+// Fixture inputs keep their original spellings; persisted subjects follow the
+// same normalization owner as the receiving policy.
+func normalizedFixtureSubject(t testing.TB, subject wire.Subject) wire.Subject {
+	t.Helper()
+	normalized, err := NormalizeDecisionSubject(subject)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return normalized
+}
+
 func newMetaFixture(t *testing.T) *metaFixture {
 	t.Helper()
 	dir := t.TempDir()
@@ -111,7 +122,7 @@ func TestAMetaRulePermitMustLapse(t *testing.T) {
 func TestAnOperatorCannotHoldAMetaRule(t *testing.T) {
 	f := newMetaFixture(t)
 	f.p.MetaHolder = func(s wire.Subject) error {
-		if s.Program == f.panel.Program {
+		if s.Program == normalizedFixtureSubject(t, f.panel).Program {
 			return errors.New("an operator program")
 		}
 		return nil
@@ -150,7 +161,7 @@ func TestAHolderWritesOnlyUnderALiveMetaRule(t *testing.T) {
 		t.Fatalf("an answer under the meta-rule: %+v %v", edit, err)
 	}
 	read := f.p.ReadRule(f.appA, decisionAction, "output:image")
-	if read.Record == nil || read.Record.SetBy.Program != f.holder.Program {
+	if read.Record == nil || read.Record.SetBy != normalizedFixtureSubject(t, f.holder) {
 		t.Fatalf("the permit's provenance %+v", read.Record)
 	}
 	f.advance(MetaRuleLapse)
@@ -248,7 +259,7 @@ func TestTheHolderNeverReplacesThePersonsRule(t *testing.T) {
 	if edit, err := f.answer(f.appB); err != nil || edit.Outcome != wire.PolicyEditOutcomeApplied {
 		t.Fatalf("beside the person's permit: %+v %v", edit, err)
 	}
-	if read := f.p.ReadRule(f.appB, decisionAction, "output:image"); read.Record == nil || read.Record.SetBy.Program != f.panel.Program || read.Record.Expires != "" {
+	if read := f.p.ReadRule(f.appB, decisionAction, "output:image"); read.Record == nil || read.Record.SetBy != normalizedFixtureSubject(t, f.panel) || read.Record.Expires != "" {
 		t.Fatalf("the person's permit became the holder's %+v", read.Record)
 	}
 	f.stop(t)

@@ -2,12 +2,70 @@ package rights
 
 import (
 	"bytes"
+	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
 
 	wire "github.com/openabstractions/abstraction-rights/go/abstraction/rights/api"
 )
+
+func TestRemoveRemoteSubjectRechecksAdmissionAfterMovedFile(t *testing.T) {
+	native, err := serviceSubject()
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := remoteTestSubject(native.Account, "a")
+	other := otherDecisionState(t, s)
+	for _, withdrawn := range []bool{false, true} {
+		t.Run(fmtBool(withdrawn), func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), "decisions.json")
+			p, err := LoadDecisionPolicy(path, []string{decisionAction})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err = p.Set(s, decisionAction, "a", true); err != nil {
+				t.Fatal(err)
+			}
+			before, _ := p.OperatorSnapshot()
+			calls, notifications := 0, 0
+			p.OnChange(func() { notifications++ })
+			denied := errors.New("Remove withdrawn during retry")
+			v, err := p.RemoveRemoteSubjectContext(context.Background(), before.Revision, s, func() error {
+				calls++
+				if calls == 1 {
+					return os.WriteFile(path, other, 0600)
+				}
+				if withdrawn {
+					return denied
+				}
+				return nil
+			})
+			if withdrawn {
+				if !errors.Is(err, denied) || v.Outcome != wire.PolicyEditOutcomeUnavailable || v.Revision != "" {
+					t.Fatal(v, err)
+				}
+			} else {
+				now, _ := p.OperatorSnapshot()
+				if err != nil || v.Outcome != wire.PolicyEditOutcomeConflict || v.Revision != now.Revision {
+					t.Fatal(v, err)
+				}
+			}
+			data, _ := os.ReadFile(path)
+			if calls != 2 || notifications != 0 || !bytes.Equal(data, other) {
+				t.Fatal("retry overwrote or misreported outside state", calls, notifications)
+			}
+		})
+	}
+}
+
+func fmtBool(v bool) string {
+	if v {
+		return "withdrawn"
+	}
+	return "stale"
+}
 
 // otherDecisionState returns a valid state file for the same seed that holds
 // one rule more than the file at path will, as a writer outside the lock

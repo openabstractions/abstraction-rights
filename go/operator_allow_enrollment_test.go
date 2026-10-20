@@ -27,7 +27,7 @@ func TestOperatorAllowWritesTheEnrollmentWithItsLapse(t *testing.T) {
 		}
 	}
 	f.p.MetaHolder = func(s wire.Subject) error {
-		if s.Program == f.appB.Program {
+		if s.Program == normalizedFixtureSubject(t, f.appB).Program {
 			return ErrMetaTarget
 		}
 		return nil

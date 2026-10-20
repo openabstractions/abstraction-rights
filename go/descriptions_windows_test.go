@@ -32,7 +32,7 @@ func TestLegacyCompletedAnswerSurvivesLoadSubjectCanonicalization(t *testing.T) 
 	if err != nil {
 		t.Fatal(err)
 	}
-	if loaded.Profile != DecisionProfile || loaded.Rules[0].Subject.Program != long || loaded.Rules[0].Permit || !reflect.DeepEqual(loaded.AppliedOperatorAnswers, f.AppliedOperatorAnswers) || len(loaded.Descriptions) != 0 {
+	if loaded.Profile != DecisionProfile || loaded.Rules[0].Subject != normalizedFixtureSubject(t, f.Rules[0].Subject) || loaded.Rules[0].Permit || !reflect.DeepEqual(loaded.AppliedOperatorAnswers, f.AppliedOperatorAnswers) || len(loaded.Descriptions) != 0 {
 		t.Fatal(loaded)
 	}
 }

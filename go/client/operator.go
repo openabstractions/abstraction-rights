@@ -6,6 +6,7 @@ import (
 	"errors"
 	identity "github.com/openabstractions/abstraction-identity"
 	"github.com/openabstractions/abstraction-identity/listen"
+	"github.com/openabstractions/abstraction-identity/remote"
 	wire "github.com/openabstractions/abstraction-rights/go/abstraction/rights/api"
 	"slices"
 	"strings"
@@ -29,14 +30,28 @@ func boundedOperatorString(s string, max int) bool {
 	return len(s) > 0 && len(s) <= max && utf8.ValidString(s) && strings.IndexFunc(s, unicode.IsControl) < 0
 }
 func validPolicyRule(r PolicyRule) bool {
-	return boundedOperatorString(r.Subject.Account, 128) && boundedOperatorString(r.Subject.Program, 4096) && identity.ValidSubjectProgram(r.Subject.Program) && boundedOperatorString(r.Action, 128) && boundedOperatorString(r.Resource, 1024)
+	return validTargetSubject(r.Subject) && boundedOperatorString(r.Action, 128) && boundedOperatorString(r.Resource, 1024)
+}
+
+func validTargetSubject(s Subject) bool {
+	return boundedOperatorString(s.Account, 128) && boundedOperatorString(s.Program, 4096) && (identity.ValidSubjectProgram(s.Program) || remote.ValidSubjectProgram(s.Program))
 }
 
 // normalizeOperatorSubject uses the same program spelling as the decision
 // policy before sending a rule and checking the rule returned by the service.
 func normalizeOperatorSubject(s Subject) Subject {
+	if strings.HasPrefix(s.Program, remote.SubjectPrefix) {
+		return s
+	}
 	s.Program = identity.NormalizeSubjectProgram(s.Program)
 	return s
+}
+
+func samePolicyProgram(a, b string) bool {
+	if strings.HasPrefix(a, remote.SubjectPrefix) || strings.HasPrefix(b, remote.SubjectPrefix) {
+		return remote.ValidSubjectProgram(a) && remote.ValidSubjectProgram(b) && a == b
+	}
+	return identity.SameSubjectProgram(a, b)
 }
 func (c *Operator) ListPolicyContext(ctx context.Context, cursor string, limit int64) (wire.PolicyPage, error) {
 	if err := ctx.Err(); err != nil {
@@ -120,7 +135,7 @@ func (c *Operator) RevokeAnswerPermitsContext(ctx context.Context, expected stri
 		return wire.PolicyEdit{}, err
 	}
 	answerer, target = normalizeOperatorSubject(answerer), normalizeOperatorSubject(target)
-	if !boundedOperatorString(expected, 128) || !validSubject(answerer) || !validSubject(target) || !boundedOperatorString(questionID, 128) || len(actions) < 1 || len(actions) > 2 || !boundedOperatorString(resource, 1024) {
+	if !boundedOperatorString(expected, 128) || !validSubject(answerer) || !validTargetSubject(target) || !boundedOperatorString(questionID, 128) || len(actions) < 1 || len(actions) > 2 || !boundedOperatorString(resource, 1024) {
 		return wire.PolicyEdit{}, errors.New("rights: invalid answer permit revoke")
 	}
 	for i, action := range actions {
@@ -219,7 +234,7 @@ func (c *Operator) SetRulesForContext(ctx context.Context, expected string, rule
 	}
 	for i := range rules {
 		rules[i].Subject = normalizeOperatorSubject(rules[i].Subject)
-		if !validPolicyRule(rules[i]) || rules[i].Subject.Account != rules[0].Subject.Account || !identity.SameSubjectProgram(rules[i].Subject.Program, rules[0].Subject.Program) || rules[i].Resource != rules[0].Resource || rules[i].Permit != rules[0].Permit || slices.ContainsFunc(rules[:i], func(r PolicyRule) bool { return r.Action == rules[i].Action }) {
+		if !validPolicyRule(rules[i]) || rules[i].Subject.Account != rules[0].Subject.Account || !samePolicyProgram(rules[i].Subject.Program, rules[0].Subject.Program) || rules[i].Resource != rules[0].Resource || rules[i].Permit != rules[0].Permit || slices.ContainsFunc(rules[:i], func(r PolicyRule) bool { return r.Action == rules[i].Action }) {
 			return wire.PolicyEdit{}, errors.New("rights: invalid grouped policy rules")
 		}
 	}
@@ -234,7 +249,7 @@ func (c *Operator) SetRulesForContext(ctx context.Context, expected string, rule
 	if result.Current != nil {
 		match := slices.ContainsFunc(rules, func(r PolicyRule) bool {
 			current := result.Current
-			return validPolicyRule(*current) && current.Subject.Account == r.Subject.Account && identity.SameSubjectProgram(current.Subject.Program, r.Subject.Program) && current.Action == r.Action && current.Resource == r.Resource && current.Permit == r.Permit
+			return validPolicyRule(*current) && current.Subject.Account == r.Subject.Account && samePolicyProgram(current.Subject.Program, r.Subject.Program) && current.Action == r.Action && current.Resource == r.Resource && current.Permit == r.Permit
 		})
 		if !match {
 			return wire.PolicyEdit{}, errors.New("rights: mismatched grouped current rule")
@@ -262,7 +277,7 @@ func (c *Operator) ReadRuleContext(ctx context.Context, subject Subject, action,
 	switch result.Outcome {
 	case wire.RuleReadOutcomeFound, wire.RuleReadOutcomeExpired:
 		r := result.Record
-		if !boundedOperatorString(result.Revision, 128) || r == nil || !validPolicyRule(r.Rule) || r.Rule.Subject.Account != subject.Account || !identity.SameSubjectProgram(r.Rule.Subject.Program, subject.Program) ||
+		if !boundedOperatorString(result.Revision, 128) || r == nil || !validPolicyRule(r.Rule) || r.Rule.Subject.Account != subject.Account || !samePolicyProgram(r.Rule.Subject.Program, subject.Program) ||
 			r.Rule.Action != action || r.Rule.Resource != resource || !validSubject(r.SetBy) || !validStamp(r.SetAt) ||
 			!(r.Why == "" || boundedOperatorString(r.Why, 256)) || (r.Expires != "" && !validStamp(r.Expires)) ||
 			(result.Outcome == wire.RuleReadOutcomeExpired && r.Expires == "") {
@@ -328,16 +343,14 @@ func (c *Operator) ExplainForContext(ctx context.Context, subject Subject, actio
 	if err := ctx.Err(); err != nil {
 		return wire.DecisionExplanation{}, err
 	}
-	if !validSubject(subject) || !boundedOperatorString(action, 128) || !boundedOperatorString(resource, 1024) {
+	if !validTargetSubject(subject) || !boundedOperatorString(action, 128) || !boundedOperatorString(resource, 1024) {
 		return wire.DecisionExplanation{}, errors.New("rights: invalid explanation request")
 	}
 	got, err := wire.NewAuthorizationOperatorClient(c.transport.WithContext(ctx)).ExplainFor(subject, action, resource)
 	if err != nil {
 		return wire.DecisionExplanation{}, err
 	}
-	evaluated := got.Outcome == wire.DecisionOutcomePermitted || got.Outcome == wire.DecisionOutcomeDenied ||
-		got.Outcome == wire.DecisionOutcomeNotGranted || got.Outcome == wire.DecisionOutcomeUnknownAction
-	if !evaluated {
+	if !Evaluated(got.Outcome) {
 		if got.PolicyRevision != "" || got.Source != nil || got.DefaultName != "" {
 			return wire.DecisionExplanation{}, errors.New("rights: malformed explanation refusal")
 		}
@@ -451,7 +464,7 @@ func checkedPolicyEdit(result wire.PolicyEdit, err error, subject Subject, actio
 		return wire.PolicyEdit{}, errors.New("rights: malformed edit revision")
 	}
 	if r := result.Current; r != nil {
-		if !validPolicyRule(*r) || r.Subject.Account != subject.Account || !identity.SameSubjectProgram(r.Subject.Program, subject.Program) || r.Action != action || r.Resource != resource {
+		if !validPolicyRule(*r) || r.Subject.Account != subject.Account || !samePolicyProgram(r.Subject.Program, subject.Program) || r.Action != action || r.Resource != resource {
 			return wire.PolicyEdit{}, errors.New("rights: mismatched current rule")
 		}
 	}

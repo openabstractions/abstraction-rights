@@ -23,7 +23,7 @@ func (p *DecisionPolicy) Require(ctx context.Context, peer *identity.Peer, actio
 	if err != nil {
 		return err
 	}
-	decision := p.DecideContext(ctx, subject, action, resource)
+	decision := p.DecideContext(WithBoundPeer(ctx, peer), subject, action, resource)
 	if decision.Outcome != wire.DecisionOutcomePermitted {
 		return &client.DecisionError{Outcome: decision.Outcome.String(), PolicyRevision: decision.PolicyRevision}
 	}

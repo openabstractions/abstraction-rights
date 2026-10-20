@@ -1,5 +1,17 @@
 # abstraction.rights contract
 
+Machine-pairing's trusted native complete-set effect and exact remote-subject
+removal are composed under Facade's [native consent and activation](https://github.com/openabstractions/abstraction-facade/blob/main/CONTRACT.md#native-consent-and-activation)
+and [uncertainty and removal](https://github.com/openabstractions/abstraction-facade/blob/main/CONTRACT.md#uncertainty-and-removal).
+`ApplyRemotePairingAllowContext` commits the complete receiver-derived
+exact effect and occurrence receipt in one conditional replacement; it refuses
+live Blocks, preserves other setters' permits and prevents completed-occurrence
+replay from restoring revoked rights. `RemoveRemoteSubjectContext` conditionally
+removes all exact-string and typed rules for one exact receiving-account/remote-SPKI
+subject, preserving unrelated state and approval replay tombstones. Both require
+trusted native reauthorization inside every replacement attempt. They expose
+no public wire grant route.
+
 Binds: `rights.thrift`
 
 `abstraction.rights/authorization@1` is the generated policy decision
@@ -13,6 +25,8 @@ a worked `Decide` call, and the separately selected native
 registration/token/awake-hold workflow.
 
 ## Reading this page
+
+The conventions every OA contract carries are stated once in [CONVENTIONS.md](https://github.com/openabstractions/abstractions/blob/main/idl/CONVENTIONS.md); a rule here that applies one cites its `CONV-` id.
 
 The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT", "SHOULD",
 "SHOULD NOT", "RECOMMENDED", "MAY" and "OPTIONAL" in this page are to be
@@ -54,7 +68,7 @@ name on the right until the release named ships (`research/vocabulary/RENAME-PLA
 ### Admission
 
 **[RIGHTS-A1] Decide binds its own caller.** `Decide(action, resource)` MUST
-derive the receiving subject from native Program proof; the caller supplies
+derive the receiving subject from native [Program](https://openabstractions.github.io/reference.html#concept-identity.listener-program-need) proof; the caller supplies
 no subject.
 
 **[RIGHTS-A2] DecideFor binds the relaying caller and requires an explicit
@@ -65,28 +79,90 @@ authorized enforcer is trusted to assert its own actual bound subject;
 serialization by itself conveys no proof.
 
 **[RIGHTS-A3] A subject is an account and a program, never a verified
-flag.** The program MUST be `msix:<package family name>` for a Windows
+flag.** A remote target MUST be the distinct kind
+`remote:<64 lowercase hex leaf-SPKI-SHA256>` from identity's shared live-pin
+mapping. It matches only its exact account, token, action and resource. It
+receives no wildcard, account default, local-program or operator authority.
+Typed `All` and nonexact target predicates never match it; typed `One` compares
+canonical target bytes. Setters, registrars, answerers and meta holders remain
+native authority actors. For a native subject the program MUST be
+`msix:<package family name>` for a Windows
 caller whose MSIX package identity is proven at `signed` and whose image
 lies inside that package's installed folder, and MUST otherwise be the
-normalized absolute executable path. Any process of the account can start an
+normalized absolute executable path. This is the one subject grammar:
+`abstraction-identity`'s `SubjectProgram` produces it and that contract's
+Windows section states it for every grant. Any process of the account can start an
 arbitrary program with an installed package's identity. Identity alone
 never names the package. Same-account access alone confers no
 enforcement-point authority.
 
 **[RIGHTS-A4] Both admission modes require the deciding service's own
 account.** `Decide` and `DecideFor` MUST require the same account as the
-deciding service's own. Remote subject assertion is outside this local
-profile; server authenticity remains a separate unfinished boundary (see
-[Not built](#not-built)).
+deciding service's own. An explicitly admitted native enforcer may assert a
+canonical remote target under that receiving policy account (accepted C-69).
+The remote certificate never supplies this native enforcer proof, account or
+program identity. Handshake pin admission and the target's per-method Rights
+decision are separate; neither substitutes for the sending runtime's decision.
+Wildcard subjects and account defaults never match a remote target. Pairing
+commits a receiver-derived complete bundle over existing actions for the exact
+remote subject; Remove deletes that subject's exact-string and typed rules.
+Held by: `go/remote_subject_test.go`
+(`TestRemoteSubjectMatchesOnlyExactRuleAndNoIdentityKeys`,
+`TestRemoteSubjectGetsNoAccountDefaultsAndCannotBeAuthorityActor`,
+`TestRemoveRemoteSubjectMixedStateAndReplay`) and `go/operator_pairing_test.go`
+(`TestRemotePairingAtomicProofAndRevocation`).
 
-**[RIGHTS-A5] SubjectFromPeer requires every shared Program requirement.**
-`SubjectFromPeer` MUST require every shared Program requirement before
+**[RIGHTS-A5] [SubjectFromPeer](https://openabstractions.github.io/reference.html#concept-rights.subject-from-peer) requires every shared Program requirement.**
+[SubjectFromPeer](https://openabstractions.github.io/reference.html#concept-rights.subject-from-peer) MUST require every shared Program requirement before
 extracting account and program, which `abstraction-identity`'s
 `SubjectProgram` names. Native path cleaning matches the receiving platform.
 A program path identifies an unpackaged subject; moving the executable
 changes identity. A package family survives package updates, whose image
 paths change with every version; a process a packaged app starts has no
 package identity of its own and keeps its path.
+
+**[RIGHTS-A6] An app's kept OA connection program is decided with its app's
+rules.** A native subject that is a kept connection program of a host program
+MUST be decided with the host program's rules for every action and resource
+on which no rule names the connection program itself; a rule naming the
+connection program takes precedence. The decider reads the relation at each
+decision from facade Applications' native directory. It holds only while all
+of these hold:
+
+1. the connection program's applications@3 agent enrollment is `enrolled` by
+   the person's Keep at the exact program and file identity it records;
+2. its image is OA's own connection image, installed from the authenticated
+   installed OA source with OA's publisher and release channel (the facts
+   asks ASK-R12 captures);
+3. the enrollment records the host registration it was kept for, and that
+   registration's program carries the official publisher signature Setup's
+   catalogue names for the app.
+
+A program name or title, a caller-supplied descriptor field, self-registration
+(`application.register_self`), a peer message and an assistant's answer never
+establish the relation. A revoked, disabled, replaced or unreadable enrollment
+ends it at the next decision, and the connection program is decided with its
+own rules only. The relation joins one connection program to one host
+program; it never chains, and the host gains nothing from the connection
+program's rules. A `remote:` subject (RIGHTS-A3) never takes part: each
+runtime relates its own native programs only. The relation copies no rule
+and writes no policy. VISION 2026-11-10 "One Allow covers an app and the OA
+connection program the person kept for it".
+
+**Published codecs retain service-owned bounds.** Published `operator@1` and
+`operator@2` keep their original codec language for `ApplyFirstUseAllow`,
+`ApplyPermissionAllow`, `UndoPermissionEffect` and `SetRulesFor`. Their existing
+receivers enforce expected revisions and question ids of 1..128 UTF-8 bytes
+without control characters, and one or two rules per batch. For an otherwise
+admitted operator, codec-valid values outside those bounds keep the method's
+`invalid` outcome and write no policy. Structural codec failures retain their
+declared decode errors.
+
+The additive `ObservePolicy` method declares its cursor and wait bounds.
+Generated clients and dispatchers refuse values outside those declarations
+with `bad_value` before transport or a handler (abstraction-ipc IPC-A6,
+DEF-A11). A first-added or narrower generated bound on a published member or
+argument requires the next service version (CONV-V1, DEF-V1).
 
 ### Registered actions and policy
 
@@ -116,7 +192,7 @@ unavailable or absent fallback MUST permit access. The default client adds a
 finite five-second per-call budget and never retries; callers pass the same
 context across their own operations.
 
-**[RIGHTS-R4] A decision is a point-in-time observation.** Decisions MUST
+**[RIGHTS-R4] A [decision](https://openabstractions.github.io/reference.html#concept-rights.policy-decision) is a point-in-time observation.** Decisions MUST
 carry no bearer token, lease or cached permission lifetime. Resource
 services MUST recheck at their specified enforcement points. Revocation
 affects the next fresh decision after a successful policy commit; it makes
@@ -268,7 +344,27 @@ A deny on it needs no expiry. The service's own program never holds one,
 and neither does a program the host refuses through `MetaHolder`: the
 runtime names its operator programs and script hosts there, since optional
 cleanup may remove every permit the holder set, and an operator sets the
-person's own rules; such an edit is `invalid`. The holder writes through `ChangeRulesUnderAnswer`,
+person's own rules; such an edit is `invalid`. A current explicit
+`ErrMetaHolder` veto also makes quiet meta-permission evaluations `forbidden`,
+with no revision or deciding source (RIGHTS-E2). `ErrMetaHolderUnavailable`
+returns existing `unavailable` in quiet evaluations and permit mutations.
+Existing plain callback errors retain their permit-write refusal behavior.
+Explicit denies keep their existing outcome and source; other actions retain
+their existing evaluation. Holder use rechecks this ceiling inside the edit,
+through a lock-free host callback. A configured `RefreshMetaHolder` runs through
+`PrepareMetaHolderContext` once at the outer admission with its actual context,
+before policy/Book locks. The multi-owner refresh has a private five-second cap;
+a shorter caller deadline or cancellation wins. Each actual policy-state read
+keeps the separate 500 ms `DecisionReadBudget` required by RIGHTS-R2. An expired
+refresh supplies no prepared permit; existing quiet refusal/disclosure rules remain.
+Its consistent source read precedes admission; a
+preceding committed external change reaches the next operation. The returned
+context belongs to that admission's nested checks only. Each authenticated
+request prepares freshly; failed preparation makes would-be permits and missing
+grants unavailable while preserving an established deny or unknown action and
+its deciding source. Cancellation and refresh re-entry disclose no policy state.
+Nil preserves
+existing hosts. The holder writes through `ChangeRulesUnderAnswer`,
 one atomic edit that reads the holder's meta-rule and refuses unless it is
 an unexpired permit; renews it to 30 days after the edit time; and writes
 one or two exact permits in one edit, `set_by` the holder, expiring with the
@@ -288,6 +384,18 @@ subject-program rules. `RevokeAnswerPermits` removes only the current
 permit effects that carry the retained answer's private question ID and
 answerer identity among one or two targets; an older or replacement grant
 stays. Zero matches conflict. The asks answer record remains historical.
+
+The trusted complete-effect companions `CheckLegacyPermissionEffectContext`,
+`ApplyLegacyPermissionEffect`, `ChangeLegacyPermissionEffectUnderAnswer` and
+`UndoLegacyPermissionEffect` MAY operate on the whole bounded retained effect
+using canonical exact-resource One selections. They reuse these same
+snapshot, enrollment, setter, expiry, receipt, checked-settlement and Undo
+rules. Public single/storage-pair limits and signatures stay unchanged.
+FAC-M19's finite routine application adapter supplies exactly three actions
+on one application. Every applied/conflict `SelectorEdit.current` projects
+the actual affected rules from the same locked snapshot, including
+real setter, time and expiry. An unavailable settlement returns unavailable
+after durable commit; the retained receipt supports reconciliation.
 
 ### Operator
 
@@ -334,6 +442,61 @@ record. An empty policy has a stable content revision without creating the
 file. The revision is a content identity: restoring identical content
 restores that revision. Enumeration epochs change on restart; durable
 content revisions do not.
+
+**[RIGHTS-O16] Policy observation is authorized invalidation.**
+`AuthorizationOperator.ObservePolicy(after, wait_ms)` uses existing receiving
+same-account Program proof and explicit operator admission. It MUST recheck
+authority after each read/wake and before returning data. `wait_ms` is 0..30000;
+`after` is at most 256 UTF-8 bytes. Empty after requests a snapshot. `changed`
+carries a new opaque cursor and the current durable revision; `unchanged`
+confirms both. The cursor binds the host epoch, receiving Program and one
+expiry-sensitive policy read. Foreign epoch/scope is `gap`, echoing after with
+empty revision; restart from empty. Other refusals carry empty cursor/revision.
+The reply carries no rule contents or permission lease.
+
+The declared mechanism is native: this configured policy owner's committed
+OnChange notifications and service expiry deadlines drive `watch.Gate`.
+Revision, expiry-sensitive stamp and next expiry MUST derive from one immutable
+policy read and one policy-clock sample. An expiry changes the observation
+cursor while preserving durable revision; existing ReadRule confirms expiry.
+Real timers use the remaining service-clock duration and retain the original
+bounded wait deadline. Sixteen waiters leave connection slots for reads/edits;
+exhaustion and source read failure are unavailable. Host close cancels/drains
+waits and removes its callback. Observation writes no policy or second store.
+This additive operator@1 method preserves every existing method and closed
+record; a prior service returns unknown_method without a polling fallback.
+
+**[RIGHTS-O15] An explicit minimum fences a fresh decision.**
+`DecideForAtLeastRevision` MUST use the same native receiving account,
+designated enforcer and rechecked Program admission as `DecideFor`. Its empty
+`at_least_revision` requests an observation. A nonempty minimum MUST be honored;
+an older or incomparable state returns `unavailable` without an observation.
+Unknown-method and transport failures MUST NOT fall back to an unfenced method.
+The decision and its `observed_revision` MUST use one state read and clock sample.
+Both strings are bounded to 128 bytes. The opaque observation orders commits
+within the same durable epoch and native configuration identity. It conveys a
+state observation, with no permission lifetime. Expiry is evaluated afresh.
+
+The native owner explicitly enables this method after final configuration and
+before sharing its policy. Its bounded semantic label versions callback behavior;
+the library hashes that label with the actual seed, definitions, defaults and
+account. Owners MUST bump the label when callback semantics change. Configuration
+after enablement is refused; direct field mutation violates the native contract
+and detected serialized configuration drift makes this method unavailable.
+Unconfigured hosts refuse this method. Enabling never designates an enforcer.
+
+Private `rights-decisions@8` stores an epoch and commit sequence in the existing
+CAS file. Each committed semantic change advances the sequence; failed and no-op
+edits preserve it. Exhaustion refuses a change. Restarts preserve the order.
+Metadata migration preserves profile-7 content revisions by excluding order
+and projecting the profile to 7. Profiles 2 through 6 remain readable (kept) and make one explicit
+canonicalization revision transition on enablement, as existing real writes
+already canonicalize them to 7. Ordinary reads of those profiles retain their existing
+no-write behavior. Identical semantic profile-7 content restores its content
+revision while the commit order advances. Observing sequence 10 then receiving
+rolled-back sequence 5 refuses. A hostile replacement fabricating the same epoch,
+configuration and sufficient sequence remains outside this one-file guarantee;
+stronger same-account replacement detection remains open under RIGHTS-R11.
 
 **[RIGHTS-O6] A lost reply is reconciled, never retried blind.** A lost
 mutation reply is uncertain. Explicitly retrying the same expected revision
@@ -387,7 +550,7 @@ additive method `unknown_method`.
 `ApplyFirstUseAllow(expected_revision, question_id)` MUST derive its complete
 one-or-two-rule permit from the actual retained operator Allow and the
 runtime's admission. The receiving operator is authorized as in RIGHTS-O1.
-Trusted composition MUST pin the Book occurrence and admission before
+Trusted composition MUST pin the [Book](https://openabstractions.github.io/reference.html#concept-asks.book) occurrence and admission before
 entering the rights edit; targets, actor, scope and options supplied by a
 caller MUST NOT serve as evidence. A pending, missing, foreign, responder,
 non-first-use or non-Allow record is `invalid`; absent composition is
@@ -575,19 +738,53 @@ its own.** A host MAY configure, before serving, up to 32 named defaults, each a
 permit on one registered action for one exact resource or for every resource of
 that action, together with the one account whose programs receive them and the
 programs excluded from every default. A legacy exact decision MUST evaluate, in
-order: an unavailable state (`unavailable`), a live typed block (`denied`), the
+order: an unavailable state (`unavailable`), a live typed block it cannot
+evaluate (`unavailable`, RIGHTS-R26), a live typed block (`denied`), the
 subject program's own live exact rule on the target (its permit or deny), and
 then the defaults. A default MUST permit only when its switch is on, the
 subject's account is the configured account, and the subject is not excluded;
 otherwise the outcome stays `not_granted`. An expired rule counts as none. A
 default MUST write, remove or rewrite no rule, so a removed rule never returns
 and a Block made for one program refuses that program alone. Each default is
-one switch: on after a fresh install, stored only once an operator turns it,
+one switch: on after a fresh install unless configured off, stored only once an
+operator turns it,
 as `{name, on, set_by, set_at}` in `rights-decisions@7`. The switch state and
-the configured defaults MUST contribute to the policy revision. The installed
-runtime configures five defaults (README), its own account, and the asks
+the configured defaults MUST contribute to the policy revision.
+A default MAY be configured off; its switch is then off after a fresh install.
+A default MAY name a host class, a predicate over subject and resource read at
+each decision; it then permits only targets the class covers. Class membership
+is a current host fact and does not contribute to the revision. The installed
+runtime configures seven defaults (README), its own account, and the asks
 script-host rule as the exclusion; a remote peer, decided under its mapped
 namespace, receives none.
+
+**[RIGHTS-R27] An elevated caller of the account is not asked.** The installed
+runtime configures the default `elevated-callers`, on after a fresh install,
+over every registered action and every resource, typed targets included. Its
+class is the subject an elevated local native peer of the runtime's own account
+binds: the decision's context carries the peer the receiving service bound
+(`WithBoundPeer`), that peer MUST read elevated by identity ID-H3 (Windows
+token elevation read from the named pipe at bind, never a group SID or payload
+claim), and its bound subject MUST equal the decided subject. The script-host
+exclusion does not apply to it. The person's own rule or Block for the program
+decides first, and turning the switch off restores asking. It writes no rule;
+`ExplainFor` names it as `account_default` `elevated-callers`, and
+`ListDefaults` reports its action as `*` with `every_resource`. A peer of
+another account, SYSTEM and an administrator a standard user's prompt asked for
+included, is refused at the receiving boundary, and a remote or paired peer is
+never elevated. The runtime records each admission it decides in its own log
+and one Activity line per program per runtime session, with no notification.
+
+**[RIGHTS-R26] A Block the service cannot evaluate refuses.** A typed or exact
+Block whose profile, selector or program comparison fails to evaluate MUST make
+the decision `unavailable`. This holds in a typed decision, in consent
+admission, and in a legacy exact decision. The whole reply is then the
+`unavailable` refusal read from that snapshot: a batch or consent admission
+carries no item or collection outcomes and no revision (RIGHTS-R19), and a
+decision or explanation carries no revision, source or name (RIGHTS-E2,
+RIGHTS-O14). A selector edit that preserves
+another setter's rules MUST report a conflict for such a Block. A permit whose
+comparison fails to evaluate matches nothing.
 
 **[RIGHTS-R23] A grant held past its call lives only while its rule does.**
 A decision admits one call. An owner that keeps something running after that
@@ -606,6 +803,16 @@ provider (abstraction-job JOB-A18). The Asks owner follows the same changes
 to withdraw pending typed requests a change settled (abstraction-asks
 ASK-A13). A remote peer's
 work is decided under its mapped subject and ends the same way.
+
+The additive Go `OnChangeChecked` companion preserves the published
+`OnChange(func())` signature. All captured callbacks run after durable commit,
+including callbacks after one reports an error. A checked settlement failure
+returns through the edit's existing error/Unavailable channel: the edit stays
+committed and the operator reconciles its current revision (RIGHTS-O6).
+Unavailable is never a refusal or a rollback. Runtime inference/resource
+callbacks join their requested checked pass before a successful reply and
+cancel/join before their dependencies close. Deadlines are cooperative; a
+deadline does not release a waiter while uncancellable I/O can still act.
 
 **[RIGHTS-O13] An operator reads and turns default switches conditionally.**
 `ListDefaults` MUST return every configured default with its switch under one
@@ -652,6 +859,31 @@ revision read with the decision. A storage, read or parse failure returns
 | `conflict` | RIGHTS-O5 | a compare-and-set mismatch on an operator edit |
 | `exhausted` | RIGHTS-O7 | the registered actions are full |
 | `gap` | RIGHTS-O4 | a `ListPolicy` cursor no longer matches |
+
+**[RIGHTS-E3] The refusal record.** This contract owns the one refusal
+record every OA service carries beside a refusing outcome
+([CONV-E4](https://github.com/openabstractions/abstractions/blob/main/idl/CONVENTIONS.md#c2-one-refusal-record)).
+`rights.thrift` declares it once as `RefusalDetail`, with `source`
+(`rights`, `credentials`, `license`, `terms`, `identity`, `os`; an open
+vocabulary), `decision` (`denied`, `not_granted`, `person_only`), `ask`
+(`available`, `none`) and the optional `action`, `question`, `credential` and
+`retry_after_ms`. A reader MUST refuse an unknown `decision` or `ask` word and
+MUST keep an unknown `source` word. `decision: denied` with `ask: none` records
+that the person chose to stop being asked. `person_only` names a question only
+the person may answer. Rights keeps `unknown_action` as an evaluated outcome
+of `Decide`, outside the record. `RefusalDetail` is open with
+`unknown_fields="grant"`: readers skip unknown extra detail members.
+`RefusalDecision` and `RefusalAsk` stay closed with `reader="act"`;
+`RefusalSource` stays open with `reader="display"`. Extra display details
+convey no authority; behavior follows only the known `decision` and `ask` words.
+When present, `action` and `question` contain 1..128 UTF-8 bytes and `credential`
+contains 1..64 UTF-8 bytes. `retry_after_ms` is in 0..86400000, inclusive.
+Vocabulary `DECISION.md` section 9.3/J-09 registers these names. Carriage joins
+each service's approved successor window and opens no window by itself.
+Held by, for the record's shape: the generated record's round trip
+in Go, Python, JavaScript, Rust and C++ (`scripts/refusal_record_test.py` in
+the maintainer source). Untestable here, for the carriage: each service's next
+version holds it.
 
 ## Bounds
 
@@ -719,4 +951,6 @@ their existing owners. This record adds no definition registration/list service.
   is the request's own lifetime (RIGHTS-R12).
 - Server authenticity: a reachable endpoint alone is not server trust,
   and this page builds no boundary for it (RIGHTS-A4).
-- Operator UI and broader capability enforcement beyond this policy service.
+- Publisher subjects: no subject form names a signer or publisher key; the
+  identity publisher evidence it needs (identity audit P0-1, P0-2) is
+  missing.

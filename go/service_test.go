@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/openabstractions/abstraction-identity/go/privatedir/privatetest"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -110,7 +111,7 @@ func start(t *testing.T) harness {
 			t.Skipf("UNPROVEN: successful Program-bound service case on current macOS socket transport; requires native transport proof: %v", err)
 		}
 	}
-	dir := t.TempDir()
+	dir := privatetest.Dir(t)
 	who := &person{}
 	at := endpoint(t, dir, "rights")
 	s, err := Start(at, dir, who)
@@ -329,7 +330,7 @@ func TestProgramProofRefusalPrecedesProvider(t *testing.T) {
 	if err := identity.CanEver(listen.Program); err == nil {
 		t.Skip("transport now supplies Program proof; success cases run")
 	}
-	state := filepath.Join(t.TempDir(), "not-created")
+	state := filepath.Join(privatetest.Dir(t), "not-created")
 	at := endpoint(t, state, "refused")
 	service, err := Start(at, state, &person{})
 	if service != nil {

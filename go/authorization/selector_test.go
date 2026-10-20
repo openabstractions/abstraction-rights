@@ -33,6 +33,14 @@ func nativeSelection(kind wire.ResourceSelectorKind, name string) wire.Permissio
 }
 func selectorNativeFixture(t *testing.T) (*rights.DecisionPolicy, *client.Client, *client.SelectorOperator, wire.Subject) {
 	t.Helper()
+	p, endpoint, s := selectorNativeFixtureWith(t, bytes.Equal, nil, nil)
+	return p, client.New(endpoint), client.NewSelectorOperator(endpoint), s
+}
+
+// selectorNativeFixtureWith serves the native test permission with the given
+// target comparison, legacy links and legacy enforcer, and returns its endpoint.
+func selectorNativeFixtureWith(t *testing.T, equal func([]byte, []byte) bool, links []rights.LegacyEquivalence, enforcer AuthorizeEnforcer) (*rights.DecisionPolicy, string, wire.Subject) {
+	t.Helper()
 	if runtime.GOOS == "darwin" {
 		t.Skip("native Program evidence unavailable")
 	}
@@ -50,7 +58,7 @@ func selectorNativeFixture(t *testing.T) (*rights.DecisionPolicy, *client.Client
 	}, Validate: func(raw []byte) bool {
 		v, err := wire.DecodeRequest(raw)
 		return err == nil && v.Op == "captured" && v.Name != "" && bytes.Equal(raw, nativeTarget(v.Op, v.Name))
-	}, Equal: bytes.Equal}}, nil, nil)
+	}, Equal: equal}}, nil, links)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -60,7 +68,7 @@ func selectorNativeFixture(t *testing.T) (*rights.DecisionPolicy, *client.Client
 	}
 	s := nativeSubject(t)
 	endpoint := listen.Endpoint(fmt.Sprintf("rights-selector-%d-%d", os.Getpid(), serial.Add(1)))
-	h, err := Listen(endpoint, p, nil)
+	h, err := Listen(endpoint, p, enforcer)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -86,7 +94,7 @@ func selectorNativeFixture(t *testing.T) (*rights.DecisionPolicy, *client.Client
 			t.Error("host did not drain")
 		}
 	})
-	return p, client.New(endpoint), client.NewSelectorOperator(endpoint), s
+	return p, endpoint, s
 }
 func definitionKey(d wire.SelectorPermissionDefinition) wire.PermissionKey {
 	return wire.PermissionKey{Action: d.Definition.Action, ResourceProfile: d.Definition.ResourceProfile}

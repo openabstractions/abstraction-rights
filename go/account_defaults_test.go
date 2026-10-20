@@ -51,6 +51,38 @@ func scriptHost(t *testing.T) wire.Subject {
 	return wire.Subject{Account: subject(t).Account, Program: filepath.Join(t.TempDir(), "python.exe")}
 }
 
+func TestDefaultCheckedSettlementUnavailableRetainsCommittedSwitch(t *testing.T) {
+	p := defaultsPolicy(t, filepath.Join(t.TempDir(), "decisions.json"), scriptHost(t))
+	s := subject(t)
+	revision, _, err := p.DefaultsSnapshot(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	unavailable := errors.New("standing unavailable")
+	remove := p.OnChangeChecked(func() error { return unavailable })
+	edit, err := p.SetDefault(revision, DefaultDownload, false, s, func() error { return nil })
+	if !errors.Is(err, unavailable) || edit.Outcome != wire.PolicyEditOutcomeUnavailable {
+		t.Fatalf("reply: %+v %v", edit, err)
+	}
+	current, switches, err := p.DefaultsSnapshot(t.Context())
+	if err != nil || current == revision {
+		t.Fatalf("reconcile: %q %v", current, err)
+	}
+	for _, d := range switches {
+		if d.Name == DefaultDownload && d.On {
+			t.Fatal("unavailable reply rolled back committed switch")
+		}
+	}
+	if got := decide(t, p, s, ActionJobSubmit, ResourceDownloadJobs); got != wire.DecisionOutcomeNotGranted {
+		t.Fatal(got)
+	}
+	remove()
+	edit, err = p.SetDefault(current, DefaultDownload, true, s, func() error { return nil })
+	if err != nil || edit.Outcome != wire.PolicyEditOutcomeApplied {
+		t.Fatal(edit, err)
+	}
+}
+
 func decide(t *testing.T, p *DecisionPolicy, s wire.Subject, action, resource string) wire.DecisionOutcome {
 	t.Helper()
 	return p.Decide(s, action, resource).Outcome

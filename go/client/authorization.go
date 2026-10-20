@@ -8,12 +8,12 @@ import (
 	identity "github.com/openabstractions/abstraction-identity"
 	"github.com/openabstractions/abstraction-identity/listen"
 	wire "github.com/openabstractions/abstraction-rights/go/abstraction/rights/api"
-	"strconv"
 	"time"
 )
 
 type Subject = wire.Subject
 type Decision = wire.Decision
+type RevisionDecision = wire.RevisionDecision
 type Client struct{ transport listen.FrameClient }
 
 func New(endpoint string) *Client {
@@ -25,30 +25,15 @@ func NewWithTransport(transport listen.FrameClient) *Client {
 	return &Client{transport: transport.WithDefaults(5*time.Second, 1<<20)}
 }
 
-// SubjectFromPeer requires Program proof supplied by a receiving service. Its
-// serialized result remains an attributed assertion at the decision service.
+// SubjectFromPeer is identity.SubjectOf at listen.Program, the proof a
+// receiving service requires, in this contract's Subject. Its serialized
+// result remains an attributed assertion at the decision service.
 func SubjectFromPeer(peer *identity.Peer) (Subject, error) {
-	if peer == nil {
-		return Subject{}, errors.New("rights: native subject evidence required")
-	}
-	if e := peer.Check(listen.Program); e != nil {
-		return Subject{}, e
-	}
-	u, e := peer.User.AtLeast(listen.Program.User)
+	s, e := identity.SubjectOf(peer, listen.Program)
 	if e != nil {
 		return Subject{}, e
 	}
-	account := ""
-	if u.Kind == "windows" {
-		account = u.SID
-	} else if u.Kind == "posix" && u.UID >= 0 {
-		account = strconv.Itoa(u.UID)
-	}
-	program, e := identity.SubjectProgram(peer, listen.Program.Path)
-	if e != nil || account == "" {
-		return Subject{}, errors.New("rights: native subject account/program unavailable")
-	}
-	return Subject{Account: account, Program: program}, nil
+	return Subject{Account: s.Account, Program: s.Program}, nil
 }
 func (c *Client) DecideContext(ctx context.Context, action, resource string) (Decision, error) {
 	if e := ctx.Err(); e != nil {
@@ -68,25 +53,72 @@ func checked(v Decision, e error) (Decision, error) {
 	if e != nil {
 		return Decision{}, e
 	}
-	evaluated := false
-	switch v.Outcome {
-	case wire.DecisionOutcomePermitted, wire.DecisionOutcomeDenied, wire.DecisionOutcomeNotGranted, wire.DecisionOutcomeUnknownAction:
-		evaluated = true
-	case wire.DecisionOutcomeInvalid, wire.DecisionOutcomeForbidden, wire.DecisionOutcomeUnavailable:
-	default:
+	if _, valid := v.Outcome.WireName(); !valid {
 		return Decision{}, errors.New("rights: unknown decision outcome")
 	}
-	if evaluated != (v.PolicyRevision != "") {
+	if Evaluated(v.Outcome) != (v.PolicyRevision != "") {
 		return Decision{}, errors.New("rights: inconsistent decision revision")
+	}
+	return v, nil
+}
+
+// DecideForAtLeastRevisionContext never falls back to a method without minimum.
+func (c *Client) DecideForAtLeastRevisionContext(ctx context.Context, subject Subject, action, resource, minimum string) (wire.RevisionDecision, error) {
+	if e := ctx.Err(); e != nil {
+		return wire.RevisionDecision{}, e
+	}
+	v, e := wire.NewAuthorizationClient(c.transport.WithContext(ctx)).DecideForAtLeastRevision(subject, action, resource, minimum)
+	if e != nil {
+		return wire.RevisionDecision{}, e
+	}
+	d, e := checked(v.Decision, nil)
+	if e != nil {
+		return wire.RevisionDecision{}, e
+	}
+	if (d.PolicyRevision != "") != (v.ObservedRevision != "") || len(v.ObservedRevision) > 128 {
+		return wire.RevisionDecision{}, errors.New("rights: inconsistent freshness observation")
 	}
 	return v, nil
 }
 
 var ErrNotPermitted = errors.New("rights: not permitted")
 
+// Evaluated reports a policy decision carrying a policy revision. Boundary
+// errors and unknown enum values carry no policy decision. Only permitted
+// authorizes access; an evaluated refusal still refuses.
+func Evaluated(outcome wire.DecisionOutcome) bool {
+	switch outcome {
+	case wire.DecisionOutcomePermitted, wire.DecisionOutcomeDenied, wire.DecisionOutcomeNotGranted, wire.DecisionOutcomeUnknownAction:
+		return true
+	}
+	return false
+}
+
+// PermittedOrNotGranted reports a known permit or a missing grant. A caller
+// may continue to its separate admission checks in either case. Only a
+// permitted outcome authorizes access through Rights itself.
+func PermittedOrNotGranted(outcome wire.DecisionOutcome) bool {
+	switch outcome {
+	case wire.DecisionOutcomePermitted, wire.DecisionOutcomeNotGranted:
+		return true
+	default:
+		return false
+	}
+}
+
 type DecisionError struct {
 	Outcome        string
 	PolicyRevision string
+}
+
+// DecisionOutcome reads the generated outcome vocabulary from the published
+// string field. An unrecognized word returns the enum's invalid zero value.
+func (e *DecisionError) DecisionOutcome() wire.DecisionOutcome {
+	if e == nil {
+		return 0
+	}
+	outcome, _ := wire.ParseDecisionOutcome(e.Outcome)
+	return outcome
 }
 
 func (e *DecisionError) Error() string {

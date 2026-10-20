@@ -39,46 +39,14 @@ function strs(out, v, depth) {
 
 const isWs = (c) => c === 0x20 || c === 0x09 || c === 0x0a || c === 0x0d;
 
+// raw writes an opaque value's bytes as they are ([DEF-A3]).
 function raw(out, s, depth) {
   const b = typeof s === "string" ? ENC.encode(s) : s;
-  let i = 0;
-  while (i < b.length) {
-    const c = b[i];
-    if (isWs(c)) { i++; continue; }
-    if (c === 0x22) {
-      let j = i + 1;
-      while (j < b.length) {
-        if (b[j] === 0x5c) { j += 2; continue; }
-        if (b[j] === 0x22) { j++; break; }
-        j++;
-      }
-      for (let k = i; k < j; k++) out.byte(b[k]);
-      i = j;
-    } else if (c === 0x7b || c === 0x5b) {
-      out.byte(c);
-      i++;
-      let j = i;
-      while (j < b.length && isWs(b[j])) j++;
-      if (j < b.length && (b[j] === 0x7d || b[j] === 0x5d)) { out.byte(b[j]); i = j + 1; }
-      else { depth++; out.byte(0x0a); pad(out, depth); }
-    } else if (c === 0x7d || c === 0x5d) {
-      depth--;
-      out.byte(0x0a);
-      pad(out, depth);
-      out.byte(c);
-      i++;
-    } else if (c === 0x2c) {
-      out.ascii(",\n");
-      pad(out, depth);
-      i++;
-    } else if (c === 0x3a) {
-      out.ascii(": ");
-      i++;
-    } else {
-      out.byte(c);
-      i++;
-    }
-  }
+  // Whitespace around the value is not part of it.
+  let i = 0, j = b.length;
+  while (i < j && isWs(b[i])) i++;
+  while (j > i && isWs(b[j - 1])) j--;
+  for (let k = i; k < j; k++) out.byte(b[k]);
 }
 
 // A JavaScript string sorts by UTF-16 code unit, which puts U+1D11E before
@@ -175,12 +143,45 @@ export const DecisionOutcome = Object.freeze({
   Unavailable: "unavailable",
 });
 
+export const RefusalSource = Object.freeze({
+  Rights: "rights",
+  Credentials: "credentials",
+  License: "license",
+  Terms: "terms",
+  Identity: "identity",
+  Os: "os",
+});
+
+export const RefusalDecision = Object.freeze({
+  Denied: "denied",
+  NotGranted: "not_granted",
+  PersonOnly: "person_only",
+});
+
+export const RefusalAsk = Object.freeze({
+  Available: "available",
+  None: "none",
+});
+
 export const PolicyPageOutcome = Object.freeze({
   Page: "page",
   Gap: "gap",
   Invalid: "invalid",
   Forbidden: "forbidden",
   Unavailable: "unavailable",
+});
+
+export const PolicyObservationOutcome = Object.freeze({
+  Changed: "changed",
+  Unchanged: "unchanged",
+  Gap: "gap",
+  Invalid: "invalid",
+  Forbidden: "forbidden",
+  Unavailable: "unavailable",
+});
+
+export const PolicyObservationMechanism = Object.freeze({
+  Native: "native",
 });
 
 export const PolicyEditOutcome = Object.freeze({
@@ -523,6 +524,93 @@ function writeDecision(out, v, depth) {
   out.byte(0x7d);
 }
 
+function writeRevisionDecision(out, v, depth) {
+  { const n = ENC.encode(v.observedRevision).length; if (n > 128) throw new Refusal("bad_value",0); }
+  if (/[\u0000-\u001f\u007f-\u009f]/.test(v.observedRevision)) throw new Refusal("bad_value",0);
+  out.byte(0x7b);
+  out.byte(0x0a);
+  pad(out, depth + 1);
+  esc(out, "decision");
+  out.ascii(": ");
+  writeDecision(out, v.decision, depth + 1);
+  if (v.observedRevision !== "") {
+    out.byte(0x2c);
+    out.byte(0x0a);
+    pad(out, depth + 1);
+    esc(out, "observed_revision");
+    out.ascii(": ");
+    esc(out, v.observedRevision);
+  }
+  out.byte(0x0a);
+  pad(out, depth);
+  out.byte(0x7d);
+}
+
+function writeRefusalDetail(out, v, depth) {
+  { const n = ENC.encode(v.action).length; if (n !== 0 && (n < 1 || n > 128)) throw new Refusal("bad_value",0); }
+  { const n = ENC.encode(v.question).length; if (n !== 0 && (n < 1 || n > 128)) throw new Refusal("bad_value",0); }
+  { const n = ENC.encode(v.credential).length; if (n !== 0 && (n < 1 || n > 64)) throw new Refusal("bad_value",0); }
+  if (v.retryAfterMs < 0n || v.retryAfterMs > 86400000n) throw new Refusal("bad_value",0);
+    if (typeof v.source !== "string") throw new Refusal("wrong_type",0);
+    if (typeof v.decision !== "string") throw new Refusal("wrong_type",0);
+    if (v.decision !== "denied" && v.decision !== "not_granted" && v.decision !== "person_only") { throw new Refusal("bad_enum",0); }
+    if (typeof v.ask !== "string") throw new Refusal("wrong_type",0);
+    if (v.ask !== "available" && v.ask !== "none") { throw new Refusal("bad_enum",0); }
+  out.byte(0x7b);
+  out.byte(0x0a);
+  pad(out, depth + 1);
+  esc(out, "source");
+  out.ascii(": ");
+  esc(out, v.source);
+  out.byte(0x2c);
+  out.byte(0x0a);
+  pad(out, depth + 1);
+  esc(out, "decision");
+  out.ascii(": ");
+  esc(out, v.decision);
+  out.byte(0x2c);
+  out.byte(0x0a);
+  pad(out, depth + 1);
+  esc(out, "ask");
+  out.ascii(": ");
+  esc(out, v.ask);
+  if (v.action !== "") {
+    out.byte(0x2c);
+    out.byte(0x0a);
+    pad(out, depth + 1);
+    esc(out, "action");
+    out.ascii(": ");
+    esc(out, v.action);
+  }
+  if (v.question !== "") {
+    out.byte(0x2c);
+    out.byte(0x0a);
+    pad(out, depth + 1);
+    esc(out, "question");
+    out.ascii(": ");
+    esc(out, v.question);
+  }
+  if (v.credential !== "") {
+    out.byte(0x2c);
+    out.byte(0x0a);
+    pad(out, depth + 1);
+    esc(out, "credential");
+    out.ascii(": ");
+    esc(out, v.credential);
+  }
+  if (v.retryAfterMs !== 0n) {
+    out.byte(0x2c);
+    out.byte(0x0a);
+    pad(out, depth + 1);
+    esc(out, "retry_after_ms");
+    out.ascii(": ");
+    num(out, v.retryAfterMs);
+  }
+  out.byte(0x0a);
+  pad(out, depth);
+  out.byte(0x7d);
+}
+
 function writePolicyRule(out, v, depth) {
   out.byte(0x7b);
   out.byte(0x0a);
@@ -592,6 +680,44 @@ function writePolicyPage(out, v, depth) {
   esc(out, "complete");
   out.ascii(": ");
   out.ascii(v.complete ? "true" : "false");
+  out.byte(0x0a);
+  pad(out, depth);
+  out.byte(0x7d);
+}
+
+function writePolicyObservation(out, v, depth) {
+  { const n = ENC.encode(v.next).length; if (n > 256) throw new Refusal("bad_value",0); }
+  if (/[\u0000-\u001f\u007f-\u009f]/.test(v.next)) throw new Refusal("bad_value",0);
+  { const n = ENC.encode(v.revision).length; if (n > 128) throw new Refusal("bad_value",0); }
+  if (/[\u0000-\u001f\u007f-\u009f]/.test(v.revision)) throw new Refusal("bad_value",0);
+    if (typeof v.outcome !== "string") throw new Refusal("wrong_type",0);
+    if (v.outcome !== "changed" && v.outcome !== "unchanged" && v.outcome !== "gap" && v.outcome !== "invalid" && v.outcome !== "forbidden" && v.outcome !== "unavailable") { throw new Refusal("bad_enum",0); }
+    if (typeof v.mechanism !== "string") throw new Refusal("wrong_type",0);
+    if (v.mechanism !== "native") { throw new Refusal("bad_enum",0); }
+  out.byte(0x7b);
+  out.byte(0x0a);
+  pad(out, depth + 1);
+  esc(out, "outcome");
+  out.ascii(": ");
+  esc(out, v.outcome);
+  out.byte(0x2c);
+  out.byte(0x0a);
+  pad(out, depth + 1);
+  esc(out, "next");
+  out.ascii(": ");
+  esc(out, v.next);
+  out.byte(0x2c);
+  out.byte(0x0a);
+  pad(out, depth + 1);
+  esc(out, "revision");
+  out.ascii(": ");
+  esc(out, v.revision);
+  out.byte(0x2c);
+  out.byte(0x0a);
+  pad(out, depth + 1);
+  esc(out, "mechanism");
+  out.ascii(": ");
+  esc(out, v.mechanism);
   out.byte(0x0a);
   pad(out, depth);
   out.byte(0x7d);
@@ -1708,6 +1834,42 @@ function writeLegacyOperationRequest(out, v, depth) {
   out.byte(0x7d);
 }
 
+function writeOAAuthorizationDecideForAtLeastRevisionArguments(out, v, depth) {
+  { const n = ENC.encode(v.action).length; if (n < 1 || n > 128) throw new Refusal("bad_value",0); }
+  if (/[\u0000-\u001f\u007f-\u009f]/.test(v.action)) throw new Refusal("bad_value",0);
+  { const n = ENC.encode(v.resource).length; if (n < 1 || n > 1024) throw new Refusal("bad_value",0); }
+  if (/[\u0000-\u001f\u007f-\u009f]/.test(v.resource)) throw new Refusal("bad_value",0);
+  { const n = ENC.encode(v.atLeastRevision).length; if (n > 128) throw new Refusal("bad_value",0); }
+  if (/[\u0000-\u001f\u007f-\u009f]/.test(v.atLeastRevision)) throw new Refusal("bad_value",0);
+  out.byte(0x7b);
+  out.byte(0x0a);
+  pad(out, depth + 1);
+  esc(out, "subject");
+  out.ascii(": ");
+  writeSubject(out, v.subject, depth + 1);
+  out.byte(0x2c);
+  out.byte(0x0a);
+  pad(out, depth + 1);
+  esc(out, "action");
+  out.ascii(": ");
+  esc(out, v.action);
+  out.byte(0x2c);
+  out.byte(0x0a);
+  pad(out, depth + 1);
+  esc(out, "resource");
+  out.ascii(": ");
+  esc(out, v.resource);
+  out.byte(0x2c);
+  out.byte(0x0a);
+  pad(out, depth + 1);
+  esc(out, "at_least_revision");
+  out.ascii(": ");
+  esc(out, v.atLeastRevision);
+  out.byte(0x0a);
+  pad(out, depth);
+  out.byte(0x7d);
+}
+
 function writeOAAuthorizationListActionDescriptionsArguments(out, v, depth) {
   out.byte(0x7b);
   out.byte(0x0a);
@@ -1763,6 +1925,27 @@ function writeOAAuthorizationDecideForArguments(out, v, depth) {
   esc(out, "resource");
   out.ascii(": ");
   esc(out, v.resource);
+  out.byte(0x0a);
+  pad(out, depth);
+  out.byte(0x7d);
+}
+
+function writeOAAuthorizationOperatorObservePolicyArguments(out, v, depth) {
+  { const n = ENC.encode(v.after).length; if (n > 256) throw new Refusal("bad_value",0); }
+  if (/[\u0000-\u001f\u007f-\u009f]/.test(v.after)) throw new Refusal("bad_value",0);
+  if (v.waitMs < 0n || v.waitMs > 30000n) throw new Refusal("bad_value",0);
+  out.byte(0x7b);
+  out.byte(0x0a);
+  pad(out, depth + 1);
+  esc(out, "after");
+  out.ascii(": ");
+  esc(out, v.after);
+  out.byte(0x2c);
+  out.byte(0x0a);
+  pad(out, depth + 1);
+  esc(out, "wait_ms");
+  out.ascii(": ");
+  num(out, v.waitMs);
   out.byte(0x0a);
   pad(out, depth);
   out.byte(0x7d);
@@ -2469,6 +2652,18 @@ function writeOAServiceError(out, v, depth) {
   out.byte(0x7d);
 }
 
+function writeOAAuthorizationDecideForAtLeastRevisionResult(out, v, depth) {
+  out.byte(0x7b);
+  out.byte(0x0a);
+  pad(out, depth + 1);
+  esc(out, "value");
+  out.ascii(": ");
+  writeRevisionDecision(out, v.value, depth + 1);
+  out.byte(0x0a);
+  pad(out, depth);
+  out.byte(0x7d);
+}
+
 function writeOAAuthorizationListActionDescriptionsResult(out, v, depth) {
   out.byte(0x7b);
   out.byte(0x0a);
@@ -2500,6 +2695,18 @@ function writeOAAuthorizationDecideForResult(out, v, depth) {
   esc(out, "value");
   out.ascii(": ");
   writeDecision(out, v.value, depth + 1);
+  out.byte(0x0a);
+  pad(out, depth);
+  out.byte(0x7d);
+}
+
+function writeOAAuthorizationOperatorObservePolicyResult(out, v, depth) {
+  out.byte(0x7b);
+  out.byte(0x0a);
+  pad(out, depth + 1);
+  esc(out, "value");
+  out.ascii(": ");
+  writePolicyObservation(out, v.value, depth + 1);
   out.byte(0x0a);
   pad(out, depth);
   out.byte(0x7d);
@@ -3145,10 +3352,12 @@ function readList(r, elem) {
   return out;
 }
 
-// Existing rights request concepts. Secret/token/admin remain credential inputs
-// checked by the service; request text never substitutes for native peer
-// identity. This descriptor does not replace the existing handwritten line
-// transport.
+// Deprecated native token-service request descriptor. Removal is scheduled for
+// Train B (expected 0.9.0), W2-01a.1, under TD13/TD57's stored-state and
+// declared outside-adopter retirement conditions. Secret/token/admin remain
+// credential inputs checked by the service; request text never substitutes for
+// native peer identity. This descriptor does not replace the existing
+// handwritten line transport.
 export function newRequest() {
   return { op: "", name: "", rights: [], secret: "", token: "", right: "", why: "", app: "", admin: "" };
 }
@@ -3161,23 +3370,34 @@ export function newAppMetadata() {
 }
 
 // Own held-right fields; since uses existing RFC3339 time representation.
-// Native Hold also carries Seen. The live Lease is connection-owned and cannot
-// be recreated from these fields.
+// Native Hold also carries Seen. The live
+// [Lease](https://openabstractions.github.io/reference.html#concept-rights.lease)
+// is connection-owned and cannot be recreated from these fields.
 export function newHoldMetadata() {
   return { app: "", name: "", right: "", why: "", since: "" };
 }
 
-// Own response fields projected without native Seen evidence. Any nonempty
-// code/error is refusal, including unknown codes. This is a common descriptor,
-// not a replacement legacy Response codec or generated service client.
+// Deprecated native token-service response descriptor. Removal is scheduled for
+// Train B (expected 0.9.0), W2-01a.1, under TD13/TD57's stored-state and
+// declared outside-adopter retirement conditions. Own response fields are
+// projected without native Seen evidence. Any nonempty code/error is refusal,
+// including unknown codes. This is a common descriptor, not a replacement
+// legacy Response codec or generated service client.
 export function newResponseMetadata() {
   return { code: "", error: "", secret: "", token: "", expires: "", app: null, right: "", apps: [], holds: [] };
 }
 
-// Account identifier and normalized absolute executable path. This serialized
-// subject is an assertion by an explicitly authorized enforcement point. It
-// contains no proof or verified flag and cannot authorize its own use. Direct
-// decisions derive their subject from native receiving Program evidence.
+// [Subject](https://openabstractions.github.io/reference.html#concept-rights.subject):
+// Receiving policy account and program target. Native programs use the shared
+// absolute-path/MSIX grammar; the distinct remote kind is remote:<64 lowercase
+// hex leaf-SPKI-SHA256> from the shared live-pin mapping. Remote targets match
+// exact account/token/action/resource only, with no defaults, wildcard
+// selectors or native operator authority. This serialized subject is an
+// assertion by an explicitly authorized native enforcement point, contains no
+// proof and cannot authorize its own use. Direct decisions derive native
+// receiving
+// [Program](https://openabstractions.github.io/reference.html#concept-identity.listener-program-need)
+// evidence. Authority setters and actors remain native.
 export function newSubject() {
   return { account: "", program: "" };
 }
@@ -3190,6 +3410,29 @@ export function newSubject() {
 // cached permission lifetime or human consent is conveyed.
 export function newDecision() {
   return { outcome: "", policyRevision: "" };
+}
+
+// A decision and bounded opaque freshness observation from the same state read.
+// Evaluated decisions carry observed_revision. Refusals carry none. This
+// observation conveys no permission lifetime.
+export function newRevisionDecision() {
+  return { decision: newDecision(), observedRevision: "" };
+}
+
+// The one refusal record every OA service carries beside a refusing outcome
+// (RIGHTS-E3; conventions CONV-E4). source names the authority that refused:
+// rights, credentials, license, terms, identity or os. decision is denied for
+// an explicit refusal, not_granted where no rule permits, and person_only where
+// only the person may answer the question. ask says whether asking can change
+// the answer: available, or none. action is the exact registered
+// <owner>/<name>; question the pending question's id; credential the
+// credential's name; retry_after_ms the earliest useful retry in milliseconds,
+// omitted when zero. Stop asking is denied with ask none. Current carriers
+// include config@2, messages@1, registry@3, endpoint@2 and chat@3, declared in
+// config.thrift, messages.thrift, registration.thrift and inference.thrift.
+// Other services adopt it in their scheduled versions.
+export function newRefusalDetail() {
+  return { source: "", decision: "", ask: "", action: "", question: "", credential: "", retryAfterMs: 0n };
 }
 
 // One exact policy rule. Subject is the administrative target, never caller
@@ -3215,6 +3458,20 @@ export function newPolicyRule() {
 // replay is promised.
 export function newPolicyPage() {
   return { outcome: "", revision: "", catalog: [], rules: [], next: "", complete: false };
+}
+
+// Read-only policy invalidation. changed carries a new nonempty opaque cursor
+// and current durable revision; an empty after requests this snapshot.
+// unchanged carries the confirmed after cursor and current revision. Expiry
+// changes the observation cursor while durable revision stays unchanged;
+// ReadRule confirms expiry. gap carries after and empty revision: restart from
+// empty after. invalid/forbidden/unavailable carry empty next/revision. Cursors
+// bind receiving Program, host epoch and expiry-sensitive state, never
+// enumerate rules or grant a permission lease. native declares policy-owner
+// commit callbacks plus expiry deadlines. At most 256 cursor bytes and 128
+// revision bytes; no rule contents, replay or second policy store.
+export function newPolicyObservation() {
+  return { outcome: "", next: "", revision: "", mechanism: "" };
 }
 
 // Applied/conflict carry the revision and optional exact current rule observed
@@ -3491,6 +3748,10 @@ export function newLegacyOperationRequest() {
   return { legacyAction: "", legacyResource: "", concreteOperation: null };
 }
 
+function newOAAuthorizationDecideForAtLeastRevisionArguments() {
+  return { subject: newSubject(), action: "", resource: "", atLeastRevision: "" };
+}
+
 function newOAAuthorizationListActionDescriptionsArguments() {
   return { cursor: "", limit: 0n };
 }
@@ -3501,6 +3762,10 @@ function newOAAuthorizationDecideArguments() {
 
 function newOAAuthorizationDecideForArguments() {
   return { subject: newSubject(), action: "", resource: "" };
+}
+
+function newOAAuthorizationOperatorObservePolicyArguments() {
+  return { after: "", waitMs: 0n };
 }
 
 function newOAAuthorizationOperatorRegisterDescribedActionArguments() {
@@ -3627,6 +3892,10 @@ function newOAServiceError() {
   return { code: "", message: "" };
 }
 
+function newOAAuthorizationDecideForAtLeastRevisionResult() {
+  return { value: newRevisionDecision() };
+}
+
 function newOAAuthorizationListActionDescriptionsResult() {
   return { value: newDescriptionPage() };
 }
@@ -3637,6 +3906,10 @@ function newOAAuthorizationDecideResult() {
 
 function newOAAuthorizationDecideForResult() {
   return { value: newDecision() };
+}
+
+function newOAAuthorizationOperatorObservePolicyResult() {
+  return { value: newPolicyObservation() };
 }
 
 function newOAAuthorizationOperatorRegisterDescribedActionResult() {
@@ -4061,6 +4334,115 @@ function readDecision(r) {
   return v;
 }
 
+function readRevisionDecision(r) {
+  if (r.at() !== 0x7b) throw r.refuse("wrong_type");
+  r.enter();
+  r.pos++;
+  const v = newRevisionDecision();
+  let seen = 0;
+  r.ws();
+  if (r.at() !== 0x7d) {
+    for (;;) {
+      r.ws();
+      if (r.at() !== 0x22) throw r.refuse("malformed");
+      const key = r.string();
+      r.ws();
+      if (r.at() !== 0x3a) throw r.refuse("malformed");
+      r.pos++;
+      r.ws();
+      if (key === "decision") {
+        if (seen & 1) throw r.refuse("duplicate_field");
+        seen |= 1;
+        v.decision = readDecision(r);
+      } else if (key === "observed_revision") {
+        if (seen & 2) throw r.refuse("duplicate_field");
+        seen |= 2;
+        v.observedRevision = r.string();
+      } else {
+        throw r.refuse("unknown_field");
+      }
+      r.ws();
+      if (r.at() !== 0x2c) break;
+      r.pos++;
+    }
+  }
+  if (r.at() !== 0x7d) throw r.refuse("malformed");
+  r.pos++;
+  r.depth--;
+  if (((seen & 1) >>> 0) !== 1) throw r.refuse("missing_field");
+  { const n = ENC.encode(v.observedRevision).length; if (n > 128) throw r.refuse("bad_value"); }
+  if (/[\u0000-\u001f\u007f-\u009f]/.test(v.observedRevision)) throw r.refuse("bad_value");
+  return v;
+}
+
+function readRefusalDetail(r) {
+  if (r.at() !== 0x7b) throw r.refuse("wrong_type");
+  r.enter();
+  r.pos++;
+  const v = newRefusalDetail();
+  let seen = 0;
+  r.ws();
+  const unknownKeys = new Set();
+  if (r.at() !== 0x7d) {
+    for (;;) {
+      r.ws();
+      if (r.at() !== 0x22) throw r.refuse("malformed");
+      const key = r.string();
+      r.ws();
+      if (r.at() !== 0x3a) throw r.refuse("malformed");
+      r.pos++;
+      r.ws();
+      if (key === "source") {
+        if (seen & 1) throw r.refuse("duplicate_field");
+        seen |= 1;
+        v.source = r.string();
+      } else if (key === "decision") {
+        if (seen & 2) throw r.refuse("duplicate_field");
+        seen |= 2;
+        v.decision = r.string();
+      } else if (key === "ask") {
+        if (seen & 4) throw r.refuse("duplicate_field");
+        seen |= 4;
+        v.ask = r.string();
+      } else if (key === "action") {
+        if (seen & 8) throw r.refuse("duplicate_field");
+        seen |= 8;
+        v.action = r.string();
+      } else if (key === "question") {
+        if (seen & 16) throw r.refuse("duplicate_field");
+        seen |= 16;
+        v.question = r.string();
+      } else if (key === "credential") {
+        if (seen & 32) throw r.refuse("duplicate_field");
+        seen |= 32;
+        v.credential = r.string();
+      } else if (key === "retry_after_ms") {
+        if (seen & 64) throw r.refuse("duplicate_field");
+        seen |= 64;
+        v.retryAfterMs = r.integer(-9223372036854775808n, 9223372036854775807n);
+      } else {
+        if (unknownKeys.has(key)) throw r.refuse("duplicate_key");
+        unknownKeys.add(key);
+        r.skipValue();
+      }
+      r.ws();
+      if (r.at() !== 0x2c) break;
+      r.pos++;
+    }
+  }
+  if (r.at() !== 0x7d) throw r.refuse("malformed");
+  r.pos++;
+  r.depth--;
+  if (((seen & 7) >>> 0) !== 7) throw r.refuse("missing_field");
+  { const n = ENC.encode(v.action).length; if (n !== 0 && (n < 1 || n > 128)) throw r.refuse("bad_value"); }
+  { const n = ENC.encode(v.question).length; if (n !== 0 && (n < 1 || n > 128)) throw r.refuse("bad_value"); }
+  { const n = ENC.encode(v.credential).length; if (n !== 0 && (n < 1 || n > 64)) throw r.refuse("bad_value"); }
+  if (v.retryAfterMs < 0n || v.retryAfterMs > 86400000n) throw r.refuse("bad_value");
+    if (v.decision !== "denied" && v.decision !== "not_granted" && v.decision !== "person_only") { throw r.refuse("bad_enum"); }
+    if (v.ask !== "available" && v.ask !== "none") { throw r.refuse("bad_enum"); }
+  return v;
+}
+
 function readPolicyRule(r) {
   if (r.at() !== 0x7b) throw r.refuse("wrong_type");
   r.enter();
@@ -4161,6 +4543,59 @@ function readPolicyPage(r) {
   r.depth--;
   if (((seen & 63) >>> 0) !== 63) throw r.refuse("missing_field");
     if (v.outcome !== "page" && v.outcome !== "gap" && v.outcome !== "invalid" && v.outcome !== "forbidden" && v.outcome !== "unavailable") { throw r.refuse("bad_enum"); }
+  return v;
+}
+
+function readPolicyObservation(r) {
+  if (r.at() !== 0x7b) throw r.refuse("wrong_type");
+  r.enter();
+  r.pos++;
+  const v = newPolicyObservation();
+  let seen = 0;
+  r.ws();
+  if (r.at() !== 0x7d) {
+    for (;;) {
+      r.ws();
+      if (r.at() !== 0x22) throw r.refuse("malformed");
+      const key = r.string();
+      r.ws();
+      if (r.at() !== 0x3a) throw r.refuse("malformed");
+      r.pos++;
+      r.ws();
+      if (key === "outcome") {
+        if (seen & 1) throw r.refuse("duplicate_field");
+        seen |= 1;
+        v.outcome = r.string();
+      } else if (key === "next") {
+        if (seen & 2) throw r.refuse("duplicate_field");
+        seen |= 2;
+        v.next = r.string();
+      } else if (key === "revision") {
+        if (seen & 4) throw r.refuse("duplicate_field");
+        seen |= 4;
+        v.revision = r.string();
+      } else if (key === "mechanism") {
+        if (seen & 8) throw r.refuse("duplicate_field");
+        seen |= 8;
+        v.mechanism = r.string();
+      } else {
+        throw r.refuse("unknown_field");
+      }
+      r.ws();
+      if (r.at() !== 0x2c) break;
+      r.pos++;
+    }
+  }
+  if (r.at() !== 0x7d) throw r.refuse("malformed");
+  r.pos++;
+  r.depth--;
+  if (((seen & 15) >>> 0) !== 15) throw r.refuse("missing_field");
+  { const n = ENC.encode(v.next).length; if (n > 256) throw r.refuse("bad_value"); }
+  if (/[\u0000-\u001f\u007f-\u009f]/.test(v.next)) throw r.refuse("bad_value");
+  { const n = ENC.encode(v.revision).length; if (n > 128) throw r.refuse("bad_value"); }
+  if (/[\u0000-\u001f\u007f-\u009f]/.test(v.revision)) throw r.refuse("bad_value");
+    if (v.outcome !== "changed" && v.outcome !== "unchanged" && v.outcome !== "gap" && v.outcome !== "invalid" && v.outcome !== "forbidden" && v.outcome !== "unavailable") { throw r.refuse("bad_enum"); }
+    if (v.mechanism !== "native") { throw r.refuse("bad_enum"); }
   return v;
 }
 
@@ -5106,6 +5541,10 @@ function readBatchDecision(r) {
     if (v.collectionOutcome !== null) {
     if (v.collectionOutcome !== "permitted" && v.collectionOutcome !== "denied" && v.collectionOutcome !== "not_granted" && v.collectionOutcome !== "unknown_action" && v.collectionOutcome !== "invalid" && v.collectionOutcome !== "forbidden" && v.collectionOutcome !== "unavailable") { throw r.refuse("bad_enum"); }
     }
+    for (const item of v.outcomes) {
+        if (typeof item !== "string") throw new Refusal("wrong_type",0);
+        if (item !== "permitted" && item !== "denied" && item !== "not_granted" && item !== "unknown_action" && item !== "invalid" && item !== "forbidden" && item !== "unavailable") throw new Refusal("bad_enum",0);
+    }
   return v;
 }
 
@@ -5165,6 +5604,14 @@ function readSelectorPermissionDefinition(r) {
   r.pos++;
   r.depth--;
   if (((seen & 127) >>> 0) !== 127) throw r.refuse("missing_field");
+    for (const item of v.supportedSelectors) {
+        if (typeof item !== "string") throw new Refusal("wrong_type",0);
+        if (item !== "one" && item !== "all") throw new Refusal("bad_enum",0);
+    }
+    for (const item of v.firstUseSelectors) {
+        if (typeof item !== "string") throw new Refusal("wrong_type",0);
+        if (item !== "one" && item !== "all") throw new Refusal("bad_enum",0);
+    }
   return v;
 }
 
@@ -5280,6 +5727,10 @@ function readPermissionBundleDefinition(r) {
   r.pos++;
   r.depth--;
   if (((seen & 255) >>> 0) !== 255) throw r.refuse("missing_field");
+    for (const item of v.supportedSelectors) {
+        if (typeof item !== "string") throw new Refusal("wrong_type",0);
+        if (item !== "one" && item !== "all") throw new Refusal("bad_enum",0);
+    }
   return v;
 }
 
@@ -5749,6 +6200,59 @@ function readLegacyOperationRequest(r) {
   return v;
 }
 
+function readOAAuthorizationDecideForAtLeastRevisionArguments(r) {
+  if (r.at() !== 0x7b) throw r.refuse("wrong_type");
+  r.enter();
+  r.pos++;
+  const v = newOAAuthorizationDecideForAtLeastRevisionArguments();
+  let seen = 0;
+  r.ws();
+  if (r.at() !== 0x7d) {
+    for (;;) {
+      r.ws();
+      if (r.at() !== 0x22) throw r.refuse("malformed");
+      const key = r.string();
+      r.ws();
+      if (r.at() !== 0x3a) throw r.refuse("malformed");
+      r.pos++;
+      r.ws();
+      if (key === "subject") {
+        if (seen & 1) throw r.refuse("duplicate_field");
+        seen |= 1;
+        v.subject = readSubject(r);
+      } else if (key === "action") {
+        if (seen & 2) throw r.refuse("duplicate_field");
+        seen |= 2;
+        v.action = r.string();
+      } else if (key === "resource") {
+        if (seen & 4) throw r.refuse("duplicate_field");
+        seen |= 4;
+        v.resource = r.string();
+      } else if (key === "at_least_revision") {
+        if (seen & 8) throw r.refuse("duplicate_field");
+        seen |= 8;
+        v.atLeastRevision = r.string();
+      } else {
+        throw r.refuse("unknown_field");
+      }
+      r.ws();
+      if (r.at() !== 0x2c) break;
+      r.pos++;
+    }
+  }
+  if (r.at() !== 0x7d) throw r.refuse("malformed");
+  r.pos++;
+  r.depth--;
+  if (((seen & 15) >>> 0) !== 15) throw r.refuse("missing_field");
+  { const n = ENC.encode(v.action).length; if (n < 1 || n > 128) throw r.refuse("bad_value"); }
+  if (/[\u0000-\u001f\u007f-\u009f]/.test(v.action)) throw r.refuse("bad_value");
+  { const n = ENC.encode(v.resource).length; if (n < 1 || n > 1024) throw r.refuse("bad_value"); }
+  if (/[\u0000-\u001f\u007f-\u009f]/.test(v.resource)) throw r.refuse("bad_value");
+  { const n = ENC.encode(v.atLeastRevision).length; if (n > 128) throw r.refuse("bad_value"); }
+  if (/[\u0000-\u001f\u007f-\u009f]/.test(v.atLeastRevision)) throw r.refuse("bad_value");
+  return v;
+}
+
 function readOAAuthorizationListActionDescriptionsArguments(r) {
   if (r.at() !== 0x7b) throw r.refuse("wrong_type");
   r.enter();
@@ -5867,6 +6371,48 @@ function readOAAuthorizationDecideForArguments(r) {
   r.pos++;
   r.depth--;
   if (((seen & 7) >>> 0) !== 7) throw r.refuse("missing_field");
+  return v;
+}
+
+function readOAAuthorizationOperatorObservePolicyArguments(r) {
+  if (r.at() !== 0x7b) throw r.refuse("wrong_type");
+  r.enter();
+  r.pos++;
+  const v = newOAAuthorizationOperatorObservePolicyArguments();
+  let seen = 0;
+  r.ws();
+  if (r.at() !== 0x7d) {
+    for (;;) {
+      r.ws();
+      if (r.at() !== 0x22) throw r.refuse("malformed");
+      const key = r.string();
+      r.ws();
+      if (r.at() !== 0x3a) throw r.refuse("malformed");
+      r.pos++;
+      r.ws();
+      if (key === "after") {
+        if (seen & 1) throw r.refuse("duplicate_field");
+        seen |= 1;
+        v.after = r.string();
+      } else if (key === "wait_ms") {
+        if (seen & 2) throw r.refuse("duplicate_field");
+        seen |= 2;
+        v.waitMs = r.integer(-9223372036854775808n, 9223372036854775807n);
+      } else {
+        throw r.refuse("unknown_field");
+      }
+      r.ws();
+      if (r.at() !== 0x2c) break;
+      r.pos++;
+    }
+  }
+  if (r.at() !== 0x7d) throw r.refuse("malformed");
+  r.pos++;
+  r.depth--;
+  if (((seen & 3) >>> 0) !== 3) throw r.refuse("missing_field");
+  { const n = ENC.encode(v.after).length; if (n > 256) throw r.refuse("bad_value"); }
+  if (/[\u0000-\u001f\u007f-\u009f]/.test(v.after)) throw r.refuse("bad_value");
+  if (v.waitMs < 0n || v.waitMs > 30000n) throw r.refuse("bad_value");
   return v;
 }
 
@@ -7175,6 +7721,41 @@ function readOAServiceError(r) {
   return v;
 }
 
+function readOAAuthorizationDecideForAtLeastRevisionResult(r) {
+  if (r.at() !== 0x7b) throw r.refuse("wrong_type");
+  r.enter();
+  r.pos++;
+  const v = newOAAuthorizationDecideForAtLeastRevisionResult();
+  let seen = 0;
+  r.ws();
+  if (r.at() !== 0x7d) {
+    for (;;) {
+      r.ws();
+      if (r.at() !== 0x22) throw r.refuse("malformed");
+      const key = r.string();
+      r.ws();
+      if (r.at() !== 0x3a) throw r.refuse("malformed");
+      r.pos++;
+      r.ws();
+      if (key === "value") {
+        if (seen & 1) throw r.refuse("duplicate_field");
+        seen |= 1;
+        v.value = readRevisionDecision(r);
+      } else {
+        throw r.refuse("unknown_field");
+      }
+      r.ws();
+      if (r.at() !== 0x2c) break;
+      r.pos++;
+    }
+  }
+  if (r.at() !== 0x7d) throw r.refuse("malformed");
+  r.pos++;
+  r.depth--;
+  if (((seen & 1) >>> 0) !== 1) throw r.refuse("missing_field");
+  return v;
+}
+
 function readOAAuthorizationListActionDescriptionsResult(r) {
   if (r.at() !== 0x7b) throw r.refuse("wrong_type");
   r.enter();
@@ -7265,6 +7846,41 @@ function readOAAuthorizationDecideForResult(r) {
         if (seen & 1) throw r.refuse("duplicate_field");
         seen |= 1;
         v.value = readDecision(r);
+      } else {
+        throw r.refuse("unknown_field");
+      }
+      r.ws();
+      if (r.at() !== 0x2c) break;
+      r.pos++;
+    }
+  }
+  if (r.at() !== 0x7d) throw r.refuse("malformed");
+  r.pos++;
+  r.depth--;
+  if (((seen & 1) >>> 0) !== 1) throw r.refuse("missing_field");
+  return v;
+}
+
+function readOAAuthorizationOperatorObservePolicyResult(r) {
+  if (r.at() !== 0x7b) throw r.refuse("wrong_type");
+  r.enter();
+  r.pos++;
+  const v = newOAAuthorizationOperatorObservePolicyResult();
+  let seen = 0;
+  r.ws();
+  if (r.at() !== 0x7d) {
+    for (;;) {
+      r.ws();
+      if (r.at() !== 0x22) throw r.refuse("malformed");
+      const key = r.string();
+      r.ws();
+      if (r.at() !== 0x3a) throw r.refuse("malformed");
+      r.pos++;
+      r.ws();
+      if (key === "value") {
+        if (seen & 1) throw r.refuse("duplicate_field");
+        seen |= 1;
+        v.value = readPolicyObservation(r);
       } else {
         throw r.refuse("unknown_field");
       }
@@ -8269,8 +8885,77 @@ export function decode(data) {
   return v;
 }
 
+const JSON_RECORDS = Object.freeze({
+  Request: [writeRequest, readRequest],
+  AppMetadata: [writeAppMetadata, readAppMetadata],
+  HoldMetadata: [writeHoldMetadata, readHoldMetadata],
+  ResponseMetadata: [writeResponseMetadata, readResponseMetadata],
+  Subject: [writeSubject, readSubject],
+  Decision: [writeDecision, readDecision],
+  RevisionDecision: [writeRevisionDecision, readRevisionDecision],
+  RefusalDetail: [writeRefusalDetail, readRefusalDetail],
+  PolicyRule: [writePolicyRule, readPolicyRule],
+  PolicyPage: [writePolicyPage, readPolicyPage],
+  PolicyObservation: [writePolicyObservation, readPolicyObservation],
+  PolicyEdit: [writePolicyEdit, readPolicyEdit],
+  RuleRecord: [writeRuleRecord, readRuleRecord],
+  RuleRead: [writeRuleRead, readRuleRead],
+  CatalogEntry: [writeCatalogEntry, readCatalogEntry],
+  ActionDescription: [writeActionDescription, readActionDescription],
+  PermissionDefinition: [writePermissionDefinition, readPermissionDefinition],
+  DescribedAction: [writeDescribedAction, readDescribedAction],
+  ActionEdit: [writeActionEdit, readActionEdit],
+  DescriptionEdit: [writeDescriptionEdit, readDescriptionEdit],
+  DescriptionPage: [writeDescriptionPage, readDescriptionPage],
+  AccountDefault: [writeAccountDefault, readAccountDefault],
+  DefaultPage: [writeDefaultPage, readDefaultPage],
+  DefaultEdit: [writeDefaultEdit, readDefaultEdit],
+  DecisionExplanation: [writeDecisionExplanation, readDecisionExplanation],
+  PermissionKey: [writePermissionKey, readPermissionKey],
+  ResourceSelector: [writeResourceSelector, readResourceSelector],
+  PermissionSelection: [writePermissionSelection, readPermissionSelection],
+  ConcreteResource: [writeConcreteResource, readConcreteResource],
+  CheckBatchRequest: [writeCheckBatchRequest, readCheckBatchRequest],
+  BatchDecision: [writeBatchDecision, readBatchDecision],
+  SelectorPermissionDefinition: [writeSelectorPermissionDefinition, readSelectorPermissionDefinition],
+  PermissionDefinitionPage: [writePermissionDefinitionPage, readPermissionDefinitionPage],
+  PermissionBundleDefinition: [writePermissionBundleDefinition, readPermissionBundleDefinition],
+  PermissionBundlePage: [writePermissionBundlePage, readPermissionBundlePage],
+  BundleExpansion: [writeBundleExpansion, readBundleExpansion],
+  PermissionEffect: [writePermissionEffect, readPermissionEffect],
+  SelectorRule: [writeSelectorRule, readSelectorRule],
+  BundleOrigin: [writeBundleOrigin, readBundleOrigin],
+  SelectorRuleRecord: [writeSelectorRuleRecord, readSelectorRuleRecord],
+  SelectorRulePage: [writeSelectorRulePage, readSelectorRulePage],
+  SelectorRuleRead: [writeSelectorRuleRead, readSelectorRuleRead],
+  SelectorEdit: [writeSelectorEdit, readSelectorEdit],
+  LegacyOperationRequest: [writeLegacyOperationRequest, readLegacyOperationRequest],
+});
+
+// toJson writes one record, named by kind, as JSON laid out as this module's
+// documents are and without the document terminator.
+export function toJson(kind, value) {
+  const codec = Object.hasOwn(JSON_RECORDS, kind) ? JSON_RECORDS[kind] : undefined;
+  if (codec === undefined) throw new TypeError("toJson takes a record name of this module, not " + String(kind));
+  const out = new Out();
+  codec[0](out, value, 0);
+  return out.bytes();
+}
+
+// fromJson reads one record, named by kind, from data; a refused input throws Refusal.
+export function fromJson(kind, data) {
+  const codec = Object.hasOwn(JSON_RECORDS, kind) ? JSON_RECORDS[kind] : undefined;
+  if (codec === undefined) throw new TypeError("fromJson takes a record name of this module, not " + String(kind));
+  const r = new Reader(data);
+  r.ws();
+  const v = codec[1](r);
+  r.ws();
+  if (r.pos < r.buf.length) throw r.refuse("trailing_bytes");
+  return v;
+}
+
 // refusals is in the order two of them are chosen between.
-const refusals = ["malformed", "bad_string", "number_spelling", "wrong_type", "depth_exceeded", "duplicate_key", "duplicate_field", "unknown_field", "missing_field", "bad_enum", "bad_binary", "trailing_bytes"];
+const refusals = ["malformed", "bad_string", "number_spelling", "wrong_type", "depth_exceeded", "duplicate_key", "duplicate_field", "unknown_field", "missing_field", "bad_enum", "bad_binary", "bad_value", "trailing_bytes"];
 
 function refusalRank(word) {
   return refusals.indexOf(word);
@@ -8336,8 +9021,11 @@ _serviceRecords["HoldMetadata"] = [["app","string","never"],["name","string","ne
 _serviceRecords["ResponseMetadata"] = [["code","string","absent"],["error","string","absent"],["secret","string","absent"],["token","string","absent"],["expires","string","absent"],["app","AppMetadata","absent"],["right","string","absent"],["apps","list<AppMetadata>","zero"],["holds","list<HoldMetadata>","zero"],];
 _serviceRecords["Subject"] = [["account","string","never"],["program","string","never"],];
 _serviceRecords["Decision"] = [["outcome","string","never"],["policyRevision","string","absent"],];
+_serviceRecords["RevisionDecision"] = [["decision","Decision","never"],["observedRevision","string","absent"],];
+_serviceRecords["RefusalDetail"] = [["source","string","never"],["decision","string","never"],["ask","string","never"],["action","string","absent"],["question","string","absent"],["credential","string","absent"],["retryAfterMs","i64","zero"],];
 _serviceRecords["PolicyRule"] = [["subject","Subject","never"],["action","string","never"],["resource","string","never"],["permit","bool","never"],];
 _serviceRecords["PolicyPage"] = [["outcome","string","never"],["revision","string","never"],["catalog","list<string>","never"],["rules","list<PolicyRule>","never"],["next","string","never"],["complete","bool","never"],];
+_serviceRecords["PolicyObservation"] = [["outcome","string","never"],["next","string","never"],["revision","string","never"],["mechanism","string","never"],];
 _serviceRecords["PolicyEdit"] = [["outcome","string","never"],["revision","string","never"],["current","PolicyRule","absent"],];
 _serviceRecords["RuleRecord"] = [["rule","PolicyRule","never"],["setBy","Subject","never"],["setAt","string","never"],["why","string","never"],["expires","string","never"],];
 _serviceRecords["RuleRead"] = [["outcome","string","never"],["revision","string","never"],["record","RuleRecord","absent"],];
@@ -8371,9 +9059,11 @@ _serviceRecords["SelectorRulePage"] = [["outcome","string","never"],["revision",
 _serviceRecords["SelectorRuleRead"] = [["outcome","string","never"],["revision","string","never"],["record","SelectorRuleRecord","absent"],];
 _serviceRecords["SelectorEdit"] = [["outcome","string","never"],["revision","string","never"],["current","list<SelectorRuleRecord>","never"],["bundleOrigin","BundleOrigin","absent"],];
 _serviceRecords["LegacyOperationRequest"] = [["legacyAction","string","never"],["legacyResource","string","never"],["concreteOperation","ConcreteResource","absent"],];
+_serviceRecords["OAAuthorizationDecideForAtLeastRevisionArguments"] = [["subject","Subject","never"],["action","string","never"],["resource","string","never"],["atLeastRevision","string","never"],];
 _serviceRecords["OAAuthorizationListActionDescriptionsArguments"] = [["cursor","string","never"],["limit","i64","never"],];
 _serviceRecords["OAAuthorizationDecideArguments"] = [["action","string","never"],["resource","string","never"],];
 _serviceRecords["OAAuthorizationDecideForArguments"] = [["subject","Subject","never"],["action","string","never"],["resource","string","never"],];
+_serviceRecords["OAAuthorizationOperatorObservePolicyArguments"] = [["after","string","never"],["waitMs","i64","never"],];
 _serviceRecords["OAAuthorizationOperatorRegisterDescribedActionArguments"] = [["expectedRevision","string","never"],["description","ActionDescription","never"],];
 _serviceRecords["OAAuthorizationOperatorApplyFirstUseAllowArguments"] = [["expectedRevision","string","never"],["questionId","string","never"],];
 _serviceRecords["OAAuthorizationOperatorListPolicyArguments"] = [["cursor","string","never"],["limit","i64","never"],];
@@ -8405,9 +9095,11 @@ _serviceRecords["OASelectorAuthorizationOperatorUndoPermissionEffectArguments"] 
 _serviceRecords["OAServiceFrame"] = [["version","i32","never"],["service","string","never"],["method","string","never"],["arguments","json","never"],];
 _serviceRecords["OAServiceReply"] = [["version","i32","never"],["service","string","never"],["method","string","never"],["ok","bool","never"],["payload","json","never"],];
 _serviceRecords["OAServiceError"] = [["code","string","never"],["message","string","never"],];
+_serviceRecords["OAAuthorizationDecideForAtLeastRevisionResult"] = [["value","RevisionDecision","never"],];
 _serviceRecords["OAAuthorizationListActionDescriptionsResult"] = [["value","DescriptionPage","never"],];
 _serviceRecords["OAAuthorizationDecideResult"] = [["value","Decision","never"],];
 _serviceRecords["OAAuthorizationDecideForResult"] = [["value","Decision","never"],];
+_serviceRecords["OAAuthorizationOperatorObservePolicyResult"] = [["value","PolicyObservation","never"],];
 _serviceRecords["OAAuthorizationOperatorRegisterDescribedActionResult"] = [["value","DescriptionEdit","never"],];
 _serviceRecords["OAAuthorizationOperatorApplyFirstUseAllowResult"] = [["value","PolicyEdit","never"],];
 _serviceRecords["OAAuthorizationOperatorListPolicyResult"] = [["value","PolicyPage","never"],];
@@ -8459,6 +9151,21 @@ function _serviceResponse(frame, service, method) {
 export class AuthorizationClient {
   constructor(transport) { this._transport = transport; }
 
+  async decideForAtLeastRevision(subject, action, resource, atLeastRevision) {
+    const _args = newOAAuthorizationDecideForAtLeastRevisionArguments();
+    _args.subject = subject;
+    _args.action = action;
+    _args.resource = resource;
+    _args.atLeastRevision = atLeastRevision;
+    _serviceCheck("OAAuthorizationDecideForAtLeastRevisionArguments", _args);
+    const _payload = _serviceEncode(writeOAAuthorizationDecideForAtLeastRevisionArguments, _args, 1);
+    _serviceDecode(readOAAuthorizationDecideForAtLeastRevisionArguments, _payload, 1);
+    const _request = _serviceRequest("abstraction.rights/authorization@1", "DecideForAtLeastRevision", _payload);
+    const _reply = _serviceResponse(await this._transport.exchangeFrame(_request), "abstraction.rights/authorization@1", "DecideForAtLeastRevision");
+    const _result = _serviceDecode(readOAAuthorizationDecideForAtLeastRevisionResult, _reply, 1);
+    return _result.value;
+  }
+
   async listActionDescriptions(cursor, limit) {
     const _args = newOAAuthorizationListActionDescriptionsArguments();
     _args.cursor = cursor;
@@ -8503,6 +9210,27 @@ export const AuthorizationService = Object.freeze({wireName:"abstraction.rights/
 
 export class AuthorizationOperatorClient {
   constructor(transport) { this._transport = transport; }
+
+  async observePolicy(after, waitMs) {
+    const _args = newOAAuthorizationOperatorObservePolicyArguments();
+    _args.after = after;
+    _args.waitMs = waitMs;
+    _serviceCheck("OAAuthorizationOperatorObservePolicyArguments", _args);
+    const _payload = _serviceEncode(writeOAAuthorizationOperatorObservePolicyArguments, _args, 1);
+    _serviceDecode(readOAAuthorizationOperatorObservePolicyArguments, _payload, 1);
+    const _request = _serviceRequest("abstraction.rights/operator@1", "ObservePolicy", _payload);
+    const _reply = _serviceResponse(await this._transport.exchangeFrame(_request), "abstraction.rights/operator@1", "ObservePolicy");
+    const _result = _serviceDecode(readOAAuthorizationOperatorObservePolicyResult, _reply, 1);
+    return _result.value;
+  }
+
+  observePolicyPages(after, waitMs) {
+    if (typeof waitMs!=="bigint" || waitMs < 0n || waitMs > 30000n) throw new RangeError("observe wait_ms is 0..30000");
+    const _observeClient=this; let _observeTail=Promise.resolve(), _observeClosed=false;
+    return { [Symbol.asyncIterator]() { return this; },
+      next() { const _observePending=_observeTail.then(async()=>{ if(_observeClosed)return {done:true,value:undefined}; const _observePage=await _observeClient.observePolicy(after, waitMs); after=_observePage["next"];return {done:false,value:_observePage}; }); _observeTail=_observePending.catch(()=>{});return _observePending; },
+      async return() { _observeClosed=true;return {done:true,value:undefined}; } };
+  }
 
   async registerDescribedAction(expectedRevision, description) {
     const _args = newOAAuthorizationOperatorRegisterDescribedActionArguments();
@@ -8906,8 +9634,11 @@ _namedRecords["HoldMetadata"] = [["app","string","never"],["name","string","neve
 _namedRecords["ResponseMetadata"] = [["code","string","absent"],["error","string","absent"],["secret","string","absent"],["token","string","absent"],["expires","string","absent"],["app","AppMetadata","absent"],["right","string","absent"],["apps","list<AppMetadata>","zero"],["holds","list<HoldMetadata>","zero"],];
 _namedRecords["Subject"] = [["account","string","never"],["program","string","never"],];
 _namedRecords["Decision"] = [["outcome","string","never"],["policyRevision","string","absent"],];
+_namedRecords["RevisionDecision"] = [["decision","Decision","never"],["observedRevision","string","absent"],];
+_namedRecords["RefusalDetail"] = [["source","string","never"],["decision","string","never"],["ask","string","never"],["action","string","absent"],["question","string","absent"],["credential","string","absent"],["retryAfterMs","i64","zero"],];
 _namedRecords["PolicyRule"] = [["subject","Subject","never"],["action","string","never"],["resource","string","never"],["permit","bool","never"],];
 _namedRecords["PolicyPage"] = [["outcome","string","never"],["revision","string","never"],["catalog","list<string>","never"],["rules","list<PolicyRule>","never"],["next","string","never"],["complete","bool","never"],];
+_namedRecords["PolicyObservation"] = [["outcome","string","never"],["next","string","never"],["revision","string","never"],["mechanism","string","never"],];
 _namedRecords["PolicyEdit"] = [["outcome","string","never"],["revision","string","never"],["current","PolicyRule","absent"],];
 _namedRecords["RuleRecord"] = [["rule","PolicyRule","never"],["setBy","Subject","never"],["setAt","string","never"],["why","string","never"],["expires","string","never"],];
 _namedRecords["RuleRead"] = [["outcome","string","never"],["revision","string","never"],["record","RuleRecord","absent"],];
@@ -9002,12 +9733,24 @@ export function checkDecision(v, depth = 0, limit = DEPTH_LIMIT) {
   _namedCheck("Decision", v, depth, Math.min(limit, DEPTH_LIMIT));
 }
 
+export function checkRevisionDecision(v, depth = 0, limit = DEPTH_LIMIT) {
+  _namedCheck("RevisionDecision", v, depth, Math.min(limit, DEPTH_LIMIT));
+}
+
+export function checkRefusalDetail(v, depth = 0, limit = DEPTH_LIMIT) {
+  _namedCheck("RefusalDetail", v, depth, Math.min(limit, DEPTH_LIMIT));
+}
+
 export function checkPolicyRule(v, depth = 0, limit = DEPTH_LIMIT) {
   _namedCheck("PolicyRule", v, depth, Math.min(limit, DEPTH_LIMIT));
 }
 
 export function checkPolicyPage(v, depth = 0, limit = DEPTH_LIMIT) {
   _namedCheck("PolicyPage", v, depth, Math.min(limit, DEPTH_LIMIT));
+}
+
+export function checkPolicyObservation(v, depth = 0, limit = DEPTH_LIMIT) {
+  _namedCheck("PolicyObservation", v, depth, Math.min(limit, DEPTH_LIMIT));
 }
 
 export function checkPolicyEdit(v, depth = 0, limit = DEPTH_LIMIT) {
@@ -9364,6 +10107,80 @@ export function decodeDecision(data) {
   return v;
 }
 
+export function decodeRevisionDecisionAt(data, depth, limit) {
+  const r = new Reader(data);
+  if (depth < 0 || limit < 1) throw r.refuse("depth_exceeded");
+  r.depth = depth;
+  r.limit = Math.min(limit, DEPTH_LIMIT);
+  r.ws();
+  const v = readRevisionDecision(r);
+  return [v, r.pos];
+}
+
+export function encodeRevisionDecisionAt(v, depth) {
+  if (depth < 0 || depth >= DEPTH_LIMIT) throw new Refusal("depth_exceeded", 0);
+  checkRevisionDecision(v, depth, DEPTH_LIMIT);
+  const out = new Out();
+  writeRevisionDecision(out, v, depth);
+  const bytes = out.bytes();
+  decodeRevisionDecisionAt(bytes, depth, DEPTH_LIMIT);
+  return bytes;
+}
+
+export function encodeRevisionDecision(v) {
+  const bytes = encodeRevisionDecisionAt(v, 0);
+  const out = new Uint8Array(bytes.length + 1);
+  out.set(bytes);
+  out[bytes.length] = 0x0a;
+  return out;
+}
+
+export function decodeRevisionDecision(data) {
+  const [v, n] = decodeRevisionDecisionAt(data, 0, DEPTH_LIMIT);
+  const r = new Reader(data);
+  r.pos = n;
+  r.ws();
+  if (r.pos !== r.buf.length) throw r.refuse("trailing_bytes");
+  return v;
+}
+
+export function decodeRefusalDetailAt(data, depth, limit) {
+  const r = new Reader(data);
+  if (depth < 0 || limit < 1) throw r.refuse("depth_exceeded");
+  r.depth = depth;
+  r.limit = Math.min(limit, DEPTH_LIMIT);
+  r.ws();
+  const v = readRefusalDetail(r);
+  return [v, r.pos];
+}
+
+export function encodeRefusalDetailAt(v, depth) {
+  if (depth < 0 || depth >= DEPTH_LIMIT) throw new Refusal("depth_exceeded", 0);
+  checkRefusalDetail(v, depth, DEPTH_LIMIT);
+  const out = new Out();
+  writeRefusalDetail(out, v, depth);
+  const bytes = out.bytes();
+  decodeRefusalDetailAt(bytes, depth, DEPTH_LIMIT);
+  return bytes;
+}
+
+export function encodeRefusalDetail(v) {
+  const bytes = encodeRefusalDetailAt(v, 0);
+  const out = new Uint8Array(bytes.length + 1);
+  out.set(bytes);
+  out[bytes.length] = 0x0a;
+  return out;
+}
+
+export function decodeRefusalDetail(data) {
+  const [v, n] = decodeRefusalDetailAt(data, 0, DEPTH_LIMIT);
+  const r = new Reader(data);
+  r.pos = n;
+  r.ws();
+  if (r.pos !== r.buf.length) throw r.refuse("trailing_bytes");
+  return v;
+}
+
 export function decodePolicyRuleAt(data, depth, limit) {
   const r = new Reader(data);
   if (depth < 0 || limit < 1) throw r.refuse("depth_exceeded");
@@ -9431,6 +10248,43 @@ export function encodePolicyPage(v) {
 
 export function decodePolicyPage(data) {
   const [v, n] = decodePolicyPageAt(data, 0, DEPTH_LIMIT);
+  const r = new Reader(data);
+  r.pos = n;
+  r.ws();
+  if (r.pos !== r.buf.length) throw r.refuse("trailing_bytes");
+  return v;
+}
+
+export function decodePolicyObservationAt(data, depth, limit) {
+  const r = new Reader(data);
+  if (depth < 0 || limit < 1) throw r.refuse("depth_exceeded");
+  r.depth = depth;
+  r.limit = Math.min(limit, DEPTH_LIMIT);
+  r.ws();
+  const v = readPolicyObservation(r);
+  return [v, r.pos];
+}
+
+export function encodePolicyObservationAt(v, depth) {
+  if (depth < 0 || depth >= DEPTH_LIMIT) throw new Refusal("depth_exceeded", 0);
+  checkPolicyObservation(v, depth, DEPTH_LIMIT);
+  const out = new Out();
+  writePolicyObservation(out, v, depth);
+  const bytes = out.bytes();
+  decodePolicyObservationAt(bytes, depth, DEPTH_LIMIT);
+  return bytes;
+}
+
+export function encodePolicyObservation(v) {
+  const bytes = encodePolicyObservationAt(v, 0);
+  const out = new Uint8Array(bytes.length + 1);
+  out.set(bytes);
+  out[bytes.length] = 0x0a;
+  return out;
+}
+
+export function decodePolicyObservation(data) {
+  const [v, n] = decodePolicyObservationAt(data, 0, DEPTH_LIMIT);
   const r = new Reader(data);
   r.pos = n;
   r.ws();

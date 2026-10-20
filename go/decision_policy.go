@@ -8,6 +8,8 @@ import (
 	"fmt"
 	cas "github.com/openabstractions/abstraction-cas/go"
 	identity "github.com/openabstractions/abstraction-identity"
+	"github.com/openabstractions/abstraction-identity/go/budget"
+	"github.com/openabstractions/abstraction-identity/remote"
 	wire "github.com/openabstractions/abstraction-rights/go/abstraction/rights/api"
 	"io"
 	"os"
@@ -63,6 +65,7 @@ type registeredAction struct {
 	At     string       `json:"at"`
 }
 type decisionFile struct {
+	Order                  *decisionOrder         `json:"order,omitempty"`
 	Profile                string                 `json:"profile"`
 	Actions                []registeredAction     `json:"actions"`
 	Rules                  []decisionRule         `json:"rules"`
@@ -78,6 +81,8 @@ type decisionFile struct {
 // other spelling.
 func profileVersion(profile string) int {
 	switch profile {
+	case orderedDecisionProfile:
+		return 8
 	case DecisionProfile:
 		return 7
 	case typedDecisionProfile:
@@ -98,9 +103,11 @@ func profileVersion(profile string) int {
 // RegisterAction are operator authority, never application methods. The catalogue
 // is the configured seed plus actions registered in the file.
 type DecisionPolicy struct {
-	path   string
-	seed   []string
-	native wire.Subject
+	revisionConfiguration       string
+	revisionConfigurationDigest string
+	path                        string
+	seed                        []string
+	native                      wire.Subject
 	// Clock supplies service time for provenance and expiry. Nil uses time.Now.
 	// Assign before the policy is shared.
 	Clock func() time.Time
@@ -116,8 +123,16 @@ type DecisionPolicy struct {
 	// meta-rule (RIGHTS-R16). A host names its operator programs here, and
 	// any other program whose own rules optional cleanup must never take; the
 	// service's own program is always refused. Assign before the policy is
-	// shared.
+	// shared. The callback must be safe under the policy CAS and acquire no
+	// directory/RPC locks. ErrMetaHolder opts into a current quiet veto;
+	// ErrMetaHolderUnavailable reports unavailable eligibility metadata.
 	MetaHolder func(wire.Subject) error
+	// RefreshMetaHolder, when configured before sharing, refreshes the host's
+	// immutable holder facts at outer admissions. It honors ctx and runs before
+	// policy/Book locks. MetaHolder itself remains a lock-free current read.
+	RefreshMetaHolder     func(context.Context) error
+	permitAdmissionAction string
+	permitAdmission       func(context.Context, wire.Subject, wire.PermissionSelection) (func() error, error)
 	// defaults, defaultAccount and defaultExcluded are the account-wide
 	// defaults ConfigureDefaults set (RIGHTS-R22).
 	defaults        []AccountDefault
@@ -130,7 +145,7 @@ type DecisionPolicy struct {
 	// changed holds the functions OnChange added, each called after every
 	// committed change; changedMu guards the slice, never a call.
 	changedMu sync.Mutex
-	changed   []*func()
+	changed   []*func() error
 }
 
 // OnChange adds changed, called after every change this policy commits, a
@@ -148,6 +163,17 @@ func (p *DecisionPolicy) OnChange(changed func()) (remove func()) {
 	if changed == nil {
 		return func() {}
 	}
+	return p.OnChangeChecked(func() error { changed(); return nil })
+}
+
+// OnChangeChecked adds a post-commit check. Every callback runs before the
+// edit returns; errors report incomplete settlement after the durable edit.
+// The caller must reconcile the saved policy (RIGHTS-O6), not assume rollback.
+// Removal has the same captured-callback semantics as OnChange.
+func (p *DecisionPolicy) OnChangeChecked(changed func() error) (remove func()) {
+	if changed == nil {
+		return func() {}
+	}
 	entry := &changed
 	p.changedMu.Lock()
 	p.changed = append(p.changed, entry)
@@ -155,7 +181,7 @@ func (p *DecisionPolicy) OnChange(changed func()) (remove func()) {
 	return func() {
 		p.changedMu.Lock()
 		defer p.changedMu.Unlock()
-		p.changed = slices.DeleteFunc(slices.Clone(p.changed), func(e *func()) bool { return e == entry })
+		p.changed = slices.DeleteFunc(slices.Clone(p.changed), func(e *func() error) bool { return e == entry })
 	}
 }
 
@@ -166,7 +192,7 @@ func (p *DecisionPolicy) committed(err error) error {
 		changed := p.changed
 		p.changedMu.Unlock()
 		for _, call := range changed {
-			(*call)()
+			err = errors.Join(err, (*call)())
 		}
 	}
 	return err
@@ -189,6 +215,12 @@ func validWhy(v string) bool {
 // read). A path CanonicalProgramPath cannot resolve, including one naming no
 // existing file, comes back unchanged, so a different file still refuses.
 func NormalizeDecisionSubject(s wire.Subject) (wire.Subject, error) {
+	if strings.HasPrefix(s.Program, remote.SubjectPrefix) {
+		if !boundedDecisionString(s.Account, 128) || !remote.ValidSubjectProgram(s.Program) {
+			return wire.Subject{}, errors.New("rights: invalid remote subject")
+		}
+		return s, nil
+	}
 	if strings.HasPrefix(s.Program, identity.PackagedProgramPrefix) {
 		if !boundedDecisionString(s.Account, 128) || !identity.ValidSubjectProgram(s.Program) {
 			return wire.Subject{}, errors.New("rights: invalid subject")
@@ -215,6 +247,9 @@ func writableSubject(s wire.Subject) (wire.Subject, error) {
 	if e != nil {
 		return n, e
 	}
+	if remoteSubject(n) {
+		return n, nil
+	}
 	if identity.UnresolvedShortName(n.Program) {
 		return wire.Subject{}, fmt.Errorf("%w: %s", ErrUnresolvedShortName, n.Program)
 	}
@@ -231,7 +266,28 @@ func writableSubject(s wire.Subject) (wire.Subject, error) {
 // (canonicalizeStored); every other stored subject is checked by syntax, with
 // no filesystem call per rule.
 func validStoredSubject(s wire.Subject) bool {
+	return boundedDecisionString(s.Account, 128) && boundedDecisionString(s.Program, 4096) &&
+		(identity.ValidSubjectProgram(s.Program) || remote.ValidSubjectProgram(s.Program))
+}
+
+func remoteSubject(s wire.Subject) bool { return remote.ValidSubjectProgram(s.Program) }
+
+func sameSubjectPrograms(a, b string) bool {
+	if strings.HasPrefix(a, remote.SubjectPrefix) || strings.HasPrefix(b, remote.SubjectPrefix) {
+		return remote.ValidSubjectProgram(a) && remote.ValidSubjectProgram(b) && a == b
+	}
+	return identity.SameSubjectProgram(a, b)
+}
+
+// A policy target may be remote; setters and administrative actors stay native.
+func validStoredActor(s wire.Subject) bool {
 	return boundedDecisionString(s.Account, 128) && boundedDecisionString(s.Program, 4096) && identity.ValidSubjectProgram(s.Program)
+}
+func normalizeActor(s wire.Subject) (wire.Subject, error) {
+	if strings.HasPrefix(s.Program, remote.SubjectPrefix) {
+		return wire.Subject{}, errors.New("rights: remote subject cannot act as native authority")
+	}
+	return NormalizeDecisionSubject(s)
 }
 
 // canonicalizeStored brings the stored subjects of f to their canonical
@@ -279,6 +335,9 @@ func canonicalizeStored(f *decisionFile, all bool) bool {
 // rule on the target's own action and resource whose name differs asks key
 // for a file identity.
 func sameTarget(r decisionRule, s wire.Subject, action, resource string, key programKeys) bool {
+	if remoteSubject(r.Subject) || remoteSubject(s) {
+		return remoteSubject(r.Subject) && remoteSubject(s) && !IsMetaRule(action, resource) && r.Subject == s && r.Action == action && r.Resource == resource
+	}
 	return r.Subject.Account == s.Account && r.Action == action && r.Resource == resource &&
 		identity.SameNormalizedSubjectProgramKeyed(r.Subject.Program, s.Program,
 			func() string { return key(r.Subject.Program) }, func() string { return key(s.Program) })
@@ -546,6 +605,9 @@ func (p *DecisionPolicy) decodeDecision(data []byte) (decisionFile, error) {
 		return f, errors.New("rights: trailing state")
 	}
 	version := profileVersion(f.Profile)
+	if (version == 8) != (f.Order != nil) || f.Order != nil && !validDecisionOrder(f.Order) {
+		return f, errors.New("rights: invalid decision order")
+	}
 	if version < 2 || len(f.Rules) > MaxDecisionRules || len(f.Actions) > MaxDecisionActions || len(f.AppliedOperatorAnswers) > MaxAppliedOperatorAnswers || (version < 4 && len(f.AppliedOperatorAnswers) != 0) || len(f.Descriptions) > MaxDecisionActions || (version < 5 && len(f.Descriptions) != 0) || (version < 7 && len(f.DefaultSwitches) != 0) {
 		return f, errors.New("rights: incompatible decision state")
 	}
@@ -558,7 +620,7 @@ func (p *DecisionPolicy) decodeDecision(data []byte) (decisionFile, error) {
 		}
 	}
 	for i, a := range f.Actions {
-		if !validStoredSubject(a.By) || !ValidActionName(a.Action) || !validStamp(a.At) || (i > 0 && f.Actions[i-1].Action >= a.Action) {
+		if !validStoredActor(a.By) || !ValidActionName(a.Action) || !validStamp(a.At) || (i > 0 && f.Actions[i-1].Action >= a.Action) {
 			return f, errors.New("rights: invalid/duplicate registered action")
 		}
 	}
@@ -567,14 +629,14 @@ func (p *DecisionPolicy) decodeDecision(data []byte) (decisionFile, error) {
 		return f, errors.New("rights: catalogue exceeds its bound")
 	}
 	for i, d := range f.Descriptions {
-		if !validStoredDescription(d.Description) || !validStoredSubject(d.By) || !validStamp(d.At) || !slices.Contains(catalogue, d.Description.Action) || (i > 0 && f.Descriptions[i-1].Description.Action >= d.Description.Action) {
+		if !validStoredDescription(d.Description) || !validStoredActor(d.By) || !validStamp(d.At) || !slices.Contains(catalogue, d.Description.Action) || (i > 0 && f.Descriptions[i-1].Description.Action >= d.Description.Action) {
 			return f, errors.New("rights: invalid/duplicate action description")
 		}
 	}
 	last := ""
 	for _, r := range f.Rules {
 		key := ruleKey(r)
-		if !validStoredSubject(r.Subject) || !validStoredSubject(r.SetBy) || !ValidDecisionQuery(r.Action, r.Resource) ||
+		if !validStoredSubject(r.Subject) || remoteSubject(r.Subject) && IsMetaRule(r.Action, r.Resource) || !validStoredActor(r.SetBy) || !ValidDecisionQuery(r.Action, r.Resource) ||
 			!slices.Contains(catalogue, r.Action) || key <= last || !validStamp(r.SetAt) || !validWhy(r.Why) ||
 			(r.Expires != "" && !validStamp(r.Expires)) ||
 			(r.QuestionID != "" && (!boundedDecisionString(r.QuestionID, 128) || !r.Permit || IsMetaRule(r.Action, r.Resource) || f.Profile == previousDecisionProfile)) {
@@ -623,10 +685,13 @@ func (p *DecisionPolicy) canonicalizeState() error {
 	})
 }
 
-// DecisionReadBudget bounds one read of the decision state. A readable file
-// reads in milliseconds. The file store retries a denied open, because a
-// writer's replace denies it for an instant, and a file denied for good ends
-// that retry at this budget: the decision, rule read or listing is unavailable.
+// DecisionReadBudget is the least time one read of the decision state has,
+// and its bound when the caller set no deadline. A caller deadline with more
+// time remaining bounds the read instead (budget.Within), so a read a person
+// waits for finishes under load. A readable file reads in milliseconds. The
+// file store retries a denied open, because a writer's replace denies it for
+// an instant, and a file denied for good ends that retry at the bound: the
+// decision, rule read or listing is unavailable.
 const DecisionReadBudget = 500 * time.Millisecond
 
 func (p *DecisionPolicy) readDecision() (decisionFile, string, error) {
@@ -642,12 +707,12 @@ func (p *DecisionPolicy) CheckState(ctx context.Context) error {
 	return e
 }
 
-// readDecisionContext reads the state within ctx and DecisionReadBudget.
+// readDecisionContext reads the state within ctx's deadline, at least DecisionReadBudget.
 func (p *DecisionPolicy) readDecisionContext(ctx context.Context) (decisionFile, string, error) {
 	if e := p.regular(); e != nil {
 		return decisionFile{}, "", e
 	}
-	ctx, cancel := context.WithTimeout(ctx, DecisionReadBudget)
+	ctx, cancel := budget.Within(ctx, DecisionReadBudget, DecisionReadBudget)
 	defer cancel()
 	data, e := cas.ReadLimitContext(ctx, p.path, MaxDecisionBytes)
 	if e != nil {
@@ -753,6 +818,14 @@ func (p *DecisionPolicy) checkedChange(edit func([]byte) ([]byte, error)) func([
 		if len(next) > MaxDecisionBytes {
 			return nil, errors.New("rights: state byte bound")
 		}
+		var stampErr error
+		next, stampErr = p.orderChange(data, next)
+		if stampErr != nil {
+			return nil, stampErr
+		}
+		if len(next) > MaxDecisionBytes {
+			return nil, errors.New("rights: state byte bound")
+		}
 		if _, err := p.decodeDecision(next); err != nil {
 			return nil, err
 		}
@@ -787,7 +860,16 @@ func (p *DecisionPolicy) editDecision(subject wire.Subject, action, resource str
 	if e != nil || !ValidDecisionQuery(action, resource) {
 		return errors.New("rights: invalid exact rule")
 	}
+	if permit != nil && *permit {
+		if _, e := p.prepareMetaOperation(context.Background(), action, resource); e != nil {
+			return e
+		}
+	}
 	if e = p.refuseHolder(s, action, resource, permit); e != nil {
+		return e
+	}
+	permitGuard, e := p.prepareLegacyPermit(context.Background(), s, action, resource, permit)
+	if e != nil {
 		return e
 	}
 	if e = p.regular(); e != nil {
@@ -795,6 +877,12 @@ func (p *DecisionPolicy) editDecision(subject wire.Subject, action, resource str
 	}
 	change := ruleChange{permit: permit, by: p.native, at: p.now()}
 	return p.change(func(data []byte) ([]byte, error) {
+		if e := permitGuard(); e != nil {
+			return nil, e
+		}
+		if e := p.refuseHolder(s, action, resource, permit); e != nil {
+			return nil, e
+		}
 		f, e := p.decodeDecision(data)
 		if e != nil {
 			return nil, e

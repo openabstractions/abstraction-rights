@@ -2,26 +2,20 @@ package rights
 
 import "time"
 
-// The wake hold moved under abstraction.resource/leases@1 in the release that
-// ships the resource contract (abstraction-resource CONTRACT.md RES-A1). Two
-// halves of it live in two places, and this file is the seam.
-//
-// The lifetime stayed here. The platform request is released when the holder
-// closes, exits or is killed, and a request-response profile carries one call
-// under a bounded deadline, so a hold carried by such a call would end at that
-// deadline while the holder was still connected (CONTRACT.md,
-// go/awake_lease_test.go). This service owns the holder's connection, so it
-// keeps the request.
-//
-// The record moved. Who holds the machine awake, since when and under which
-// rule is a row of the resource table now, so one reader answers who holds the
-// card and who holds the wake. `rights holds` reads those rows through this
-// seam rather than a listing of its own.
+// WakeKeeper is the connection bridge supplied by the composing host. Rights
+// checks its rule first and supplies the authenticated original subject.
+type WakeKeeper interface {
+	KeepAwake(program, account, why string) (lease string, release func(), err error)
+}
 
-// An AwakeLeases is the resource service's lease book, seen from here. The
-// resource module is not imported: this service decides rights, and a
-// decision layer that had to import the layer above it would be the wrong way
-// round. A composition that serves both wires one to the other.
+// WakeFactory constructs the owner before the legacy service accepts callers.
+type WakeFactory func() (WakeKeeper, error)
+
+// AwakeLeases preserves the published external listing seam. The rights
+// service owns the authenticated connection and ends its resource-book hold
+// when that connection ends or its rule is revoked. The resource book owns
+// the platform request. Standalone Start retains its compatibility fallback.
+// A supplied listing receives the same original program and account.
 type AwakeLeases interface {
 	// HoldAwake writes one connection-owned lease of resource awake for a
 	// holder this service has already decided the rule for, and returns its

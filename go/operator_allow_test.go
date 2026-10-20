@@ -17,6 +17,182 @@ import (
 const operatorQ1 = "11111111111111111111111111111111"
 const operatorQ2 = "22222222222222222222222222222222"
 
+func legacyCompleteFixture(t *testing.T) (*metaFixture, wire.PermissionEffect) {
+	t.Helper()
+	f := newMetaFixture(t)
+	effect := wire.PermissionEffect{Subject: f.appA}
+	var definitions []wire.PermissionDefinition
+	for _, action := range []string{"example/one", "example/three", "example/two"} {
+		d := testDefinition()
+		d.Action = action
+		definitions = append(definitions, d)
+		if err := f.p.RegisterAction(action); err != nil {
+			t.Fatal(err)
+		}
+		effect.Selections = append(effect.Selections, wire.PermissionSelection{Permission: wire.PermissionKey{Action: action, ResourceProfile: LegacyExactResourceProfile}, Selector: wire.ResourceSelector{Kind: wire.ResourceSelectorKindOne, Target: []byte(`"app:editor"`)}})
+	}
+	var err error
+	f.p.Definitions, err = NewDefinitionCatalog(definitions, testProfiles())
+	if err != nil {
+		t.Fatal(err)
+	}
+	return f, effect
+}
+
+func TestLegacyCompleteEffectAtomicApplyCurrentAndUndo(t *testing.T) {
+	f, effect := legacyCompleteFixture(t)
+	permit := true
+	edit, err := f.p.ApplyLegacyPermissionEffect(t.Context(), f.revision(t), effect, RuleEdit{Permit: &permit, By: f.panel, Exact: true}, operatorQ1, []string{operatorQ1}, func() error { return nil })
+	if err != nil || edit.Outcome != wire.PolicyEditOutcomeApplied || len(edit.Current) != 3 {
+		t.Fatal(edit, err)
+	}
+	for _, row := range edit.Current {
+		if !row.Rule.Permit || row.SetBy != f.panel || row.Rule.Selection.Permission.ResourceProfile != LegacyExactResourceProfile || string(row.Rule.Selection.Selector.Target) != `"app:editor"` {
+			t.Fatal(row)
+		}
+	}
+	check := f.p.CheckLegacyPermissionEffectContext(t.Context(), effect, edit.Revision)
+	if check.Outcome != wire.BatchCheckOutcomeChecked || len(check.Outcomes) != 3 || slices.ContainsFunc(check.Outcomes, func(o wire.DecisionOutcome) bool { return o != wire.DecisionOutcomePermitted }) {
+		t.Fatal(check)
+	}
+	replay, err := f.p.ApplyLegacyPermissionEffect(t.Context(), edit.Revision, effect, RuleEdit{By: f.panel, Exact: true}, operatorQ1, []string{operatorQ1}, func() error { return nil })
+	if err != nil || replay.Outcome != wire.PolicyEditOutcomeConflict || len(replay.Current) != 3 {
+		t.Fatal(replay, err)
+	}
+	undone, err := f.p.UndoLegacyPermissionEffect(t.Context(), edit.Revision, effect, nil, operatorQ1, func() error { return nil })
+	if err != nil || undone.Outcome != wire.PolicyEditOutcomeApplied || len(undone.Current) != 0 {
+		t.Fatal(undone, err)
+	}
+	for _, selection := range effect.Selections {
+		if got := f.p.Decide(f.appA, selection.Permission.Action, "app:editor"); got.Outcome != wire.DecisionOutcomeNotGranted {
+			t.Fatal(got)
+		}
+	}
+}
+
+func TestLegacyCompleteEffectDenyIsAtomicAndOldBatchStaysTwo(t *testing.T) {
+	f, effect := legacyCompleteFixture(t)
+	deny := false
+	if _, err := f.p.ChangeRule(f.revision(t), effect.Subject, effect.Selections[2].Permission.Action, "app:editor", RuleEdit{Permit: &deny, By: f.panel, Exact: true}, func() error { return nil }); err != nil {
+		t.Fatal(err)
+	}
+	before := f.revision(t)
+	edit, err := f.p.ApplyLegacyPermissionEffect(t.Context(), before, effect, RuleEdit{By: f.panel, Exact: true}, operatorQ1, []string{operatorQ1}, func() error { return nil })
+	if err != nil || edit.Outcome != wire.PolicyEditOutcomeConflict || len(edit.Current) != 1 || edit.Current[0].Rule.Permit || f.revision(t) != before {
+		t.Fatal(edit, err)
+	}
+	for _, selection := range effect.Selections[:2] {
+		if got := f.p.Decide(f.appA, selection.Permission.Action, "app:editor"); got.Outcome != wire.DecisionOutcomeNotGranted {
+			t.Fatal("partial grant", got)
+		}
+	}
+	rules, _ := f.p.legacyPermissionRules(effect)
+	old, err := f.p.ChangeRules(before, rules, RuleEdit{By: f.panel, Exact: true}, func() error { return nil })
+	if err != nil || old.Outcome != wire.PolicyEditOutcomeInvalid {
+		t.Fatal("old batch bound changed", old, err)
+	}
+}
+
+func TestLegacyCompleteEffectEnrollmentExpiryStopAndReplacement(t *testing.T) {
+	f, effect := legacyCompleteFixture(t)
+	f.enroll(t, time.Hour)
+	edit, err := f.p.ChangeLegacyPermissionEffectUnderAnswer(t.Context(), f.holder, effect, "routine application answer", operatorQ1, true, func() error { return nil })
+	if err != nil || edit.Outcome != wire.PolicyEditOutcomeApplied || len(edit.Current) != 3 {
+		t.Fatal(edit, err)
+	}
+	for _, row := range edit.Current {
+		if row.SetBy != f.holder || row.Expires == "" {
+			t.Fatal("missing enrollment attribution/expiry", row)
+		}
+	}
+	permit := true
+	_, err = f.p.ChangeRule(f.revision(t), effect.Subject, effect.Selections[0].Permission.Action, "app:editor", RuleEdit{Permit: &permit, By: f.panel, Exact: true}, func() error { return nil })
+	if err != nil {
+		t.Fatal(err)
+	}
+	undo, err := f.p.UndoLegacyPermissionEffect(t.Context(), f.revision(t), effect, &f.holder, operatorQ1, func() error { return nil })
+	if err != nil || undo.Outcome != wire.PolicyEditOutcomeApplied || len(undo.Current) != 1 || undo.Current[0].SetBy != f.panel {
+		t.Fatal("replacement was not preserved", undo, err)
+	}
+	f.stop(t)
+	stopped, err := f.p.ChangeLegacyPermissionEffectUnderAnswer(t.Context(), f.holder, effect, "late answer", operatorQ2, true, func() error { return nil })
+	if !errors.Is(err, ErrNoMetaRule) || stopped.Outcome != wire.PolicyEditOutcomeUnavailable {
+		t.Fatal("stopped holder wrote effect", stopped, err)
+	}
+}
+
+func TestLegacyCompleteEffectCancelledAndUnavailableCommitRecovery(t *testing.T) {
+	f, effect := legacyCompleteFixture(t)
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+	before := f.revision(t)
+	edit, err := f.p.ApplyLegacyPermissionEffect(ctx, before, effect, RuleEdit{By: f.panel, Exact: true}, operatorQ1, []string{operatorQ1}, func() error { return nil })
+	if !errors.Is(err, context.Canceled) || edit.Outcome != wire.PolicyEditOutcomeUnavailable || f.revision(t) != before {
+		t.Fatal(edit, err)
+	}
+	unavailable := errors.New("checked settlement unavailable")
+	remove := f.p.OnChangeChecked(func() error { return unavailable })
+	edit, err = f.p.ApplyLegacyPermissionEffect(t.Context(), before, effect, RuleEdit{By: f.panel, Exact: true}, operatorQ1, []string{operatorQ1}, func() error { return nil })
+	if !errors.Is(err, unavailable) || edit.Outcome != wire.PolicyEditOutcomeUnavailable || len(edit.Current) != 0 {
+		t.Fatal(edit, err)
+	}
+	remove()
+	if applied, err := f.p.AppliedFirstUseAllow(operatorQ1); err != nil || !applied {
+		t.Fatal("lost durable commit receipt", applied, err)
+	}
+	for _, s := range effect.Selections {
+		if d := f.p.Decide(effect.Subject, s.Permission.Action, "app:editor"); d.Outcome != wire.DecisionOutcomePermitted {
+			t.Fatal(d)
+		}
+	}
+	revision := f.revision(t)
+	edit, err = f.p.ApplyLegacyPermissionEffect(t.Context(), revision, effect, RuleEdit{By: f.panel, Exact: true}, operatorQ1, []string{operatorQ1}, func() error { return nil })
+	if err != nil || edit.Outcome != wire.PolicyEditOutcomeConflict || len(edit.Current) != 3 || f.revision(t) != revision {
+		t.Fatal("reconcile replay", edit, err)
+	}
+}
+
+func TestLegacyCompleteEffectExpiredEnrollmentWritesNothing(t *testing.T) {
+	f, effect := legacyCompleteFixture(t)
+	f.enroll(t, time.Hour)
+	f.mu.Lock()
+	f.now = f.now.Add(2 * time.Hour)
+	f.mu.Unlock()
+	edit, err := f.p.ChangeLegacyPermissionEffectUnderAnswer(t.Context(), f.holder, effect, "expired answer", operatorQ1, true, func() error { return nil })
+	if !errors.Is(err, ErrNoMetaRule) || edit.Outcome != wire.PolicyEditOutcomeUnavailable {
+		t.Fatal(edit, err)
+	}
+	for _, s := range effect.Selections {
+		if d := f.p.Decide(effect.Subject, s.Permission.Action, "app:editor"); d.Outcome != wire.DecisionOutcomeNotGranted {
+			t.Fatal(d)
+		}
+	}
+}
+
+func TestOperatorAllowCheckedSettlementUnavailableRetainsRecoveryProof(t *testing.T) {
+	f := newMetaFixture(t)
+	permit := true
+	rules := []wire.PolicyRule{{Subject: f.appA, Action: decisionAction, Resource: "output:image", Permit: true}}
+	unavailable := errors.New("standing decision unavailable")
+	remove := f.p.OnChangeChecked(func() error { return unavailable })
+	edit, err := f.p.ApplyFirstUseAllow(t.Context(), f.revision(t), rules, RuleEdit{Permit: &permit, By: f.panel, Exact: true}, operatorQ1, []string{operatorQ1}, func() error { return nil })
+	if !errors.Is(err, unavailable) || edit.Outcome != wire.PolicyEditOutcomeUnavailable {
+		t.Fatalf("reply: %+v %v", edit, err)
+	}
+	if yes, err := f.p.AppliedFirstUseAllow(operatorQ1); err != nil || !yes {
+		t.Fatalf("committed answer proof: %v %v", yes, err)
+	}
+	if got := f.p.Decide(f.appA, decisionAction, "output:image"); got.Outcome != wire.DecisionOutcomePermitted {
+		t.Fatalf("committed permit lost: %+v", got)
+	}
+	remove()
+	current := f.revision(t)
+	edit, err = f.p.ApplyFirstUseAllow(t.Context(), current, rules, RuleEdit{Permit: &permit, By: f.panel, Exact: true}, operatorQ1, []string{operatorQ1}, func() error { return nil })
+	if err != nil || edit.Outcome != wire.PolicyEditOutcomeConflict || f.revision(t) != current {
+		t.Fatalf("reconcile/replay: %+v %v", edit, err)
+	}
+}
+
 func TestOperatorAllowProofSurvivesRemovalAndLostReply(t *testing.T) {
 	f := newMetaFixture(t)
 	if err := f.p.RegisterAction(pairedWrite); err != nil {

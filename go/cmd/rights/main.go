@@ -41,11 +41,9 @@ func main() {
 		os.Exit(2)
 	}
 
-	admin, err := os.ReadFile(filepath.Join(*state, "admin.secret"))
-	if err != nil {
-		fail("no admin.secret in %s: is the rights service (openabstractions serve rights) running with -state there?", *state)
-	}
-	c := &rights.Client{Endpoint: *endpoint, Admin: string(admin)}
+	admin, err := adminSecret(*state)
+	check(err)
+	c := &rights.Client{Endpoint: *endpoint, Admin: admin}
 
 	need := func(n int) {
 		if len(args) != n+1 {
@@ -107,6 +105,20 @@ func seen(s rights.Seen) string {
 }
 
 func ago(t time.Time) string { return time.Since(t).Round(time.Second).String() }
+
+// adminSecret reads the service's admin.secret from state, an absolute
+// folder. DefaultStateDir is "" when the account has no configuration
+// folder, and a relative folder would read the working folder's file.
+func adminSecret(state string) (string, error) {
+	if !filepath.IsAbs(state) {
+		return "", fmt.Errorf("no state folder: this account has no configuration folder, so name an absolute one with --state")
+	}
+	admin, err := os.ReadFile(filepath.Join(state, "admin.secret"))
+	if err != nil {
+		return "", fmt.Errorf("no admin.secret in %s: is the rights service (openabstractions serve rights) running with -state there?", state)
+	}
+	return string(admin), nil
+}
 
 func check(err error) {
 	if err != nil {

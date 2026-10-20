@@ -2,6 +2,7 @@ package rights
 
 import (
 	"bufio"
+	"github.com/openabstractions/abstraction-identity/go/privatedir/privatetest"
 
 	"encoding/json"
 	"errors"
@@ -18,7 +19,7 @@ func TestClientRefusalCompatibility(t *testing.T) {
 		{"known", `{"code":"` + CodeBadToken + `","error":"human reason"}`, CodeBadToken, "human reason"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			at := endpoint(t, t.TempDir(), "rights-codes")
+			at := endpoint(t, privatetest.Dir(t), "rights-codes")
 			listener, err := listen.Listen(at)
 			if err != nil {
 				t.Fatal(err)

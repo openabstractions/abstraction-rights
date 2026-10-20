@@ -68,23 +68,27 @@ func TestOperatorAcceptsSameFileAliasRules(t *testing.T) {
 		t.Fatal(err)
 	}
 	rule := wire.PolicyRule{Subject: wire.Subject{Account: u.Uid, Program: alias}, Action: action, Resource: resource, Permit: true}
+	expectedAlias, err := rights.NormalizeDecisionSubject(rule.Subject)
+	if err != nil {
+		t.Fatal(err)
+	}
 	set, err := op.SetRuleContext(ctx, page.Revision, rule)
 	if err != nil || set.Outcome != wire.PolicyEditOutcomeApplied {
 		t.Fatalf("store alias: %+v %v", set, err)
 	}
 	target := wire.Subject{Account: u.Uid, Program: program}
 	read, err := op.ReadRuleContext(ctx, target, action, resource)
-	if err != nil || read.Outcome != wire.RuleReadOutcomeFound || read.Record == nil || read.Record.Rule.Subject.Program != alias {
+	if err != nil || read.Outcome != wire.RuleReadOutcomeFound || read.Record == nil || read.Record.Rule.Subject != expectedAlias {
 		t.Fatalf("read same-file alias: %+v %v", read, err)
 	}
 	rule.Subject = target
 	conflict, err := op.SetRuleContext(ctx, page.Revision, rule)
-	if err != nil || conflict.Outcome != wire.PolicyEditOutcomeConflict || conflict.Current == nil || conflict.Current.Subject.Program != alias {
+	if err != nil || conflict.Outcome != wire.PolicyEditOutcomeConflict || conflict.Current == nil || conflict.Current.Subject != expectedAlias {
 		t.Fatalf("edit current alias: %+v %v", conflict, err)
 	}
 	group := []wire.PolicyRule{rule, {Subject: target, Action: second, Resource: resource, Permit: true}}
 	conflict, err = op.SetRulesForContext(ctx, page.Revision, group, 0, "")
-	if err != nil || conflict.Outcome != wire.PolicyEditOutcomeConflict || conflict.Current == nil || conflict.Current.Subject.Program != alias {
+	if err != nil || conflict.Outcome != wire.PolicyEditOutcomeConflict || conflict.Current == nil || conflict.Current.Subject != expectedAlias {
 		t.Fatalf("group current alias: %+v %v", conflict, err)
 	}
 	group[1].Subject.Program = alias

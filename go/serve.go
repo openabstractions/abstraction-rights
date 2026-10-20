@@ -10,7 +10,6 @@ import (
 	"os/signal"
 
 	identity "github.com/openabstractions/abstraction-identity"
-	logging "github.com/openabstractions/abstraction-logging/go"
 )
 
 const rightsUsage = `Usage: openabstractions serve rights [options]
@@ -43,6 +42,11 @@ var ErrUsage = errors.New("rights: usage error")
 // --asks endpoint into the Asker registrations go to, and defaultAsks is that
 // flag's default (the asks service's installed endpoint).
 func Serve(args []string, asker func(endpoint string) Asker, defaultAsks string) error {
+	return ServeWithWake(args, asker, defaultAsks, nil)
+}
+
+// ServeWithWake supplies the composition's wake owner while preserving Serve.
+func ServeWithWake(args []string, asker func(endpoint string) Asker, defaultAsks string, factory WakeFactory) error {
 	if len(args) > 0 && isHelp(args[0]) {
 		_, err := io.WriteString(os.Stdout, rightsUsage)
 		return err
@@ -56,19 +60,21 @@ func Serve(args []string, asker func(endpoint string) Asker, defaultAsks string)
 	fs.Usage = func() { _, usageErr = fmt.Fprint(fs.Output(), rightsUsage) }
 	endpoint := fs.String("endpoint", DefaultEndpoint(), "where applications connect")
 	state := fs.String("state", DefaultStateDir(), "policy.json and admin.secret live here")
-	asksAt := fs.String("asks", defaultAsks,"where the asks service listens; registrations are questions put there")
+	asksAt := fs.String("asks", defaultAsks, "where the asks service listens; registrations are questions put there")
 	if err := fs.Parse(args); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
 			return usageErr
 		}
 		return errors.Join(fmt.Errorf("%w: %v", ErrUsage, err), usageErr)
 	}
-	// The rights service can start with no logging runtime running. Its own diagnostics go
-	// to the explicitly selected environment chain, heard on stderr when nothing
-	// is configured [LOG-S8].
-	slog.SetDefault(slog.New(logging.LegacyDefault("rights")))
+	// Native diagnostics use the runtime when resolution succeeds.
+	handler, closeDiagnostics := resolvedDiagnostics("rights")
+	defer closeDiagnostics()
+	previousLogger := slog.Default()
+	slog.SetDefault(slog.New(handler))
+	defer slog.SetDefault(previousLogger)
 
-	s, err := Start(*endpoint, *state, asker(*asksAt))
+	s, err := StartWithWake(*endpoint, *state, asker(*asksAt), factory)
 	if err != nil {
 		return err
 	}

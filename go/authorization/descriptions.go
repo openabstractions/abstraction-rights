@@ -5,8 +5,8 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	wire "github.com/openabstractions/abstraction-rights/go/abstraction/rights/api"
+	cursorcodec "github.com/openabstractions/abstraction-watch/go/cursor"
 	"strconv"
-	"strings"
 	"unicode/utf8"
 )
 
@@ -40,10 +40,11 @@ func (r *receiver) ListActionDescriptions(cursor string, limit int64) (wire.Desc
 		return descriptionRefusal(wire.PolicyPageOutcomeUnavailable), nil
 	}
 	sum := sha256.Sum256(scope)
-	prefix := r.host.operatorEpoch + ":descriptions:" + hex.EncodeToString(sum[:]) + ":" + revision + ":"
+	codec := cursorcodec.Codec{Separator: ":", Scoped: true}
+	binding := cursorcodec.Envelope{Epoch: r.host.operatorEpoch, Scope: "descriptions:" + hex.EncodeToString(sum[:]) + ":" + revision}
 	offset := 0
 	if cursor != "" {
-		word, ok := strings.CutPrefix(cursor, prefix)
+		word, ok := codec.Open(cursor, binding)
 		n, err := strconv.Atoi(word)
 		if !ok || err != nil || n < 0 || n > len(actions) || strconv.Itoa(n) != word {
 			return descriptionRefusal(wire.PolicyPageOutcomeGap), nil
@@ -56,7 +57,8 @@ func (r *receiver) ListActionDescriptions(cursor string, limit int64) (wire.Desc
 		page.Complete = offset+1 == len(actions)
 		page.Next = ""
 		if !page.Complete {
-			page.Next = prefix + strconv.Itoa(offset+1)
+			binding.Payload = strconv.Itoa(offset + 1)
+			page.Next = codec.Encode(binding)
 		}
 		// Standard JSON escaping is at least as large as the wire escaping;
 		// reserve space for snake-case keys, fixed-shape indentation and the reply envelope.
@@ -75,7 +77,8 @@ func (r *receiver) ListActionDescriptions(cursor string, limit int64) (wire.Desc
 	}
 	page.Complete, page.Next = offset == len(actions), ""
 	if !page.Complete {
-		page.Next = prefix + strconv.Itoa(offset)
+		binding.Payload = strconv.Itoa(offset)
+		page.Next = codec.Encode(binding)
 	}
 	if _, err = r.descriptionCaller(); err != nil {
 		return descriptionRefusal(operatorPageError(err)), nil

@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	identity "github.com/openabstractions/abstraction-identity"
 	"slices"
 	"time"
 
@@ -20,16 +19,39 @@ var ErrRuleDeadline = errors.New("rights: delegated permission deadline passed")
 // rules; a delegated caller sets PreserveOtherSetter to protect the person's
 // current rule. Every precondition is checked before either member mutates.
 func (p *DecisionPolicy) ChangeRules(expected string, rules []wire.PolicyRule, edit RuleEdit, authorize func() error) (wire.PolicyEdit, error) {
-	return p.changeRules(context.Background(), expected, rules, edit, authorize, nil)
+	return p.ChangeRulesContext(context.Background(), expected, rules, edit, authorize)
+}
+
+// ChangeRulesContext keeps the outer grouped edit within its caller's context.
+func (p *DecisionPolicy) ChangeRulesContext(ctx context.Context, expected string, rules []wire.PolicyRule, edit RuleEdit, authorize func() error) (wire.PolicyEdit, error) {
+	return p.changeRules(ctx, expected, rules, edit, authorize, nil)
 }
 
 func (p *DecisionPolicy) changeRules(ctx context.Context, expected string, rules []wire.PolicyRule, edit RuleEdit, authorize func() error, receipt *operatorAllowReceipt) (wire.PolicyEdit, error) {
-	if len(rules) < 1 || len(rules) > 2 || edit.Permit == nil || !boundedDecisionString(expected, 128) ||
+	return p.changeRulesForPairing(ctx, expected, rules, edit, authorize, receipt, false)
+}
+
+// The native pairing entry alone permits heterogeneous exact resources. All
+// mutation, catalogue, revision, authorization and receipt handling stays here.
+func (p *DecisionPolicy) changeRulesForPairing(ctx context.Context, expected string, rules []wire.PolicyRule, edit RuleEdit, authorize func() error, receipt *operatorAllowReceipt, pairing bool) (wire.PolicyEdit, error) {
+	limit := 2
+	if pairing {
+		limit = MaxPermissionEffect
+	}
+	return p.changeRulesBounded(ctx, expected, rules, edit, authorize, receipt, pairing, false, limit, nil)
+}
+
+// fanout admits one action over distinct exact resources: the complete
+// legacy effect of one recorded answer that writes one rule per target.
+func (p *DecisionPolicy) changeRulesBounded(ctx context.Context, expected string, rules []wire.PolicyRule, edit RuleEdit, authorize func() error, receipt *operatorAllowReceipt, pairing, fanout bool, limit int, observe func(decisionFile, string)) (wire.PolicyEdit, error) {
+	providerSetup := receipt != nil && !pairing && providerFirstUseRules(rules)
+	fanout = fanout && receipt != nil && !pairing && legacyFanout(rules)
+	if len(rules) < 1 || len(rules) > limit || edit.Permit == nil || !boundedDecisionString(expected, 128) ||
 		edit.TTL < 0 || edit.TTL > MaxRuleTTL || edit.TTL%time.Millisecond != 0 || !validWhy(edit.Why) ||
 		(edit.QuestionID != "" && (!boundedDecisionString(edit.QuestionID, 128) || !*edit.Permit)) {
 		return wire.PolicyEdit{Outcome: wire.PolicyEditOutcomeInvalid}, nil
 	}
-	by, err := NormalizeDecisionSubject(edit.By)
+	by, err := normalizeActor(edit.By)
 	if err != nil {
 		return wire.PolicyEdit{Outcome: wire.PolicyEditOutcomeInvalid}, nil
 	}
@@ -40,18 +62,32 @@ func (p *DecisionPolicy) changeRules(ctx context.Context, expected string, rules
 	if err != nil {
 		return wire.PolicyEdit{Outcome: wire.PolicyEditOutcomeInvalid}, nil
 	}
+	if pairing && (!remoteSubject(base) || by.Account != base.Account) {
+		return wire.PolicyEdit{Outcome: wire.PolicyEditOutcomeInvalid}, nil
+	}
 	for i := range rules {
 		s, e := writableSubject(rules[i].Subject)
 		if errors.Is(e, ErrUnresolvedShortName) {
 			return wire.PolicyEdit{Outcome: wire.PolicyEditOutcomeInvalid}, e
 		}
-		if e != nil || s.Account != base.Account || !identity.SameSubjectProgram(s.Program, base.Program) || rules[i].Resource != rules[0].Resource || rules[i].Permit != *edit.Permit ||
-			!ValidDecisionQuery(rules[i].Action, rules[i].Resource) || (edit.QuestionID != "" && IsMetaRule(rules[i].Action, rules[i].Resource)) || validMetaEdit(rules[i].Action, rules[i].Resource, edit.Permit, edit.TTL) != nil ||
-			p.refuseHolder(s, rules[i].Action, rules[i].Resource, edit.Permit) != nil {
+		if e != nil || s.Account != base.Account || !sameSubjectPrograms(s.Program, base.Program) || !pairing && !providerSetup && !fanout && rules[i].Resource != rules[0].Resource || rules[i].Permit != *edit.Permit ||
+			!ValidDecisionQuery(rules[i].Action, rules[i].Resource) || (edit.QuestionID != "" && IsMetaRule(rules[i].Action, rules[i].Resource)) || validMetaEdit(rules[i].Action, rules[i].Resource, edit.Permit, edit.TTL) != nil {
+			return wire.PolicyEdit{Outcome: wire.PolicyEditOutcomeInvalid}, nil
+		}
+		if *edit.Permit {
+			ctx, err = p.prepareMetaOperation(ctx, rules[i].Action, rules[i].Resource)
+			if err != nil {
+				return wire.PolicyEdit{Outcome: wire.PolicyEditOutcomeUnavailable}, err
+			}
+		}
+		if err := p.refuseHolder(s, rules[i].Action, rules[i].Resource, edit.Permit); err != nil {
+			if errors.Is(err, ErrMetaHolderUnavailable) {
+				return wire.PolicyEdit{Outcome: wire.PolicyEditOutcomeUnavailable}, err
+			}
 			return wire.PolicyEdit{Outcome: wire.PolicyEditOutcomeInvalid}, nil
 		}
 		for j := 0; j < i; j++ {
-			if rules[j].Action == rules[i].Action {
+			if rules[j].Action == rules[i].Action && (!pairing && !fanout || rules[j].Resource == rules[i].Resource) {
 				return wire.PolicyEdit{Outcome: wire.PolicyEditOutcomeInvalid}, nil
 			}
 		}
@@ -63,21 +99,41 @@ func (p *DecisionPolicy) changeRules(ctx context.Context, expected string, rules
 	if err := p.regular(); err != nil {
 		return wire.PolicyEdit{Outcome: wire.PolicyEditOutcomeUnavailable}, err
 	}
+	guards := make([]func() error, 0, len(rules))
+	for _, rule := range rules {
+		guard, err := p.prepareLegacyPermit(ctx, rule.Subject, rule.Action, rule.Resource, edit.Permit)
+		if err != nil {
+			return wire.PolicyEdit{Outcome: wire.PolicyEditOutcomeUnavailable}, err
+		}
+		guards = append(guards, guard)
+	}
 	result := wire.PolicyEdit{}
 	noWrite := errors.New("rights: grouped edit without write")
-	change := p.change
-	if receipt != nil {
-		change = func(edit func([]byte) ([]byte, error)) error { return p.changeContext(ctx, edit) }
-	}
+	change := func(edit func([]byte) ([]byte, error)) error { return p.changeContext(ctx, edit) }
 	err = change(func(data []byte) ([]byte, error) {
 		result = wire.PolicyEdit{}
+		for _, guard := range guards {
+			if err := guard(); err != nil {
+				return nil, err
+			}
+		}
 		if err := authorize(); err != nil {
 			return nil, err
+		}
+		for _, rule := range rules {
+			if err := p.refuseHolder(rule.Subject, rule.Action, rule.Resource, edit.Permit); err != nil {
+				return nil, err
+			}
 		}
 		f, err := p.decodeDecision(data)
 		if err != nil {
 			return nil, err
 		}
+		defer func() {
+			if observe != nil && (result.Outcome == wire.PolicyEditOutcomeApplied || result.Outcome == wire.PolicyEditOutcomeConflict) {
+				observe(f, result.Revision)
+			}
+		}()
 		catalogue := p.catalogue(f)
 		for _, rule := range rules {
 			if !slices.Contains(catalogue, rule.Action) {
@@ -160,6 +216,9 @@ func (p *DecisionPolicy) changeRules(ctx context.Context, expected string, rules
 	})
 	if errors.Is(err, noWrite) {
 		return result, nil
+	}
+	if errors.Is(err, ErrMetaHolder) {
+		return wire.PolicyEdit{Outcome: wire.PolicyEditOutcomeInvalid}, nil
 	}
 	if err != nil {
 		return wire.PolicyEdit{Outcome: wire.PolicyEditOutcomeUnavailable}, err

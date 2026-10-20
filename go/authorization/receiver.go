@@ -4,6 +4,7 @@ import (
 	"context"
 	identity "github.com/openabstractions/abstraction-identity"
 	"github.com/openabstractions/abstraction-identity/listen"
+	rights "github.com/openabstractions/abstraction-rights/go"
 	wire "github.com/openabstractions/abstraction-rights/go/abstraction/rights/api"
 	"github.com/openabstractions/abstraction-rights/go/client"
 )
@@ -27,6 +28,9 @@ func (r *receiver) Decide(action, resource string) (wire.Decision, error) {
 	if e != nil || s.Account != r.host.owner {
 		return wire.Decision{Outcome: wire.DecisionOutcomeForbidden}, nil
 	}
+	if rights.IsMetaRule(action, resource) && r.call.Recheck() != nil {
+		return wire.Decision{Outcome: wire.DecisionOutcomeForbidden}, nil
+	}
 	return r.host.policy.DecideContext(r.ctx, s, action, resource), nil
 }
 func (r *receiver) DecideFor(subject wire.Subject, action, resource string) (wire.Decision, error) {
@@ -44,4 +48,22 @@ func (r *receiver) DecideFor(subject wire.Subject, action, resource string) (wir
 		return wire.Decision{Outcome: wire.DecisionOutcomeForbidden}, nil
 	}
 	return r.host.policy.DecideContext(r.ctx, subject, action, resource), nil
+}
+
+func (r *receiver) DecideForAtLeastRevision(subject wire.Subject, action, resource, minimum string) (wire.RevisionDecision, error) {
+	s, peer, e := r.caller()
+	forbidden := wire.RevisionDecision{Decision: wire.Decision{Outcome: wire.DecisionOutcomeForbidden}}
+	if e != nil || s.Account != r.host.owner || subject.Account != r.host.owner || r.host.enforcer == nil {
+		return forbidden, nil
+	}
+	if !r.host.enforcer(r.ctx, peer, action, resource) {
+		return forbidden, nil
+	}
+	if e = r.ctx.Err(); e != nil {
+		return wire.RevisionDecision{}, e
+	}
+	if e = r.call.Recheck(); e != nil {
+		return forbidden, nil
+	}
+	return r.host.policy.DecideForAtLeastRevisionContext(r.ctx, subject, action, resource, minimum), nil
 }

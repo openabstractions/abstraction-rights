@@ -1,6 +1,7 @@
 package rights
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
@@ -11,6 +12,169 @@ import (
 
 	wire "github.com/openabstractions/abstraction-rights/go/abstraction/rights/api"
 )
+
+// legacyPermissionRules validates a complete trusted effect without installing
+// a new typed profile. Its One targets are canonical exact-resource strings.
+func (p *DecisionPolicy) legacyPermissionRules(effect wire.PermissionEffect) ([]wire.PolicyRule, bool) {
+	if p.Definitions == nil || effect.Bundle != nil || len(effect.Selections) == 0 || len(effect.Selections) > MaxPermissionEffect {
+		return nil, false
+	}
+	subject, err := writableSubject(effect.Subject)
+	if err != nil {
+		return nil, false
+	}
+	var rules []wire.PolicyRule
+	for _, s := range effect.Selections {
+		var resource string
+		definition, known := p.Definitions.Lookup(s.Permission.Action)
+		if !known || !definition.Served || definition.ResourceProfile != LegacyExactResourceProfile || s.Permission.ResourceProfile != LegacyExactResourceProfile || s.Selector.Kind != wire.ResourceSelectorKindOne || json.Unmarshal(s.Selector.Target, &resource) != nil || !p.Definitions.ValidResource(s.Permission.Action, resource) {
+			return nil, false
+		}
+		raw, _ := json.Marshal(resource)
+		if !bytes.Equal(raw, s.Selector.Target) || IsMetaRule(s.Permission.Action, resource) {
+			return nil, false
+		}
+		rules = append(rules, wire.PolicyRule{Subject: subject, Action: s.Permission.Action, Resource: resource, Permit: true})
+	}
+	if !legacySameResource(rules) && !legacyFanout(rules) {
+		return nil, false
+	}
+	return rules, true
+}
+
+// legacySameResource is the original complete shape: several actions on one
+// exact resource, in strictly increasing action order.
+func legacySameResource(rules []wire.PolicyRule) bool {
+	for i := 1; i < len(rules); i++ {
+		if rules[i].Resource != rules[0].Resource || rules[i-1].Action >= rules[i].Action {
+			return false
+		}
+	}
+	return true
+}
+
+// legacyFanout is one action on several exact resources in strictly
+// increasing resource order: one answer that writes one rule per target,
+// each stored and removable on its own.
+func legacyFanout(rules []wire.PolicyRule) bool {
+	if len(rules) < 2 {
+		return false
+	}
+	for i := 1; i < len(rules); i++ {
+		if rules[i].Action != rules[0].Action || rules[i-1].Resource >= rules[i].Resource {
+			return false
+		}
+	}
+	return true
+}
+
+func legacyTargets(rules []wire.PolicyRule) []answerTarget {
+	out := make([]answerTarget, 0, len(rules))
+	for _, r := range rules {
+		out = append(out, answerTarget{r.Action, r.Resource})
+	}
+	return out
+}
+
+// CheckLegacyPermissionEffectContext evaluates all exact members at one policy
+// snapshot. It is the complete-effect companion of CheckLegacyOperationContext.
+func (p *DecisionPolicy) CheckLegacyPermissionEffectContext(ctx context.Context, effect wire.PermissionEffect, expected string) wire.BatchDecision {
+	rules, ok := p.legacyPermissionRules(effect)
+	if !ok {
+		return wire.BatchDecision{Outcome: wire.BatchCheckOutcomeInvalid, Outcomes: []wire.DecisionOutcome{}}
+	}
+	f, revision, err := p.readDecisionContext(ctx)
+	if err != nil {
+		return wire.BatchDecision{Outcome: wire.BatchCheckOutcomeUnavailable, Outcomes: []wire.DecisionOutcome{}}
+	}
+	if expected != "" && expected != revision {
+		return wire.BatchDecision{Outcome: wire.BatchCheckOutcomeConflict, Revision: revision, Outcomes: []wire.DecisionOutcome{}}
+	}
+	out := wire.BatchDecision{Outcome: wire.BatchCheckOutcomeChecked, Revision: revision, Outcomes: []wire.DecisionOutcome{}}
+	for _, r := range rules {
+		decision := p.legacyOperationDecision(ctx, f, revision, r.Subject, wire.LegacyOperationRequest{LegacyAction: r.Action, LegacyResource: r.Resource}, p.now())
+		if decision.Outcome == wire.DecisionOutcomeUnavailable {
+			return wire.BatchDecision{Outcome: wire.BatchCheckOutcomeUnavailable, Outcomes: []wire.DecisionOutcome{}}
+		}
+		out.Outcomes = append(out.Outcomes, decision.Outcome)
+	}
+	return out
+}
+
+func legacyEffectState(f decisionFile, rules []wire.PolicyRule) []wire.SelectorRuleRecord {
+	out := []wire.SelectorRuleRecord{}
+	key := keyOnce()
+	for _, wanted := range rules {
+		for _, r := range f.Rules {
+			if sameTarget(r, wanted.Subject, wanted.Action, wanted.Resource, key) {
+				target, _ := json.Marshal(r.Resource)
+				out = append(out, wire.SelectorRuleRecord{Rule: wire.SelectorRule{Subject: r.Subject, Selection: wire.PermissionSelection{Permission: wire.PermissionKey{Action: r.Action, ResourceProfile: LegacyExactResourceProfile}, Selector: wire.ResourceSelector{Kind: wire.ResourceSelectorKindOne, Target: target}}, Permit: r.Permit}, SetBy: r.SetBy, SetAt: r.SetAt, Why: r.Why, Expires: r.Expires})
+			}
+		}
+	}
+	return out
+}
+
+func legacyEffectEdit(result wire.PolicyEdit, err error, current []wire.SelectorRuleRecord) (wire.SelectorEdit, error) {
+	if err != nil {
+		return wire.SelectorEdit{Outcome: wire.PolicyEditOutcomeUnavailable, Current: []wire.SelectorRuleRecord{}}, err
+	}
+	if result.Outcome != wire.PolicyEditOutcomeApplied && result.Outcome != wire.PolicyEditOutcomeConflict {
+		current = []wire.SelectorRuleRecord{}
+	}
+	return wire.SelectorEdit{Outcome: result.Outcome, Revision: result.Revision, Current: current}, nil
+}
+
+// ApplyLegacyPermissionEffect commits the Book-pinned exact effect and its
+// completion receipt through the existing legacy policy mutation owner.
+func (p *DecisionPolicy) ApplyLegacyPermissionEffect(ctx context.Context, expected string, effect wire.PermissionEffect, edit RuleEdit, id string, retained []string, authorize func() error) (wire.SelectorEdit, error) {
+	rules, ok := p.legacyPermissionRules(effect)
+	receipt, valid := firstUseAllowReceipt(id, retained)
+	if !ok || !valid || edit.TTL != 0 || !edit.Deadline.IsZero() {
+		return wire.SelectorEdit{Outcome: wire.PolicyEditOutcomeInvalid, Current: []wire.SelectorRuleRecord{}}, nil
+	}
+	permit := true
+	edit.Permit, edit.QuestionID, edit.PreserveOtherSetter = &permit, id, true
+	current := []wire.SelectorRuleRecord{}
+	result, err := p.changeRulesBounded(ctx, expected, rules, edit, authorize, receipt, false, legacyFanout(rules), MaxPermissionEffect, func(f decisionFile, _ string) { current = legacyEffectState(f, rules) })
+	return legacyEffectEdit(result, err, current)
+}
+
+// ChangeLegacyPermissionEffectUnderAnswer atomically checks/renews the live
+// enrollment and writes every member with its stamped expiry and answerer.
+func (p *DecisionPolicy) ChangeLegacyPermissionEffectUnderAnswer(ctx context.Context, holder wire.Subject, effect wire.PermissionEffect, why, id string, allow bool, authorize func() error) (wire.SelectorEdit, error) {
+	rules, ok := p.legacyPermissionRules(effect)
+	if !ok || !validAnswerID(id) || legacyFanout(rules) {
+		return wire.SelectorEdit{Outcome: wire.PolicyEditOutcomeInvalid, Current: []wire.SelectorRuleRecord{}}, nil
+	}
+	var actions []string
+	if allow {
+		for _, r := range rules {
+			actions = append(actions, r.Action)
+		}
+	} else {
+		id = ""
+	}
+	current := []wire.SelectorRuleRecord{}
+	result, err := p.changeRulesUnderAnswer(ctx, holder, rules[0].Subject, actions, rules[0].Resource, why, id, authorize, MaxPermissionEffect, func(f decisionFile, _ string) { current = legacyEffectState(f, rules) })
+	return legacyEffectEdit(result, err, current)
+}
+
+// UndoLegacyPermissionEffect removes only the current rules carrying this
+// retained occurrence ID. A responder actor, when supplied, must still match.
+func (p *DecisionPolicy) UndoLegacyPermissionEffect(ctx context.Context, expected string, effect wire.PermissionEffect, answerer *wire.Subject, id string, authorize func() error) (wire.SelectorEdit, error) {
+	rules, ok := p.legacyPermissionRules(effect)
+	if !ok || !validAnswerID(id) {
+		return wire.SelectorEdit{Outcome: wire.PolicyEditOutcomeInvalid, Current: []wire.SelectorRuleRecord{}}, nil
+	}
+	holder := wire.Subject{}
+	if answerer != nil {
+		holder = *answerer
+	}
+	current := []wire.SelectorRuleRecord{}
+	result, err := p.revokeAnswerPermits(ctx, expected, holder, rules[0].Subject, legacyTargets(rules), id, authorize, MaxPermissionEffect, answerer == nil, func(f decisionFile, _ string) { current = legacyEffectState(f, rules) })
+	return legacyEffectEdit(result, err, current)
+}
 
 type selectorChange struct {
 	selections   []wire.PermissionSelection
@@ -24,12 +188,15 @@ type selectorChange struct {
 }
 
 func validSelectorEdit(expected string, edit RuleEdit) bool {
-	return boundedDecisionString(expected, 128) && edit.TTL >= 0 && edit.TTL <= MaxRuleTTL && edit.TTL%time.Millisecond == 0 && validWhy(edit.Why) && validStoredSubject(edit.By)
+	return boundedDecisionString(expected, 128) && edit.TTL >= 0 && edit.TTL <= MaxRuleTTL && edit.TTL%time.Millisecond == 0 && validWhy(edit.Why) && validStoredActor(edit.By)
 }
 func (p *DecisionPolicy) SetSelectorRuleContext(ctx context.Context, expected string, rule wire.SelectorRule, edit RuleEdit, authorize func() error) (wire.SelectorEdit, error) {
 	s, e := writableSubject(rule.Subject)
 	if e != nil {
 		return wire.SelectorEdit{Outcome: wire.PolicyEditOutcomeInvalid, Current: []wire.SelectorRuleRecord{}}, e
+	}
+	if remoteSubject(s) && rule.Selection.Selector.Kind != wire.ResourceSelectorKindOne {
+		return wire.SelectorEdit{Outcome: wire.PolicyEditOutcomeInvalid, Current: []wire.SelectorRuleRecord{}}, nil
 	}
 	selection, e := p.Definitions.PrepareSelection(rule.Selection)
 	if e != nil {
@@ -110,6 +277,9 @@ func (p *DecisionPolicy) changeSelectors(ctx context.Context, expected string, c
 		return refuse(wire.PolicyEditOutcomeInvalid), nil
 	}
 	for i, s := range change.selections {
+		if remoteSubject(change.subject) && s.Selector.Kind != wire.ResourceSelectorKindOne {
+			return refuse(wire.PolicyEditOutcomeInvalid), nil
+		}
 		if !p.Definitions.ValidStoredSelection(s) || change.permit != nil && !p.Definitions.ValidSelection(s) || i > 0 && permissionKeyString(change.selections[i-1].Permission) >= permissionKeyString(s.Permission) {
 			return refuse(wire.PolicyEditOutcomeInvalid), nil
 		}
@@ -120,9 +290,22 @@ func (p *DecisionPolicy) changeSelectors(ctx context.Context, expected string, c
 	if e := p.regular(); e != nil {
 		return refuse(wire.PolicyEditOutcomeUnavailable), e
 	}
+	guards := make([]func() error, 0, len(change.selections))
+	for _, selection := range change.selections {
+		guard, err := p.preparePermit(ctx, change.subject, selection, change.permit)
+		if err != nil {
+			return refuse(wire.PolicyEditOutcomeUnavailable), err
+		}
+		guards = append(guards, guard)
+	}
 	result := refuse(wire.PolicyEditOutcomeUnavailable)
 	noWrite := errors.New("rights: selector no write")
 	err := p.changeContext(ctx, func(data []byte) ([]byte, error) {
+		for _, guard := range guards {
+			if err := guard(); err != nil {
+				return nil, err
+			}
+		}
 		if e := authorize(); e != nil {
 			return nil, e
 		}
@@ -186,7 +369,7 @@ func (p *DecisionPolicy) changeSelectors(ctx context.Context, expected string, c
 		}
 		if change.edit.PreserveOtherSetter {
 			for _, s := range change.selections {
-				if p.consentBlockForSelection(f, revision, change.subject, s, now) {
+				if blocked, ok := p.consentBlockForSelection(f, revision, change.subject, s, now); blocked || !ok {
 					result = wire.SelectorEdit{Outcome: wire.PolicyEditOutcomeConflict, Revision: revision, Current: affected()}
 					return nil, noWrite
 				}

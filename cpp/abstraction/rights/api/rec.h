@@ -69,6 +69,75 @@ inline constexpr bool operator!=(std::string_view name, DecisionOutcome value) {
 
 inline const std::vector<std::string> kDecisionOutcomeNames = {"permitted", "denied", "not_granted", "unknown_action", "invalid", "forbidden", "unavailable"};
 
+inline const std::vector<std::string> kRefusalSourceNames = {"rights", "credentials", "license", "terms", "identity", "os"};
+inline constexpr std::string_view kRefusalSourceRights = "rights";
+inline constexpr std::string_view kRefusalSourceCredentials = "credentials";
+inline constexpr std::string_view kRefusalSourceLicense = "license";
+inline constexpr std::string_view kRefusalSourceTerms = "terms";
+inline constexpr std::string_view kRefusalSourceIdentity = "identity";
+inline constexpr std::string_view kRefusalSourceOs = "os";
+
+enum class RefusalDecision : std::int32_t {
+    Denied = 1,
+    NotGranted = 2,
+    PersonOnly = 3,
+};
+
+// The member's name on the wire; empty for a value that names no member.
+inline constexpr std::string_view wire_name(RefusalDecision value) {
+    switch (value) {
+        case RefusalDecision::Denied: return "denied";
+        case RefusalDecision::NotGranted: return "not_granted";
+        case RefusalDecision::PersonOnly: return "person_only";
+    }
+    return {};
+}
+
+// The member a wire name spells; empty for a name this vocabulary refuses.
+inline std::optional<RefusalDecision> parse_refusal_decision(std::string_view name) {
+    if (name == "denied") return RefusalDecision::Denied;
+    if (name == "not_granted") return RefusalDecision::NotGranted;
+    if (name == "person_only") return RefusalDecision::PersonOnly;
+    return std::nullopt;
+}
+
+// A member equals its wire name, so code holding the contract's word compares directly.
+inline constexpr bool operator==(RefusalDecision value, std::string_view name) { return wire_name(value) == name; }
+inline constexpr bool operator!=(RefusalDecision value, std::string_view name) { return wire_name(value) != name; }
+inline constexpr bool operator==(std::string_view name, RefusalDecision value) { return wire_name(value) == name; }
+inline constexpr bool operator!=(std::string_view name, RefusalDecision value) { return wire_name(value) != name; }
+
+inline const std::vector<std::string> kRefusalDecisionNames = {"denied", "not_granted", "person_only"};
+
+enum class RefusalAsk : std::int32_t {
+    Available = 1,
+    None = 2,
+};
+
+// The member's name on the wire; empty for a value that names no member.
+inline constexpr std::string_view wire_name(RefusalAsk value) {
+    switch (value) {
+        case RefusalAsk::Available: return "available";
+        case RefusalAsk::None: return "none";
+    }
+    return {};
+}
+
+// The member a wire name spells; empty for a name this vocabulary refuses.
+inline std::optional<RefusalAsk> parse_refusal_ask(std::string_view name) {
+    if (name == "available") return RefusalAsk::Available;
+    if (name == "none") return RefusalAsk::None;
+    return std::nullopt;
+}
+
+// A member equals its wire name, so code holding the contract's word compares directly.
+inline constexpr bool operator==(RefusalAsk value, std::string_view name) { return wire_name(value) == name; }
+inline constexpr bool operator!=(RefusalAsk value, std::string_view name) { return wire_name(value) != name; }
+inline constexpr bool operator==(std::string_view name, RefusalAsk value) { return wire_name(value) == name; }
+inline constexpr bool operator!=(std::string_view name, RefusalAsk value) { return wire_name(value) != name; }
+
+inline const std::vector<std::string> kRefusalAskNames = {"available", "none"};
+
 enum class PolicyPageOutcome : std::int32_t {
     Page = 1,
     Gap = 2,
@@ -106,6 +175,73 @@ inline constexpr bool operator==(std::string_view name, PolicyPageOutcome value)
 inline constexpr bool operator!=(std::string_view name, PolicyPageOutcome value) { return wire_name(value) != name; }
 
 inline const std::vector<std::string> kPolicyPageOutcomeNames = {"page", "gap", "invalid", "forbidden", "unavailable"};
+
+enum class PolicyObservationOutcome : std::int32_t {
+    Changed = 1,
+    Unchanged = 2,
+    Gap = 3,
+    Invalid = 4,
+    Forbidden = 5,
+    Unavailable = 6,
+};
+
+// The member's name on the wire; empty for a value that names no member.
+inline constexpr std::string_view wire_name(PolicyObservationOutcome value) {
+    switch (value) {
+        case PolicyObservationOutcome::Changed: return "changed";
+        case PolicyObservationOutcome::Unchanged: return "unchanged";
+        case PolicyObservationOutcome::Gap: return "gap";
+        case PolicyObservationOutcome::Invalid: return "invalid";
+        case PolicyObservationOutcome::Forbidden: return "forbidden";
+        case PolicyObservationOutcome::Unavailable: return "unavailable";
+    }
+    return {};
+}
+
+// The member a wire name spells; empty for a name this vocabulary refuses.
+inline std::optional<PolicyObservationOutcome> parse_policy_observation_outcome(std::string_view name) {
+    if (name == "changed") return PolicyObservationOutcome::Changed;
+    if (name == "unchanged") return PolicyObservationOutcome::Unchanged;
+    if (name == "gap") return PolicyObservationOutcome::Gap;
+    if (name == "invalid") return PolicyObservationOutcome::Invalid;
+    if (name == "forbidden") return PolicyObservationOutcome::Forbidden;
+    if (name == "unavailable") return PolicyObservationOutcome::Unavailable;
+    return std::nullopt;
+}
+
+// A member equals its wire name, so code holding the contract's word compares directly.
+inline constexpr bool operator==(PolicyObservationOutcome value, std::string_view name) { return wire_name(value) == name; }
+inline constexpr bool operator!=(PolicyObservationOutcome value, std::string_view name) { return wire_name(value) != name; }
+inline constexpr bool operator==(std::string_view name, PolicyObservationOutcome value) { return wire_name(value) == name; }
+inline constexpr bool operator!=(std::string_view name, PolicyObservationOutcome value) { return wire_name(value) != name; }
+
+inline const std::vector<std::string> kPolicyObservationOutcomeNames = {"changed", "unchanged", "gap", "invalid", "forbidden", "unavailable"};
+
+enum class PolicyObservationMechanism : std::int32_t {
+    Native = 1,
+};
+
+// The member's name on the wire; empty for a value that names no member.
+inline constexpr std::string_view wire_name(PolicyObservationMechanism value) {
+    switch (value) {
+        case PolicyObservationMechanism::Native: return "native";
+    }
+    return {};
+}
+
+// The member a wire name spells; empty for a name this vocabulary refuses.
+inline std::optional<PolicyObservationMechanism> parse_policy_observation_mechanism(std::string_view name) {
+    if (name == "native") return PolicyObservationMechanism::Native;
+    return std::nullopt;
+}
+
+// A member equals its wire name, so code holding the contract's word compares directly.
+inline constexpr bool operator==(PolicyObservationMechanism value, std::string_view name) { return wire_name(value) == name; }
+inline constexpr bool operator!=(PolicyObservationMechanism value, std::string_view name) { return wire_name(value) != name; }
+inline constexpr bool operator==(std::string_view name, PolicyObservationMechanism value) { return wire_name(value) == name; }
+inline constexpr bool operator!=(std::string_view name, PolicyObservationMechanism value) { return wire_name(value) != name; }
+
+inline const std::vector<std::string> kPolicyObservationMechanismNames = {"native"};
 
 enum class PolicyEditOutcome : std::int32_t {
     Applied = 1,
@@ -375,6 +511,183 @@ inline constexpr std::string_view kServiceErrorCodeUnknownService = "unknown_ser
 inline constexpr std::string_view kServiceErrorCodeUnknownMethod = "unknown_method";
 inline constexpr std::string_view kServiceErrorCodeWrongMode = "wrong_mode";
 
+enum class EndpointServiceReadiness : std::int32_t {
+    Ready = 1,
+    NotReady = 2,
+    Unknown = 3,
+};
+
+// The member's name on the wire; empty for a value that names no member.
+inline constexpr std::string_view wire_name(EndpointServiceReadiness value) {
+    switch (value) {
+        case EndpointServiceReadiness::Ready: return "ready";
+        case EndpointServiceReadiness::NotReady: return "not_ready";
+        case EndpointServiceReadiness::Unknown: return "unknown";
+    }
+    return {};
+}
+
+// The member a wire name spells; empty for a name this vocabulary refuses.
+inline std::optional<EndpointServiceReadiness> parse_endpoint_service_readiness(std::string_view name) {
+    if (name == "ready") return EndpointServiceReadiness::Ready;
+    if (name == "not_ready") return EndpointServiceReadiness::NotReady;
+    if (name == "unknown") return EndpointServiceReadiness::Unknown;
+    return std::nullopt;
+}
+
+// A member equals its wire name, so code holding the contract's word compares directly.
+inline constexpr bool operator==(EndpointServiceReadiness value, std::string_view name) { return wire_name(value) == name; }
+inline constexpr bool operator!=(EndpointServiceReadiness value, std::string_view name) { return wire_name(value) != name; }
+inline constexpr bool operator==(std::string_view name, EndpointServiceReadiness value) { return wire_name(value) == name; }
+inline constexpr bool operator!=(std::string_view name, EndpointServiceReadiness value) { return wire_name(value) != name; }
+
+inline const std::vector<std::string> kEndpointServiceReadinessNames = {"ready", "not_ready", "unknown"};
+
+inline const std::vector<std::string> kEndpointRefusalSourceNames = {"rights", "credentials", "license", "terms", "identity", "os"};
+inline constexpr std::string_view kEndpointRefusalSourceRights = "rights";
+inline constexpr std::string_view kEndpointRefusalSourceCredentials = "credentials";
+inline constexpr std::string_view kEndpointRefusalSourceLicense = "license";
+inline constexpr std::string_view kEndpointRefusalSourceTerms = "terms";
+inline constexpr std::string_view kEndpointRefusalSourceIdentity = "identity";
+inline constexpr std::string_view kEndpointRefusalSourceOs = "os";
+
+enum class EndpointRefusalDecision : std::int32_t {
+    Denied = 1,
+    NotGranted = 2,
+    PersonOnly = 3,
+};
+
+// The member's name on the wire; empty for a value that names no member.
+inline constexpr std::string_view wire_name(EndpointRefusalDecision value) {
+    switch (value) {
+        case EndpointRefusalDecision::Denied: return "denied";
+        case EndpointRefusalDecision::NotGranted: return "not_granted";
+        case EndpointRefusalDecision::PersonOnly: return "person_only";
+    }
+    return {};
+}
+
+// The member a wire name spells; empty for a name this vocabulary refuses.
+inline std::optional<EndpointRefusalDecision> parse_endpoint_refusal_decision(std::string_view name) {
+    if (name == "denied") return EndpointRefusalDecision::Denied;
+    if (name == "not_granted") return EndpointRefusalDecision::NotGranted;
+    if (name == "person_only") return EndpointRefusalDecision::PersonOnly;
+    return std::nullopt;
+}
+
+// A member equals its wire name, so code holding the contract's word compares directly.
+inline constexpr bool operator==(EndpointRefusalDecision value, std::string_view name) { return wire_name(value) == name; }
+inline constexpr bool operator!=(EndpointRefusalDecision value, std::string_view name) { return wire_name(value) != name; }
+inline constexpr bool operator==(std::string_view name, EndpointRefusalDecision value) { return wire_name(value) == name; }
+inline constexpr bool operator!=(std::string_view name, EndpointRefusalDecision value) { return wire_name(value) != name; }
+
+inline const std::vector<std::string> kEndpointRefusalDecisionNames = {"denied", "not_granted", "person_only"};
+
+enum class EndpointRefusalAsk : std::int32_t {
+    Available = 1,
+    None = 2,
+};
+
+// The member's name on the wire; empty for a value that names no member.
+inline constexpr std::string_view wire_name(EndpointRefusalAsk value) {
+    switch (value) {
+        case EndpointRefusalAsk::Available: return "available";
+        case EndpointRefusalAsk::None: return "none";
+    }
+    return {};
+}
+
+// The member a wire name spells; empty for a name this vocabulary refuses.
+inline std::optional<EndpointRefusalAsk> parse_endpoint_refusal_ask(std::string_view name) {
+    if (name == "available") return EndpointRefusalAsk::Available;
+    if (name == "none") return EndpointRefusalAsk::None;
+    return std::nullopt;
+}
+
+// A member equals its wire name, so code holding the contract's word compares directly.
+inline constexpr bool operator==(EndpointRefusalAsk value, std::string_view name) { return wire_name(value) == name; }
+inline constexpr bool operator!=(EndpointRefusalAsk value, std::string_view name) { return wire_name(value) != name; }
+inline constexpr bool operator==(std::string_view name, EndpointRefusalAsk value) { return wire_name(value) == name; }
+inline constexpr bool operator!=(std::string_view name, EndpointRefusalAsk value) { return wire_name(value) != name; }
+
+inline const std::vector<std::string> kEndpointRefusalAskNames = {"available", "none"};
+
+enum class EndpointProducerCheckState : std::int32_t {
+    Current = 1,
+    Repaired = 2,
+    Stale = 3,
+    Refused = 4,
+    Unverified = 5,
+};
+
+// The member's name on the wire; empty for a value that names no member.
+inline constexpr std::string_view wire_name(EndpointProducerCheckState value) {
+    switch (value) {
+        case EndpointProducerCheckState::Current: return "current";
+        case EndpointProducerCheckState::Repaired: return "repaired";
+        case EndpointProducerCheckState::Stale: return "stale";
+        case EndpointProducerCheckState::Refused: return "refused";
+        case EndpointProducerCheckState::Unverified: return "unverified";
+    }
+    return {};
+}
+
+// The member a wire name spells; empty for a name this vocabulary refuses.
+inline std::optional<EndpointProducerCheckState> parse_endpoint_producer_check_state(std::string_view name) {
+    if (name == "current") return EndpointProducerCheckState::Current;
+    if (name == "repaired") return EndpointProducerCheckState::Repaired;
+    if (name == "stale") return EndpointProducerCheckState::Stale;
+    if (name == "refused") return EndpointProducerCheckState::Refused;
+    if (name == "unverified") return EndpointProducerCheckState::Unverified;
+    return std::nullopt;
+}
+
+// A member equals its wire name, so code holding the contract's word compares directly.
+inline constexpr bool operator==(EndpointProducerCheckState value, std::string_view name) { return wire_name(value) == name; }
+inline constexpr bool operator!=(EndpointProducerCheckState value, std::string_view name) { return wire_name(value) != name; }
+inline constexpr bool operator==(std::string_view name, EndpointProducerCheckState value) { return wire_name(value) == name; }
+inline constexpr bool operator!=(std::string_view name, EndpointProducerCheckState value) { return wire_name(value) != name; }
+
+inline const std::vector<std::string> kEndpointProducerCheckStateNames = {"current", "repaired", "stale", "refused", "unverified"};
+
+enum class EndpointDescriptionOutcome : std::int32_t {
+    Described = 1,
+    Forbidden = 2,
+    Unavailable = 3,
+    Invalid = 4,
+    Unsupported = 5,
+};
+
+// The member's name on the wire; empty for a value that names no member.
+inline constexpr std::string_view wire_name(EndpointDescriptionOutcome value) {
+    switch (value) {
+        case EndpointDescriptionOutcome::Described: return "described";
+        case EndpointDescriptionOutcome::Forbidden: return "forbidden";
+        case EndpointDescriptionOutcome::Unavailable: return "unavailable";
+        case EndpointDescriptionOutcome::Invalid: return "invalid";
+        case EndpointDescriptionOutcome::Unsupported: return "unsupported";
+    }
+    return {};
+}
+
+// The member a wire name spells; empty for a name this vocabulary refuses.
+inline std::optional<EndpointDescriptionOutcome> parse_endpoint_description_outcome(std::string_view name) {
+    if (name == "described") return EndpointDescriptionOutcome::Described;
+    if (name == "forbidden") return EndpointDescriptionOutcome::Forbidden;
+    if (name == "unavailable") return EndpointDescriptionOutcome::Unavailable;
+    if (name == "invalid") return EndpointDescriptionOutcome::Invalid;
+    if (name == "unsupported") return EndpointDescriptionOutcome::Unsupported;
+    return std::nullopt;
+}
+
+// A member equals its wire name, so code holding the contract's word compares directly.
+inline constexpr bool operator==(EndpointDescriptionOutcome value, std::string_view name) { return wire_name(value) == name; }
+inline constexpr bool operator!=(EndpointDescriptionOutcome value, std::string_view name) { return wire_name(value) != name; }
+inline constexpr bool operator==(std::string_view name, EndpointDescriptionOutcome value) { return wire_name(value) == name; }
+inline constexpr bool operator!=(std::string_view name, EndpointDescriptionOutcome value) { return wire_name(value) != name; }
+
+inline const std::vector<std::string> kEndpointDescriptionOutcomeNames = {"described", "forbidden", "unavailable", "invalid", "unsupported"};
+
 inline const std::vector<std::string> kOperations = {"register", "ask", "hold", "check", "apps", "grant", "revoke", "forget", "holds"};
 
 inline const std::vector<std::string> kKnownRights = {"awake"};
@@ -383,10 +696,12 @@ inline const std::vector<std::string> kRefusalCodes = {"internal", "invalid_requ
 
 inline const std::vector<std::string> kResourceActions = {"abstraction.storage/content.read", "abstraction.storage/content.write", "abstraction.job/acceptance.submit", "abstraction.job/acceptance.cancel", "abstraction.config/user.replace", "abstraction.logging/history.read", "abstraction.model/lookup", "abstraction.router/inventory.read", "abstraction.router/route", "abstraction.storage/content.observe", "abstraction.storage/content.remove"};
 
-// Existing rights request concepts. Secret/token/admin remain credential inputs
-// checked by the service; request text never substitutes for native peer
-// identity. This descriptor does not replace the existing handwritten line
-// transport.
+// Deprecated native token-service request descriptor. Removal is scheduled for
+// Train B (expected 0.9.0), W2-01a.1, under TD13/TD57's stored-state and
+// declared outside-adopter retirement conditions. Secret/token/admin remain
+// credential inputs checked by the service; request text never substitutes for
+// native peer identity. This descriptor does not replace the existing
+// handwritten line transport.
 struct Request {
     std::string op;
     std::string name;
@@ -410,8 +725,9 @@ struct AppMetadata {
 };
 
 // Own held-right fields; since uses existing RFC3339 time representation.
-// Native Hold also carries Seen. The live Lease is connection-owned and cannot
-// be recreated from these fields.
+// Native Hold also carries Seen. The live
+// [Lease](https://openabstractions.github.io/reference.html#concept-rights.lease)
+// is connection-owned and cannot be recreated from these fields.
 struct HoldMetadata {
     std::string app;
     std::string name;
@@ -420,9 +736,12 @@ struct HoldMetadata {
     std::string since;
 };
 
-// Own response fields projected without native Seen evidence. Any nonempty
-// code/error is refusal, including unknown codes. This is a common descriptor,
-// not a replacement legacy Response codec or generated service client.
+// Deprecated native token-service response descriptor. Removal is scheduled for
+// Train B (expected 0.9.0), W2-01a.1, under TD13/TD57's stored-state and
+// declared outside-adopter retirement conditions. Own response fields are
+// projected without native Seen evidence. Any nonempty code/error is refusal,
+// including unknown codes. This is a common descriptor, not a replacement
+// legacy Response codec or generated service client.
 struct ResponseMetadata {
     std::string code;
     std::string error;
@@ -435,10 +754,17 @@ struct ResponseMetadata {
     std::vector<HoldMetadata> holds;
 };
 
-// Account identifier and normalized absolute executable path. This serialized
-// subject is an assertion by an explicitly authorized enforcement point. It
-// contains no proof or verified flag and cannot authorize its own use. Direct
-// decisions derive their subject from native receiving Program evidence.
+// [Subject](https://openabstractions.github.io/reference.html#concept-rights.subject):
+// Receiving policy account and program target. Native programs use the shared
+// absolute-path/MSIX grammar; the distinct remote kind is remote:<64 lowercase
+// hex leaf-SPKI-SHA256> from the shared live-pin mapping. Remote targets match
+// exact account/token/action/resource only, with no defaults, wildcard
+// selectors or native operator authority. This serialized subject is an
+// assertion by an explicitly authorized native enforcement point, contains no
+// proof and cannot authorize its own use. Direct decisions derive native
+// receiving
+// [Program](https://openabstractions.github.io/reference.html#concept-identity.listener-program-need)
+// evidence. Authority setters and actors remain native.
 struct Subject {
     std::string account;
     std::string program;
@@ -453,6 +779,36 @@ struct Subject {
 struct Decision {
     DecisionOutcome outcome{};
     std::string policy_revision;
+};
+
+// A decision and bounded opaque freshness observation from the same state read.
+// Evaluated decisions carry observed_revision. Refusals carry none. This
+// observation conveys no permission lifetime.
+struct RevisionDecision {
+    Decision decision;
+    std::string observed_revision;
+};
+
+// The one refusal record every OA service carries beside a refusing outcome
+// (RIGHTS-E3; conventions CONV-E4). source names the authority that refused:
+// rights, credentials, license, terms, identity or os. decision is denied for
+// an explicit refusal, not_granted where no rule permits, and person_only where
+// only the person may answer the question. ask says whether asking can change
+// the answer: available, or none. action is the exact registered
+// <owner>/<name>; question the pending question's id; credential the
+// credential's name; retry_after_ms the earliest useful retry in milliseconds,
+// omitted when zero. Stop asking is denied with ask none. Current carriers
+// include config@2, messages@1, registry@3, endpoint@2 and chat@3, declared in
+// config.thrift, messages.thrift, registration.thrift and inference.thrift.
+// Other services adopt it in their scheduled versions.
+struct RefusalDetail {
+    std::string source;
+    RefusalDecision decision{};
+    RefusalAsk ask{};
+    std::string action;
+    std::string question;
+    std::string credential;
+    std::int64_t retry_after_ms = 0;
 };
 
 // One exact policy rule. Subject is the administrative target, never caller
@@ -486,6 +842,23 @@ struct PolicyPage {
     std::vector<PolicyRule> rules;
     std::string next;
     bool complete = false;
+};
+
+// Read-only policy invalidation. changed carries a new nonempty opaque cursor
+// and current durable revision; an empty after requests this snapshot.
+// unchanged carries the confirmed after cursor and current revision. Expiry
+// changes the observation cursor while durable revision stays unchanged;
+// ReadRule confirms expiry. gap carries after and empty revision: restart from
+// empty after. invalid/forbidden/unavailable carry empty next/revision. Cursors
+// bind receiving Program, host epoch and expiry-sensitive state, never
+// enumerate rules or grant a permission lease. native declares policy-owner
+// commit callbacks plus expiry deadlines. At most 256 cursor bytes and 128
+// revision bytes; no rule contents, replay or second policy store.
+struct PolicyObservation {
+    PolicyObservationOutcome outcome{};
+    std::string next;
+    std::string revision;
+    PolicyObservationMechanism mechanism{};
 };
 
 // Applied/conflict carry the revision and optional exact current rule observed
@@ -864,6 +1237,81 @@ struct LegacyOperationRequest {
     std::optional<ConcreteResource> concrete_operation;
 };
 
+// The one refusal record every OA service carries beside a refusing outcome
+// (RIGHTS-E3; conventions CONV-E4). source names the authority that refused:
+// rights, credentials, license, terms, identity or os. decision is denied for
+// an explicit refusal, not_granted where no rule permits, and person_only where
+// only the person may answer the question. ask says whether asking can change
+// the answer: available, or none. action is the exact registered
+// <owner>/<name>; question the pending question's id; credential the
+// credential's name; retry_after_ms the earliest useful retry in milliseconds,
+// omitted when zero. Stop asking is denied with ask none. Current carriers
+// include config@2, messages@1, registry@3, endpoint@2 and chat@3, declared in
+// config.thrift, messages.thrift, registration.thrift and inference.thrift.
+// Other services adopt it in their scheduled versions.
+struct EndpointRefusalDetail {
+    std::string source;
+    EndpointRefusalDecision decision{};
+    EndpointRefusalAsk ask{};
+    std::string action;
+    std::string question;
+    std::string credential;
+    std::int64_t retry_after_ms = 0;
+};
+
+// Producer assertion validated by the runtime. Kind is the governed open
+// build-time vocabulary <owner>/<name>, not a display string or an authority
+// claim. copy identifies one copy within the kind. reason follows D87
+// domain:word:detail as open display text. checked is the producer's claimed
+// check time. Custom/unknown copies are unverified; readiness remains
+// independent. No runtime kind-registration method is introduced.
+struct EndpointProducerCheck {
+    std::string kind;
+    std::string copy;
+    EndpointProducerCheckState state{};
+    std::string reason;
+    std::string checked;
+};
+
+// endpoint@2 service observation. definition_hash is sha256: plus64 lowercase
+// hex over this service version's canonical wire form (CONV-V2), verified by
+// the definition-hash owner. reason retains readiness errors and is empty when
+// ready. capabilities remain display-only. Program-level producer checks belong
+// to EndpointDescription and are independent of service readiness.
+struct EndpointServiceState {
+    std::string service;
+    EndpointServiceReadiness readiness{};
+    std::string reason;
+    std::vector<std::string> guarantees;
+    std::map<std::string, std::string> capabilities;
+    std::string definition_hash;
+};
+
+// Complete endpoint@2 description with each advertised service's definition
+// hash and one program-level producer-check list. Checks are independent of
+// service readiness; absence means unobserved, never verified.
+// Forbidden/unavailable authority refusals carry the single Rights-owned
+// EndpointRefusalDetail; other outcomes omit it. Unsupported carries the
+// existing bounded reason with D87 unsupported:not_implemented words; no closed
+// staged-reason vocabulary is frozen. Non-described replies disclose no
+// program/version/services/checks. Endpoint@1 and its closed
+// EndpointDescription/EndpointServiceState remain unchanged. The compact value
+// ceiling excluding insignificant JSON whitespace is IPC-F1; an oversized whole
+// reply is unavailable/bound:reply_bytes without truncation.
+struct EndpointDescription {
+    EndpointDescriptionOutcome outcome{};
+    std::string program;
+    std::string version;
+    std::vector<EndpointServiceState> services;
+    std::optional<EndpointRefusalDetail> refusal;
+    std::string reason;
+    std::vector<EndpointProducerCheck> checks;
+};
+
+struct EndpointDescriptionResult {
+    EndpointDescription value;
+};
+
 // Codec machinery. Nothing here is API; it may change in any release.
 namespace detail {
 
@@ -926,52 +1374,13 @@ inline void enum_strs(std::string& out, const std::vector<E>& v, int depth) {
 
 inline bool ws(unsigned char c) { return c == ' ' || c == '\t' || c == '\n' || c == '\r'; }
 
-inline void raw(std::string& out, const std::string& s, int depth) {
-    const std::size_t n = s.size();
-    for (std::size_t i = 0; i < n;) {
-        const unsigned char c = static_cast<unsigned char>(s[i]);
-        if (ws(c)) {
-            ++i;
-        } else if (c == '"') {
-            std::size_t j = i + 1;
-            while (j < n) {
-                if (s[j] == '\\') { j += 2; continue; }
-                if (s[j] == '"') { ++j; break; }
-                ++j;
-            }
-            out.append(s, i, j - i);
-            i = j;
-        } else if (c == '{' || c == '[') {
-            out += static_cast<char>(c);
-            ++i;
-            std::size_t j = i;
-            while (j < n && ws(static_cast<unsigned char>(s[j]))) ++j;
-            if (j < n && (s[j] == '}' || s[j] == ']')) {
-                out += s[j];
-                i = j + 1;
-            } else {
-                ++depth;
-                out += '\n';
-                pad(out, depth);
-            }
-        } else if (c == '}' || c == ']') {
-            --depth;
-            out += '\n';
-            pad(out, depth);
-            out += static_cast<char>(c);
-            ++i;
-        } else if (c == ',') {
-            out += ",\n";
-            pad(out, depth);
-            ++i;
-        } else if (c == ':') {
-            out += ": ";
-            ++i;
-        } else {
-            out += static_cast<char>(c);
-            ++i;
-        }
-    }
+// raw writes an opaque value's bytes as they are ([DEF-A3]).
+inline void raw(std::string& out, const std::string& s, int /*depth*/) {
+    // Whitespace around the value is not part of it.
+    std::size_t i = 0, j = s.size();
+    while (i < j && ws(static_cast<unsigned char>(s[i]))) ++i;
+    while (j > i && ws(static_cast<unsigned char>(s[j - 1]))) --j;
+    out.append(s, i, j - i);
 }
 
 // std::char_traits<char>::compare is specified to order by unsigned char, so a
@@ -999,6 +1408,26 @@ inline void esc(std::string& out, const std::string& s) {
     out += '"';
 }
 
+inline bool wide_timestamp(std::string_view);
+inline std::string normalized_timestamp(std::string_view);
+inline std::string write_timestamp(std::string_view);
+
+inline void strmap(std::string& out, const std::map<std::string, std::string>& m, int depth) {
+    if (m.empty()) { out += "{}"; return; }
+    out += "{\n";
+    std::size_t i = 0;
+    for (const auto& kv : m) {
+        pad(out, depth + 1);
+        esc(out, kv.first);
+        out += ": ";
+        esc(out, kv.second);
+        if (++i < m.size()) out += ',';
+        out += '\n';
+    }
+    pad(out, depth);
+    out += '}';
+}
+
 template <typename T>
 inline void enc_list(std::string& out, const std::vector<T>& v, int depth,
                      void (*enc)(std::string&, const T&, int)) {
@@ -1017,6 +1446,32 @@ inline void enc_list(std::string& out, const std::vector<T>& v, int depth,
 inline std::string encode_binary(const std::vector<std::uint8_t>&);
 inline std::vector<std::uint8_t> decode_binary(const std::string&);
 
+struct CompactEncodedCounter {
+    std::size_t start, pos, count = 0;
+    bool quoted = false, escaped = false;
+    explicit CompactEncodedCounter(std::size_t at): start(at), pos(at) {}
+    void check(std::string_view out, std::size_t limit) {
+        if (out.size()-start > 1048576) throw Refusal("encoded_size", 0);
+        for (; pos < out.size(); ++pos) {
+            const auto b = out[pos];
+            if (!quoted && (b == ' ' || b == '\t' || b == '\r' || b == '\n')) continue;
+            if (++count > limit) throw Refusal("encoded_size", 0);
+            if (quoted) {
+                if (escaped) escaped = false;
+                else if (b == '\\') escaped = true;
+                else if (b == '"') quoted = false;
+            } else if (b == '"') quoted = true;
+        }
+    }
+};
+
+struct OAAuthorizationDecideForAtLeastRevisionArguments {
+    Subject subject;
+    std::string action;
+    std::string resource;
+    std::string at_least_revision;
+};
+
 struct OAAuthorizationListActionDescriptionsArguments {
     std::string cursor;
     std::int64_t limit = 0;
@@ -1031,6 +1486,11 @@ struct OAAuthorizationDecideForArguments {
     Subject subject;
     std::string action;
     std::string resource;
+};
+
+struct OAAuthorizationOperatorObservePolicyArguments {
+    std::string after;
+    std::int64_t wait_ms = 0;
 };
 
 struct OAAuthorizationOperatorRegisterDescribedActionArguments {
@@ -1212,6 +1672,10 @@ struct OAServiceError {
     std::string message;
 };
 
+struct OAAuthorizationDecideForAtLeastRevisionResult {
+    RevisionDecision value;
+};
+
 struct OAAuthorizationListActionDescriptionsResult {
     DescriptionPage value;
 };
@@ -1222,6 +1686,10 @@ struct OAAuthorizationDecideResult {
 
 struct OAAuthorizationDecideForResult {
     Decision value;
+};
+
+struct OAAuthorizationOperatorObservePolicyResult {
+    PolicyObservation value;
 };
 
 struct OAAuthorizationOperatorRegisterDescribedActionResult {
@@ -1341,8 +1809,11 @@ inline void enc_hold_metadata(std::string&, const HoldMetadata&, int);
 inline void enc_response_metadata(std::string&, const ResponseMetadata&, int);
 inline void enc_subject(std::string&, const Subject&, int);
 inline void enc_decision(std::string&, const Decision&, int);
+inline void enc_revision_decision(std::string&, const RevisionDecision&, int);
+inline void enc_refusal_detail(std::string&, const RefusalDetail&, int);
 inline void enc_policy_rule(std::string&, const PolicyRule&, int);
 inline void enc_policy_page(std::string&, const PolicyPage&, int);
+inline void enc_policy_observation(std::string&, const PolicyObservation&, int);
 inline void enc_policy_edit(std::string&, const PolicyEdit&, int);
 inline void enc_rule_record(std::string&, const RuleRecord&, int);
 inline void enc_rule_read(std::string&, const RuleRead&, int);
@@ -1376,9 +1847,16 @@ inline void enc_selector_rule_page(std::string&, const SelectorRulePage&, int);
 inline void enc_selector_rule_read(std::string&, const SelectorRuleRead&, int);
 inline void enc_selector_edit(std::string&, const SelectorEdit&, int);
 inline void enc_legacy_operation_request(std::string&, const LegacyOperationRequest&, int);
+inline void enc_endpoint_refusal_detail(std::string&, const EndpointRefusalDetail&, int);
+inline void enc_endpoint_producer_check(std::string&, const EndpointProducerCheck&, int);
+inline void enc_endpoint_service_state(std::string&, const EndpointServiceState&, int);
+inline void enc_endpoint_description(std::string&, const EndpointDescription&, int);
+inline void enc_endpoint_description_result(std::string&, const EndpointDescriptionResult&, int);
+inline void enc_oa_authorization_decide_for_at_least_revision_arguments(std::string&, const OAAuthorizationDecideForAtLeastRevisionArguments&, int);
 inline void enc_oa_authorization_list_action_descriptions_arguments(std::string&, const OAAuthorizationListActionDescriptionsArguments&, int);
 inline void enc_oa_authorization_decide_arguments(std::string&, const OAAuthorizationDecideArguments&, int);
 inline void enc_oa_authorization_decide_for_arguments(std::string&, const OAAuthorizationDecideForArguments&, int);
+inline void enc_oa_authorization_operator_observe_policy_arguments(std::string&, const OAAuthorizationOperatorObservePolicyArguments&, int);
 inline void enc_oa_authorization_operator_register_described_action_arguments(std::string&, const OAAuthorizationOperatorRegisterDescribedActionArguments&, int);
 inline void enc_oa_authorization_operator_apply_first_use_allow_arguments(std::string&, const OAAuthorizationOperatorApplyFirstUseAllowArguments&, int);
 inline void enc_oa_authorization_operator_list_policy_arguments(std::string&, const OAAuthorizationOperatorListPolicyArguments&, int);
@@ -1410,9 +1888,11 @@ inline void enc_oa_selector_authorization_operator_undo_permission_effect_argume
 inline void enc_oa_service_frame(std::string&, const OAServiceFrame&, int);
 inline void enc_oa_service_reply(std::string&, const OAServiceReply&, int);
 inline void enc_oa_service_error(std::string&, const OAServiceError&, int);
+inline void enc_oa_authorization_decide_for_at_least_revision_result(std::string&, const OAAuthorizationDecideForAtLeastRevisionResult&, int);
 inline void enc_oa_authorization_list_action_descriptions_result(std::string&, const OAAuthorizationListActionDescriptionsResult&, int);
 inline void enc_oa_authorization_decide_result(std::string&, const OAAuthorizationDecideResult&, int);
 inline void enc_oa_authorization_decide_for_result(std::string&, const OAAuthorizationDecideForResult&, int);
+inline void enc_oa_authorization_operator_observe_policy_result(std::string&, const OAAuthorizationOperatorObservePolicyResult&, int);
 inline void enc_oa_authorization_operator_register_described_action_result(std::string&, const OAAuthorizationOperatorRegisterDescribedActionResult&, int);
 inline void enc_oa_authorization_operator_apply_first_use_allow_result(std::string&, const OAAuthorizationOperatorApplyFirstUseAllowResult&, int);
 inline void enc_oa_authorization_operator_list_policy_result(std::string&, const OAAuthorizationOperatorListPolicyResult&, int);
@@ -1710,6 +2190,90 @@ inline void enc_decision(std::string& out, const Decision& v, int depth) {
     out += '}';
 }
 
+inline void enc_revision_decision(std::string& out, const RevisionDecision& v, int depth) {
+    if (const auto n = static_cast<std::uint64_t>(v.observed_revision.size()); n > 128ULL) throw Refusal("bad_value",0);
+    for (std::size_t i = 0; i < v.observed_revision.size(); ++i) { const auto c = static_cast<unsigned char>(v.observed_revision[i]); if (c < 0x20 || c == 0x7f || (c == 0xc2 && i + 1 < v.observed_revision.size() && static_cast<unsigned char>(v.observed_revision[i + 1]) <= 0x9f)) throw Refusal("bad_value",0); }
+    out += '{';
+    out += '\n';
+    pad(out, depth + 1);
+    esc(out, "decision");
+    out += ": ";
+    enc_decision(out, v.decision, depth + 1);
+    if (!v.observed_revision.empty()) {
+        out += ',';
+        out += '\n';
+        pad(out, depth + 1);
+        esc(out, "observed_revision");
+        out += ": ";
+        esc(out, v.observed_revision);
+    }
+    out += '\n';
+    pad(out, depth);
+    out += '}';
+}
+
+inline void enc_refusal_detail(std::string& out, const RefusalDetail& v, int depth) {
+    if (const auto n = static_cast<std::uint64_t>(v.action.size()); n != 0 && (n < 1ULL || n > 128ULL)) throw Refusal("bad_value",0);
+    if (const auto n = static_cast<std::uint64_t>(v.question.size()); n != 0 && (n < 1ULL || n > 128ULL)) throw Refusal("bad_value",0);
+    if (const auto n = static_cast<std::uint64_t>(v.credential.size()); n != 0 && (n < 1ULL || n > 64ULL)) throw Refusal("bad_value",0);
+    if (v.retry_after_ms < 0LL || v.retry_after_ms > 86400000LL) throw Refusal("bad_value",0);
+    if (wire_name(v.decision).empty()) throw Refusal("bad_enum", 0);
+    if (wire_name(v.ask).empty()) throw Refusal("bad_enum", 0);
+    out += '{';
+    out += '\n';
+    pad(out, depth + 1);
+    esc(out, "source");
+    out += ": ";
+    esc(out, v.source);
+    out += ',';
+    out += '\n';
+    pad(out, depth + 1);
+    esc(out, "decision");
+    out += ": ";
+    esc(out, std::string(wire_name(v.decision)));
+    out += ',';
+    out += '\n';
+    pad(out, depth + 1);
+    esc(out, "ask");
+    out += ": ";
+    esc(out, std::string(wire_name(v.ask)));
+    if (!v.action.empty()) {
+        out += ',';
+        out += '\n';
+        pad(out, depth + 1);
+        esc(out, "action");
+        out += ": ";
+        esc(out, v.action);
+    }
+    if (!v.question.empty()) {
+        out += ',';
+        out += '\n';
+        pad(out, depth + 1);
+        esc(out, "question");
+        out += ": ";
+        esc(out, v.question);
+    }
+    if (!v.credential.empty()) {
+        out += ',';
+        out += '\n';
+        pad(out, depth + 1);
+        esc(out, "credential");
+        out += ": ";
+        esc(out, v.credential);
+    }
+    if (v.retry_after_ms != 0) {
+        out += ',';
+        out += '\n';
+        pad(out, depth + 1);
+        esc(out, "retry_after_ms");
+        out += ": ";
+        num(out, v.retry_after_ms);
+    }
+    out += '\n';
+    pad(out, depth);
+    out += '}';
+}
+
 inline void enc_policy_rule(std::string& out, const PolicyRule& v, int depth) {
     out += '{';
     out += '\n';
@@ -1778,6 +2342,42 @@ inline void enc_policy_page(std::string& out, const PolicyPage& v, int depth) {
     esc(out, "complete");
     out += ": ";
     out += v.complete ? "true" : "false";
+    out += '\n';
+    pad(out, depth);
+    out += '}';
+}
+
+inline void enc_policy_observation(std::string& out, const PolicyObservation& v, int depth) {
+    if (const auto n = static_cast<std::uint64_t>(v.next.size()); n > 256ULL) throw Refusal("bad_value",0);
+    for (std::size_t i = 0; i < v.next.size(); ++i) { const auto c = static_cast<unsigned char>(v.next[i]); if (c < 0x20 || c == 0x7f || (c == 0xc2 && i + 1 < v.next.size() && static_cast<unsigned char>(v.next[i + 1]) <= 0x9f)) throw Refusal("bad_value",0); }
+    if (const auto n = static_cast<std::uint64_t>(v.revision.size()); n > 128ULL) throw Refusal("bad_value",0);
+    for (std::size_t i = 0; i < v.revision.size(); ++i) { const auto c = static_cast<unsigned char>(v.revision[i]); if (c < 0x20 || c == 0x7f || (c == 0xc2 && i + 1 < v.revision.size() && static_cast<unsigned char>(v.revision[i + 1]) <= 0x9f)) throw Refusal("bad_value",0); }
+    if (wire_name(v.outcome).empty()) throw Refusal("bad_enum", 0);
+    if (wire_name(v.mechanism).empty()) throw Refusal("bad_enum", 0);
+    out += '{';
+    out += '\n';
+    pad(out, depth + 1);
+    esc(out, "outcome");
+    out += ": ";
+    esc(out, std::string(wire_name(v.outcome)));
+    out += ',';
+    out += '\n';
+    pad(out, depth + 1);
+    esc(out, "next");
+    out += ": ";
+    esc(out, v.next);
+    out += ',';
+    out += '\n';
+    pad(out, depth + 1);
+    esc(out, "revision");
+    out += ": ";
+    esc(out, v.revision);
+    out += ',';
+    out += '\n';
+    pad(out, depth + 1);
+    esc(out, "mechanism");
+    out += ": ";
+    esc(out, std::string(wire_name(v.mechanism)));
     out += '\n';
     pad(out, depth);
     out += '}';
@@ -2860,6 +3460,297 @@ inline void enc_legacy_operation_request(std::string& out, const LegacyOperation
     out += '}';
 }
 
+inline void enc_endpoint_refusal_detail(std::string& out, const EndpointRefusalDetail& v, int depth) {
+if(depth<0||depth>=64)throw Refusal("depth_exceeded",0);
+    if (const auto n = static_cast<std::uint64_t>(v.action.size()); n != 0 && (n < 1ULL || n > 128ULL)) throw Refusal("bad_value",0);
+    if (const auto n = static_cast<std::uint64_t>(v.question.size()); n != 0 && (n < 1ULL || n > 128ULL)) throw Refusal("bad_value",0);
+    if (const auto n = static_cast<std::uint64_t>(v.credential.size()); n != 0 && (n < 1ULL || n > 64ULL)) throw Refusal("bad_value",0);
+    if (v.retry_after_ms < 0LL || v.retry_after_ms > 86400000LL) throw Refusal("bad_value",0);
+    if (wire_name(v.decision).empty()) throw Refusal("bad_enum", 0);
+    if (wire_name(v.ask).empty()) throw Refusal("bad_enum", 0);
+    out += '{';
+    out += '\n';
+    pad(out, depth + 1);
+    esc(out, "source");
+    out += ": ";
+    esc(out, v.source);
+    out += ',';
+    out += '\n';
+    pad(out, depth + 1);
+    esc(out, "decision");
+    out += ": ";
+    esc(out, std::string(wire_name(v.decision)));
+    out += ',';
+    out += '\n';
+    pad(out, depth + 1);
+    esc(out, "ask");
+    out += ": ";
+    esc(out, std::string(wire_name(v.ask)));
+    if (!v.action.empty()) {
+        out += ',';
+        out += '\n';
+        pad(out, depth + 1);
+        esc(out, "action");
+        out += ": ";
+        esc(out, v.action);
+    }
+    if (!v.question.empty()) {
+        out += ',';
+        out += '\n';
+        pad(out, depth + 1);
+        esc(out, "question");
+        out += ": ";
+        esc(out, v.question);
+    }
+    if (!v.credential.empty()) {
+        out += ',';
+        out += '\n';
+        pad(out, depth + 1);
+        esc(out, "credential");
+        out += ": ";
+        esc(out, v.credential);
+    }
+    if (v.retry_after_ms != 0) {
+        out += ',';
+        out += '\n';
+        pad(out, depth + 1);
+        esc(out, "retry_after_ms");
+        out += ": ";
+        num(out, v.retry_after_ms);
+    }
+    out += '\n';
+    pad(out, depth);
+    out += '}';
+}
+
+inline void enc_endpoint_producer_check(std::string& out, const EndpointProducerCheck& v, int depth) {
+if(depth<0||depth>=1000)throw Refusal("depth_exceeded",0);
+    if (const auto n = static_cast<std::uint64_t>(v.kind.size()); n < 1ULL || n > 128ULL) throw Refusal("bad_value",0);
+    for (std::size_t i = 0; i < v.kind.size(); ++i) { const auto c = static_cast<unsigned char>(v.kind[i]); if (c < 0x20 || c == 0x7f || (c == 0xc2 && i + 1 < v.kind.size() && static_cast<unsigned char>(v.kind[i + 1]) <= 0x9f)) throw Refusal("bad_value",0); }
+    if (const auto n = static_cast<std::uint64_t>(v.copy.size()); n > 256ULL) throw Refusal("bad_value",0);
+    for (std::size_t i = 0; i < v.copy.size(); ++i) { const auto c = static_cast<unsigned char>(v.copy[i]); if (c < 0x20 || c == 0x7f || (c == 0xc2 && i + 1 < v.copy.size() && static_cast<unsigned char>(v.copy[i + 1]) <= 0x9f)) throw Refusal("bad_value",0); }
+    if (const auto n = static_cast<std::uint64_t>(v.reason.size()); n > 256ULL) throw Refusal("bad_value",0);
+    for (std::size_t i = 0; i < v.reason.size(); ++i) { const auto c = static_cast<unsigned char>(v.reason[i]); if (c < 0x20 || c == 0x7f || (c == 0xc2 && i + 1 < v.reason.size() && static_cast<unsigned char>(v.reason[i + 1]) <= 0x9f)) throw Refusal("bad_value",0); }
+    if (wire_name(v.state).empty()) throw Refusal("bad_enum", 0);
+    out += '{';
+    out += '\n';
+    pad(out, depth + 1);
+    esc(out, "kind");
+    out += ": ";
+    esc(out, v.kind);
+    out += ',';
+    out += '\n';
+    pad(out, depth + 1);
+    esc(out, "copy");
+    out += ": ";
+    esc(out, v.copy);
+    out += ',';
+    out += '\n';
+    pad(out, depth + 1);
+    esc(out, "state");
+    out += ": ";
+    esc(out, std::string(wire_name(v.state)));
+    out += ',';
+    out += '\n';
+    pad(out, depth + 1);
+    esc(out, "reason");
+    out += ": ";
+    esc(out, v.reason);
+    out += ',';
+    out += '\n';
+    pad(out, depth + 1);
+    esc(out, "checked");
+    out += ": ";
+    esc(out, write_timestamp(v.checked));
+    out += '\n';
+    pad(out, depth);
+    out += '}';
+}
+
+inline void enc_endpoint_service_state(std::string& out, const EndpointServiceState& v, int depth) {
+if(depth<0||depth>=1000)throw Refusal("depth_exceeded",0);
+    if (const auto n = static_cast<std::uint64_t>(v.service.size()); n < 1ULL || n > 128ULL) throw Refusal("bad_value",0);
+    for (std::size_t i = 0; i < v.service.size(); ++i) { const auto c = static_cast<unsigned char>(v.service[i]); if (c < 0x20 || c == 0x7f || (c == 0xc2 && i + 1 < v.service.size() && static_cast<unsigned char>(v.service[i + 1]) <= 0x9f)) throw Refusal("bad_value",0); }
+    if (const auto n = static_cast<std::uint64_t>(v.reason.size()); n > 256ULL) throw Refusal("bad_value",0);
+    for (std::size_t i = 0; i < v.reason.size(); ++i) { const auto c = static_cast<unsigned char>(v.reason[i]); if (c < 0x20 || c == 0x7f || (c == 0xc2 && i + 1 < v.reason.size() && static_cast<unsigned char>(v.reason[i + 1]) <= 0x9f)) throw Refusal("bad_value",0); }
+    if (const auto n = static_cast<std::uint64_t>(v.guarantees.size()); n > 64ULL) throw Refusal("bad_value",0);
+    for (const auto& oaElement : v.guarantees) {
+    if (const auto n = static_cast<std::uint64_t>(oaElement.size()); n < 1ULL || n > 128ULL) throw Refusal("bad_value",0);
+    }
+    for (const auto& oaElement : v.guarantees) {
+    for (std::size_t i = 0; i < oaElement.size(); ++i) { const auto c = static_cast<unsigned char>(oaElement[i]); if (c < 0x20 || c == 0x7f || (c == 0xc2 && i + 1 < oaElement.size() && static_cast<unsigned char>(oaElement[i + 1]) <= 0x9f)) throw Refusal("bad_value",0); }
+    }
+    if (const auto n = static_cast<std::uint64_t>(v.capabilities.size()); n > 32ULL) throw Refusal("bad_value",0);
+    for (const auto& oaEntry : v.capabilities) { const auto& oaElement = oaEntry.first;
+    if (const auto n = static_cast<std::uint64_t>(oaElement.size()); n < 1ULL || n > 64ULL) throw Refusal("bad_value",0);
+    }
+    for (const auto& oaEntry : v.capabilities) { const auto& oaElement = oaEntry.first;
+    for (std::size_t i = 0; i < oaElement.size(); ++i) { const auto c = static_cast<unsigned char>(oaElement[i]); if (c < 0x20 || c == 0x7f || (c == 0xc2 && i + 1 < oaElement.size() && static_cast<unsigned char>(oaElement[i + 1]) <= 0x9f)) throw Refusal("bad_value",0); }
+    }
+    for (const auto& oaEntry : v.capabilities) { const auto& oaElement = oaEntry.second;
+    if (const auto n = static_cast<std::uint64_t>(oaElement.size()); n > 256ULL) throw Refusal("bad_value",0);
+    }
+    if (const auto n = static_cast<std::uint64_t>(v.definition_hash.size()); n < 71ULL || n > 71ULL) throw Refusal("bad_value",0);
+    for (std::size_t i = 0; i < v.definition_hash.size(); ++i) { const auto c = static_cast<unsigned char>(v.definition_hash[i]); if (c < 0x20 || c == 0x7f || (c == 0xc2 && i + 1 < v.definition_hash.size() && static_cast<unsigned char>(v.definition_hash[i + 1]) <= 0x9f)) throw Refusal("bad_value",0); }
+    if (wire_name(v.readiness).empty()) throw Refusal("bad_enum", 0);
+    out += '{';
+    out += '\n';
+    pad(out, depth + 1);
+    esc(out, "service");
+    out += ": ";
+    esc(out, v.service);
+    out += ',';
+    out += '\n';
+    pad(out, depth + 1);
+    esc(out, "readiness");
+    out += ": ";
+    esc(out, std::string(wire_name(v.readiness)));
+    out += ',';
+    out += '\n';
+    pad(out, depth + 1);
+    esc(out, "reason");
+    out += ": ";
+    esc(out, v.reason);
+    out += ',';
+    out += '\n';
+    pad(out, depth + 1);
+    esc(out, "guarantees");
+    out += ": ";
+    strs(out, v.guarantees, depth + 1);
+    out += ',';
+    out += '\n';
+    pad(out, depth + 1);
+    esc(out, "capabilities");
+    out += ": ";
+    strmap(out, v.capabilities, depth + 1);
+    out += ',';
+    out += '\n';
+    pad(out, depth + 1);
+    esc(out, "definition_hash");
+    out += ": ";
+    esc(out, v.definition_hash);
+    out += '\n';
+    pad(out, depth);
+    out += '}';
+}
+
+inline void enc_endpoint_description(std::string& out, const EndpointDescription& v, int depth) {
+if(depth<0||depth>=1000)throw Refusal("depth_exceeded",0);
+    CompactEncodedCounter encoded_counter(out.size());
+    if (const auto n = static_cast<std::uint64_t>(v.program.size()); n > 256ULL) throw Refusal("bad_value",0);
+    if (const auto n = static_cast<std::uint64_t>(v.version.size()); n > 256ULL) throw Refusal("bad_value",0);
+    if (const auto n = static_cast<std::uint64_t>(v.services.size()); n > 64ULL) throw Refusal("bad_value",0);
+    if (const auto n = static_cast<std::uint64_t>(v.reason.size()); n > 256ULL) throw Refusal("bad_value",0);
+    for (std::size_t i = 0; i < v.reason.size(); ++i) { const auto c = static_cast<unsigned char>(v.reason[i]); if (c < 0x20 || c == 0x7f || (c == 0xc2 && i + 1 < v.reason.size() && static_cast<unsigned char>(v.reason[i + 1]) <= 0x9f)) throw Refusal("bad_value",0); }
+    if (const auto n = static_cast<std::uint64_t>(v.checks.size()); n > 64ULL) throw Refusal("bad_value",0);
+    if (wire_name(v.outcome).empty()) throw Refusal("bad_enum", 0);
+    out += '{';
+    out += '\n';
+    pad(out, depth + 1);
+    esc(out, "outcome");
+    out += ": ";
+    esc(out, std::string(wire_name(v.outcome)));
+    encoded_counter.check(out, 1048576);
+    out += ',';
+    out += '\n';
+    pad(out, depth + 1);
+    esc(out, "program");
+    out += ": ";
+    esc(out, v.program);
+    encoded_counter.check(out, 1048576);
+    out += ',';
+    out += '\n';
+    pad(out, depth + 1);
+    esc(out, "version");
+    out += ": ";
+    esc(out, v.version);
+    encoded_counter.check(out, 1048576);
+    out += ',';
+    out += '\n';
+    pad(out, depth + 1);
+    esc(out, "services");
+    out += ": ";
+    enc_list<EndpointServiceState>(out, v.services, depth + 1, enc_endpoint_service_state);
+    encoded_counter.check(out, 1048576);
+    if (v.refusal.has_value()) {
+        out += ',';
+        out += '\n';
+        pad(out, depth + 1);
+        esc(out, "refusal");
+        out += ": ";
+        enc_endpoint_refusal_detail(out, *v.refusal, depth + 1);
+    }
+    encoded_counter.check(out, 1048576);
+    out += ',';
+    out += '\n';
+    pad(out, depth + 1);
+    esc(out, "reason");
+    out += ": ";
+    esc(out, v.reason);
+    encoded_counter.check(out, 1048576);
+    if (!v.checks.empty()) {
+        out += ',';
+        out += '\n';
+        pad(out, depth + 1);
+        esc(out, "checks");
+        out += ": ";
+        enc_list<EndpointProducerCheck>(out, v.checks, depth + 1, enc_endpoint_producer_check);
+    }
+    encoded_counter.check(out, 1048576);
+    out += '\n';
+    pad(out, depth);
+    out += '}';
+    encoded_counter.check(out, 1048576);
+}
+
+inline void enc_endpoint_description_result(std::string& out, const EndpointDescriptionResult& v, int depth) {
+    out += '{';
+    out += '\n';
+    pad(out, depth + 1);
+    esc(out, "value");
+    out += ": ";
+    enc_endpoint_description(out, v.value, depth + 1);
+    out += '\n';
+    pad(out, depth);
+    out += '}';
+}
+
+inline void enc_oa_authorization_decide_for_at_least_revision_arguments(std::string& out, const OAAuthorizationDecideForAtLeastRevisionArguments& v, int depth) {
+    if (const auto n = static_cast<std::uint64_t>(v.action.size()); n < 1ULL || n > 128ULL) throw Refusal("bad_value",0);
+    for (std::size_t i = 0; i < v.action.size(); ++i) { const auto c = static_cast<unsigned char>(v.action[i]); if (c < 0x20 || c == 0x7f || (c == 0xc2 && i + 1 < v.action.size() && static_cast<unsigned char>(v.action[i + 1]) <= 0x9f)) throw Refusal("bad_value",0); }
+    if (const auto n = static_cast<std::uint64_t>(v.resource.size()); n < 1ULL || n > 1024ULL) throw Refusal("bad_value",0);
+    for (std::size_t i = 0; i < v.resource.size(); ++i) { const auto c = static_cast<unsigned char>(v.resource[i]); if (c < 0x20 || c == 0x7f || (c == 0xc2 && i + 1 < v.resource.size() && static_cast<unsigned char>(v.resource[i + 1]) <= 0x9f)) throw Refusal("bad_value",0); }
+    if (const auto n = static_cast<std::uint64_t>(v.at_least_revision.size()); n > 128ULL) throw Refusal("bad_value",0);
+    for (std::size_t i = 0; i < v.at_least_revision.size(); ++i) { const auto c = static_cast<unsigned char>(v.at_least_revision[i]); if (c < 0x20 || c == 0x7f || (c == 0xc2 && i + 1 < v.at_least_revision.size() && static_cast<unsigned char>(v.at_least_revision[i + 1]) <= 0x9f)) throw Refusal("bad_value",0); }
+    out += '{';
+    out += '\n';
+    pad(out, depth + 1);
+    esc(out, "subject");
+    out += ": ";
+    enc_subject(out, v.subject, depth + 1);
+    out += ',';
+    out += '\n';
+    pad(out, depth + 1);
+    esc(out, "action");
+    out += ": ";
+    esc(out, v.action);
+    out += ',';
+    out += '\n';
+    pad(out, depth + 1);
+    esc(out, "resource");
+    out += ": ";
+    esc(out, v.resource);
+    out += ',';
+    out += '\n';
+    pad(out, depth + 1);
+    esc(out, "at_least_revision");
+    out += ": ";
+    esc(out, v.at_least_revision);
+    out += '\n';
+    pad(out, depth);
+    out += '}';
+}
+
 inline void enc_oa_authorization_list_action_descriptions_arguments(std::string& out, const OAAuthorizationListActionDescriptionsArguments& v, int depth) {
     out += '{';
     out += '\n';
@@ -2915,6 +3806,27 @@ inline void enc_oa_authorization_decide_for_arguments(std::string& out, const OA
     esc(out, "resource");
     out += ": ";
     esc(out, v.resource);
+    out += '\n';
+    pad(out, depth);
+    out += '}';
+}
+
+inline void enc_oa_authorization_operator_observe_policy_arguments(std::string& out, const OAAuthorizationOperatorObservePolicyArguments& v, int depth) {
+    if (const auto n = static_cast<std::uint64_t>(v.after.size()); n > 256ULL) throw Refusal("bad_value",0);
+    for (std::size_t i = 0; i < v.after.size(); ++i) { const auto c = static_cast<unsigned char>(v.after[i]); if (c < 0x20 || c == 0x7f || (c == 0xc2 && i + 1 < v.after.size() && static_cast<unsigned char>(v.after[i + 1]) <= 0x9f)) throw Refusal("bad_value",0); }
+    if (v.wait_ms < 0LL || v.wait_ms > 30000LL) throw Refusal("bad_value",0);
+    out += '{';
+    out += '\n';
+    pad(out, depth + 1);
+    esc(out, "after");
+    out += ": ";
+    esc(out, v.after);
+    out += ',';
+    out += '\n';
+    pad(out, depth + 1);
+    esc(out, "wait_ms");
+    out += ": ";
+    num(out, v.wait_ms);
     out += '\n';
     pad(out, depth);
     out += '}';
@@ -3623,6 +4535,18 @@ inline void enc_oa_service_error(std::string& out, const OAServiceError& v, int 
     out += '}';
 }
 
+inline void enc_oa_authorization_decide_for_at_least_revision_result(std::string& out, const OAAuthorizationDecideForAtLeastRevisionResult& v, int depth) {
+    out += '{';
+    out += '\n';
+    pad(out, depth + 1);
+    esc(out, "value");
+    out += ": ";
+    enc_revision_decision(out, v.value, depth + 1);
+    out += '\n';
+    pad(out, depth);
+    out += '}';
+}
+
 inline void enc_oa_authorization_list_action_descriptions_result(std::string& out, const OAAuthorizationListActionDescriptionsResult& v, int depth) {
     out += '{';
     out += '\n';
@@ -3654,6 +4578,18 @@ inline void enc_oa_authorization_decide_for_result(std::string& out, const OAAut
     esc(out, "value");
     out += ": ";
     enc_decision(out, v.value, depth + 1);
+    out += '\n';
+    pad(out, depth);
+    out += '}';
+}
+
+inline void enc_oa_authorization_operator_observe_policy_result(std::string& out, const OAAuthorizationOperatorObservePolicyResult& v, int depth) {
+    out += '{';
+    out += '\n';
+    pad(out, depth + 1);
+    esc(out, "value");
+    out += ": ";
+    enc_policy_observation(out, v.value, depth + 1);
     out += '\n';
     pad(out, depth);
     out += '}';
@@ -4043,7 +4979,9 @@ struct Reader {
     std::string_view buf;
     std::size_t pos = 0;
     int depth = 0;
- int limit = kDepthLimit;
+    int limit = 0;
+    int ceiling = 0;
+    int depth_limit() const {int own=ceiling>0?ceiling:kDepthLimit;return limit>0&&limit<own?limit:own;}
 
     [[noreturn]] void refuse(const char* word) const { throw Refusal(word, pos); }
 
@@ -4058,7 +4996,7 @@ struct Reader {
     }
 
     void enter() {
-        if (++depth > limit) refuse("depth_exceeded");
+        if (++depth > depth_limit()) refuse("depth_exceeded");
     }
 
     std::string str() {
@@ -4291,6 +5229,34 @@ struct Reader {
     }
 };
 
+inline std::map<std::string, std::string> str_map(Reader& r) {
+    if (r.at() != '{') r.refuse("wrong_type");
+    r.enter();
+    ++r.pos;
+    std::map<std::string, std::string> out;
+    r.skip_ws();
+    if (r.at() != '}') {
+        for (;;) {
+            r.skip_ws();
+            if (r.at() != '"') r.refuse("malformed");
+            const std::string k = r.str();
+            if (out.count(k) != 0) r.refuse("duplicate_key");
+            r.skip_ws();
+            if (r.at() != ':') r.refuse("malformed");
+            ++r.pos;
+            r.skip_ws();
+            out[k] = r.str();
+            r.skip_ws();
+            if (r.at() != ',') break;
+            ++r.pos;
+        }
+    }
+    if (r.at() != '}') r.refuse("malformed");
+    ++r.pos;
+    --r.depth;
+    return out;
+}
+
 template <typename T>
 inline std::vector<T> decode_list(Reader& r, T (*elem)(Reader&)) {
     if (r.at() != '[') r.refuse("wrong_type");
@@ -4313,14 +5279,118 @@ inline std::vector<T> decode_list(Reader& r, T (*elem)(Reader&)) {
     return out;
 }
 
+inline bool digits(std::string_view s, std::size_t i, std::size_t n) {
+    if (s.size() < i + n) return false;
+    for (std::size_t k = 0; k < n; ++k) {
+        if (s[i + k] < '0' || s[i + k] > '9') return false;
+    }
+    return true;
+}
+
+inline bool date_part(std::string_view s) {
+    return s.size() >= 19 && digits(s, 0, 4) && s[4] == '-' && digits(s, 5, 2) && s[7] == '-' &&
+           digits(s, 8, 2) && digits(s, 11, 2) && s[13] == ':' && digits(s, 14, 2) && s[16] == ':' &&
+           digits(s, 17, 2);
+}
+
+// [DEF-G1] rfc3339-wide: what a reader accepts. Any fraction of one to nine
+// digits or none, either case of the separators, and a numeric offset.
+inline bool lexical_timestamp(std::string_view s) {
+    if (!date_part(s) || (s[10] != 'T' && s[10] != 't')) return false;
+    std::size_t i = 19;
+    if (i < s.size() && s[i] == '.') {
+        ++i;
+        const std::size_t start = i;
+        while (i < s.size() && s[i] >= '0' && s[i] <= '9') ++i;
+        if (i - start < 1 || i - start > 9) return false;
+    }
+    if (i >= s.size()) return false;
+    if (s[i] == 'Z' || s[i] == 'z') return i + 1 == s.size();
+    if (s[i] != '+' && s[i] != '-') return false;
+    return s.size() == i + 6 && digits(s, i + 1, 2) && s[i + 3] == ':' && digits(s, i + 4, 2);
+}
+
+// [DEF-G2] rfc3339-micros: what a writer emits. Exactly six fractional digits,
+// upper-case separators, UTC.
+inline bool micros_timestamp(std::string_view s) {
+    return s.size() == 27 && normalized_timestamp(s) == s;
+}
+
+inline std::string read_timestamp(Reader& r) {
+    const std::size_t at = r.pos;
+    const std::string s = r.str();
+    if (!wide_timestamp(s)) {
+        r.pos = at;
+        r.refuse("bad_timestamp");
+    }
+    return s;
+}
+
+inline int timestamp_number(std::string_view s, std::size_t at, std::size_t n) {
+    int v=0; for(std::size_t k=0;k<n;++k) v=v*10+(s[at+k]-'0'); return v;
+}
+inline int timestamp_days(int y, int m) {
+    if(m==2) return y%4==0 && (y%100!=0 || y%400==0) ? 29 : 28;
+    return m==4 || m==6 || m==9 || m==11 ? 30 : 31;
+}
+inline std::string normalized_timestamp(std::string_view s) {
+    if(!lexical_timestamp(s)) return {};
+    int y=timestamp_number(s,0,4), m=timestamp_number(s,5,2), d=timestamp_number(s,8,2);
+    int h=timestamp_number(s,11,2), minute=timestamp_number(s,14,2), sec=timestamp_number(s,17,2);
+    if(m<1 || m>12 || d<1 || d>timestamp_days(y,m) || h>23 || minute>59 || sec>59) return {};
+    std::size_t i=19; std::string_view fraction;
+    if(s[i]=='.') {const auto start=++i; while(s[i]>='0' && s[i]<='9') ++i; fraction=s.substr(start,i-start);}
+    int total=h*60+minute;
+    if(s[i]=='+' || s[i]=='-') {
+        int oh=timestamp_number(s,i+1,2), om=timestamp_number(s,i+4,2);
+        if(oh>23 || om>59) return {};
+        total += (s[i]=='+' ? -1 : 1)*(oh*60+om);
+    }
+    if(total<0) {total+=1440; --d;} else if(total>=1440) {total-=1440; ++d;}
+    if(d==0) {--m; if(m==0) {--y; m=12;} d=timestamp_days(y,m);}
+    if(d>timestamp_days(y,m)) {d=1; ++m; if(m==13) {++y; m=1;}}
+    if(y<0 || y>9999) return {};
+    std::string out="0000-00-00T00:00:00.000000Z";
+    auto put=[&](int at,int width,int value) {for(int k=width-1;k>=0;--k) {out[at+k]=char('0'+value%10); value/=10;}};
+    put(0,4,y); put(5,2,m); put(8,2,d); put(11,2,total/60); put(14,2,total%60); put(17,2,sec);
+    for(std::size_t k=0;k<6 && k<fraction.size();++k) out[20+k]=fraction[k];
+    return out;
+}
+inline bool wide_timestamp(std::string_view s) {return !normalized_timestamp(s).empty();}
+inline std::string write_timestamp(std::string_view s) {
+    auto result=normalized_timestamp(s);
+    if(result.empty()) throw Refusal("bad_timestamp",0);
+    return result;
+}
+
+inline void check_encoded_size(const Reader& r, std::size_t limit) {
+    auto depth = r.depth; bool quoted = false, escaped = false; std::size_t count = 0;
+    for (auto i = r.pos; i < r.buf.size(); ++i) {
+        if (i-r.pos >= 1048576) r.refuse("encoded_size");
+        const auto c = r.buf[i];
+        if (!quoted && (c == ' ' || c == '\t' || c == '\r' || c == '\n')) continue;
+        if (++count > limit) r.refuse("encoded_size");
+        if (quoted) {
+            if (escaped) escaped = false;
+            else if (c == '\\') escaped = true;
+            else if (c == '"') quoted = false;
+        } else if (c == '"') quoted = true;
+        else if (c == '{' || c == '[') { if (++depth > r.depth_limit()) r.refuse("depth_exceeded"); }
+        else if (c == '}' || c == ']') { if (--depth <= r.depth) return; }
+    }
+}
+
 inline Request decode_request(Reader& r);
 inline AppMetadata decode_app_metadata(Reader& r);
 inline HoldMetadata decode_hold_metadata(Reader& r);
 inline ResponseMetadata decode_response_metadata(Reader& r);
 inline Subject decode_subject(Reader& r);
 inline Decision decode_decision(Reader& r);
+inline RevisionDecision decode_revision_decision(Reader& r);
+inline RefusalDetail decode_refusal_detail(Reader& r);
 inline PolicyRule decode_policy_rule(Reader& r);
 inline PolicyPage decode_policy_page(Reader& r);
+inline PolicyObservation decode_policy_observation(Reader& r);
 inline PolicyEdit decode_policy_edit(Reader& r);
 inline RuleRecord decode_rule_record(Reader& r);
 inline RuleRead decode_rule_read(Reader& r);
@@ -4354,9 +5424,16 @@ inline SelectorRulePage decode_selector_rule_page(Reader& r);
 inline SelectorRuleRead decode_selector_rule_read(Reader& r);
 inline SelectorEdit decode_selector_edit(Reader& r);
 inline LegacyOperationRequest decode_legacy_operation_request(Reader& r);
+inline EndpointRefusalDetail decode_endpoint_refusal_detail(Reader& r);
+inline EndpointProducerCheck decode_endpoint_producer_check(Reader& r);
+inline EndpointServiceState decode_endpoint_service_state(Reader& r);
+inline EndpointDescription decode_endpoint_description(Reader& r);
+inline EndpointDescriptionResult decode_endpoint_description_result(Reader& r);
+inline OAAuthorizationDecideForAtLeastRevisionArguments decode_oa_authorization_decide_for_at_least_revision_arguments(Reader& r);
 inline OAAuthorizationListActionDescriptionsArguments decode_oa_authorization_list_action_descriptions_arguments(Reader& r);
 inline OAAuthorizationDecideArguments decode_oa_authorization_decide_arguments(Reader& r);
 inline OAAuthorizationDecideForArguments decode_oa_authorization_decide_for_arguments(Reader& r);
+inline OAAuthorizationOperatorObservePolicyArguments decode_oa_authorization_operator_observe_policy_arguments(Reader& r);
 inline OAAuthorizationOperatorRegisterDescribedActionArguments decode_oa_authorization_operator_register_described_action_arguments(Reader& r);
 inline OAAuthorizationOperatorApplyFirstUseAllowArguments decode_oa_authorization_operator_apply_first_use_allow_arguments(Reader& r);
 inline OAAuthorizationOperatorListPolicyArguments decode_oa_authorization_operator_list_policy_arguments(Reader& r);
@@ -4388,9 +5465,11 @@ inline OASelectorAuthorizationOperatorUndoPermissionEffectArguments decode_oa_se
 inline OAServiceFrame decode_oa_service_frame(Reader& r);
 inline OAServiceReply decode_oa_service_reply(Reader& r);
 inline OAServiceError decode_oa_service_error(Reader& r);
+inline OAAuthorizationDecideForAtLeastRevisionResult decode_oa_authorization_decide_for_at_least_revision_result(Reader& r);
 inline OAAuthorizationListActionDescriptionsResult decode_oa_authorization_list_action_descriptions_result(Reader& r);
 inline OAAuthorizationDecideResult decode_oa_authorization_decide_result(Reader& r);
 inline OAAuthorizationDecideForResult decode_oa_authorization_decide_for_result(Reader& r);
+inline OAAuthorizationOperatorObservePolicyResult decode_oa_authorization_operator_observe_policy_result(Reader& r);
 inline OAAuthorizationOperatorRegisterDescribedActionResult decode_oa_authorization_operator_register_described_action_result(Reader& r);
 inline OAAuthorizationOperatorApplyFirstUseAllowResult decode_oa_authorization_operator_apply_first_use_allow_result(Reader& r);
 inline OAAuthorizationOperatorListPolicyResult decode_oa_authorization_operator_list_policy_result(Reader& r);
@@ -4735,6 +5814,124 @@ inline Decision decode_decision(Reader& r) {
     return v;
 }
 
+inline RevisionDecision decode_revision_decision(Reader& r) {
+    if (r.at() != '{') r.refuse("wrong_type");
+    r.enter();
+    ++r.pos;
+    RevisionDecision v;
+    std::uint32_t seen = 0;
+    r.skip_ws();
+    if (r.at() != '}') {
+        for (;;) {
+            r.skip_ws();
+            if (r.at() != '"') r.refuse("malformed");
+            const std::string key = r.str();
+            r.skip_ws();
+            if (r.at() != ':') r.refuse("malformed");
+            ++r.pos;
+            r.skip_ws();
+            if (key == "decision") {
+                if (seen & 1u) r.refuse("duplicate_field");
+                seen |= 1u;
+                v.decision = decode_decision(r);
+            } else if (key == "observed_revision") {
+                if (seen & 2u) r.refuse("duplicate_field");
+                seen |= 2u;
+                v.observed_revision = r.str();
+            } else {
+                r.refuse("unknown_field");
+            }
+            r.skip_ws();
+            if (r.at() != ',') break;
+            ++r.pos;
+        }
+    }
+    if (r.at() != '}') r.refuse("malformed");
+    ++r.pos;
+    --r.depth;
+    if ((seen & 1u) != 1u) r.refuse("missing_field");
+    if (const auto n = static_cast<std::uint64_t>(v.observed_revision.size()); n > 128ULL) r.refuse("bad_value");
+    for (std::size_t i = 0; i < v.observed_revision.size(); ++i) { const auto c = static_cast<unsigned char>(v.observed_revision[i]); if (c < 0x20 || c == 0x7f || (c == 0xc2 && i + 1 < v.observed_revision.size() && static_cast<unsigned char>(v.observed_revision[i + 1]) <= 0x9f)) r.refuse("bad_value"); }
+    return v;
+}
+
+inline RefusalDetail decode_refusal_detail(Reader& r) {
+    if (r.at() != '{') r.refuse("wrong_type");
+    r.enter();
+    ++r.pos;
+    RefusalDetail v;
+    std::map<std::string, bool> unknown_keys;
+    std::optional<std::string> wire_decision;
+    std::optional<std::string> wire_ask;
+    std::uint32_t seen = 0;
+    r.skip_ws();
+    if (r.at() != '}') {
+        for (;;) {
+            r.skip_ws();
+            if (r.at() != '"') r.refuse("malformed");
+            const std::string key = r.str();
+            r.skip_ws();
+            if (r.at() != ':') r.refuse("malformed");
+            ++r.pos;
+            r.skip_ws();
+            if (key == "source") {
+                if (seen & 1u) r.refuse("duplicate_field");
+                seen |= 1u;
+                v.source = r.str();
+            } else if (key == "decision") {
+                if (seen & 2u) r.refuse("duplicate_field");
+                seen |= 2u;
+                wire_decision = r.str();
+            } else if (key == "ask") {
+                if (seen & 4u) r.refuse("duplicate_field");
+                seen |= 4u;
+                wire_ask = r.str();
+            } else if (key == "action") {
+                if (seen & 8u) r.refuse("duplicate_field");
+                seen |= 8u;
+                v.action = r.str();
+            } else if (key == "question") {
+                if (seen & 16u) r.refuse("duplicate_field");
+                seen |= 16u;
+                v.question = r.str();
+            } else if (key == "credential") {
+                if (seen & 32u) r.refuse("duplicate_field");
+                seen |= 32u;
+                v.credential = r.str();
+            } else if (key == "retry_after_ms") {
+                if (seen & 64u) r.refuse("duplicate_field");
+                seen |= 64u;
+                v.retry_after_ms = r.integer(INT64_MIN, INT64_MAX);
+            } else {
+                if (!unknown_keys.emplace(key, true).second) r.refuse("duplicate_key");
+                r.skip_value();
+            }
+            r.skip_ws();
+            if (r.at() != ',') break;
+            ++r.pos;
+        }
+    }
+    if (r.at() != '}') r.refuse("malformed");
+    ++r.pos;
+    --r.depth;
+    if ((seen & 7u) != 7u) r.refuse("missing_field");
+    if (const auto n = static_cast<std::uint64_t>(v.action.size()); n != 0 && (n < 1ULL || n > 128ULL)) r.refuse("bad_value");
+    if (const auto n = static_cast<std::uint64_t>(v.question.size()); n != 0 && (n < 1ULL || n > 128ULL)) r.refuse("bad_value");
+    if (const auto n = static_cast<std::uint64_t>(v.credential.size()); n != 0 && (n < 1ULL || n > 64ULL)) r.refuse("bad_value");
+    if (v.retry_after_ms < 0LL || v.retry_after_ms > 86400000LL) r.refuse("bad_value");
+    if (wire_decision) {
+        const auto parsed = parse_refusal_decision(*wire_decision);
+        if (!parsed) r.refuse("bad_enum");
+        v.decision = *parsed;
+    }
+    if (wire_ask) {
+        const auto parsed = parse_refusal_ask(*wire_ask);
+        if (!parsed) r.refuse("bad_enum");
+        v.ask = *parsed;
+    }
+    return v;
+}
+
 inline PolicyRule decode_policy_rule(Reader& r) {
     if (r.at() != '{') r.refuse("wrong_type");
     r.enter();
@@ -4839,6 +6036,69 @@ inline PolicyPage decode_policy_page(Reader& r) {
         const auto parsed = parse_policy_page_outcome(*wire_outcome);
         if (!parsed) r.refuse("bad_enum");
         v.outcome = *parsed;
+    }
+    return v;
+}
+
+inline PolicyObservation decode_policy_observation(Reader& r) {
+    if (r.at() != '{') r.refuse("wrong_type");
+    r.enter();
+    ++r.pos;
+    PolicyObservation v;
+    std::optional<std::string> wire_outcome;
+    std::optional<std::string> wire_mechanism;
+    std::uint32_t seen = 0;
+    r.skip_ws();
+    if (r.at() != '}') {
+        for (;;) {
+            r.skip_ws();
+            if (r.at() != '"') r.refuse("malformed");
+            const std::string key = r.str();
+            r.skip_ws();
+            if (r.at() != ':') r.refuse("malformed");
+            ++r.pos;
+            r.skip_ws();
+            if (key == "outcome") {
+                if (seen & 1u) r.refuse("duplicate_field");
+                seen |= 1u;
+                wire_outcome = r.str();
+            } else if (key == "next") {
+                if (seen & 2u) r.refuse("duplicate_field");
+                seen |= 2u;
+                v.next = r.str();
+            } else if (key == "revision") {
+                if (seen & 4u) r.refuse("duplicate_field");
+                seen |= 4u;
+                v.revision = r.str();
+            } else if (key == "mechanism") {
+                if (seen & 8u) r.refuse("duplicate_field");
+                seen |= 8u;
+                wire_mechanism = r.str();
+            } else {
+                r.refuse("unknown_field");
+            }
+            r.skip_ws();
+            if (r.at() != ',') break;
+            ++r.pos;
+        }
+    }
+    if (r.at() != '}') r.refuse("malformed");
+    ++r.pos;
+    --r.depth;
+    if ((seen & 15u) != 15u) r.refuse("missing_field");
+    if (const auto n = static_cast<std::uint64_t>(v.next.size()); n > 256ULL) r.refuse("bad_value");
+    for (std::size_t i = 0; i < v.next.size(); ++i) { const auto c = static_cast<unsigned char>(v.next[i]); if (c < 0x20 || c == 0x7f || (c == 0xc2 && i + 1 < v.next.size() && static_cast<unsigned char>(v.next[i + 1]) <= 0x9f)) r.refuse("bad_value"); }
+    if (const auto n = static_cast<std::uint64_t>(v.revision.size()); n > 128ULL) r.refuse("bad_value");
+    for (std::size_t i = 0; i < v.revision.size(); ++i) { const auto c = static_cast<unsigned char>(v.revision[i]); if (c < 0x20 || c == 0x7f || (c == 0xc2 && i + 1 < v.revision.size() && static_cast<unsigned char>(v.revision[i + 1]) <= 0x9f)) r.refuse("bad_value"); }
+    if (wire_outcome) {
+        const auto parsed = parse_policy_observation_outcome(*wire_outcome);
+        if (!parsed) r.refuse("bad_enum");
+        v.outcome = *parsed;
+    }
+    if (wire_mechanism) {
+        const auto parsed = parse_policy_observation_mechanism(*wire_mechanism);
+        if (!parsed) r.refuse("bad_enum");
+        v.mechanism = *parsed;
     }
     return v;
 }
@@ -6534,6 +7794,398 @@ inline LegacyOperationRequest decode_legacy_operation_request(Reader& r) {
     return v;
 }
 
+inline EndpointRefusalDetail decode_endpoint_refusal_detail(Reader& r) {
+const int previous_ceiling=r.ceiling;struct LimitRestore{Reader&r;int previous;~LimitRestore(){r.ceiling=previous;}} restore{r,previous_ceiling};r.ceiling=64;
+    if (r.at() != '{') r.refuse("wrong_type");
+    r.enter();
+    ++r.pos;
+    EndpointRefusalDetail v;
+    std::map<std::string, bool> unknown_keys;
+    std::optional<std::string> wire_decision;
+    std::optional<std::string> wire_ask;
+    std::uint32_t seen = 0;
+    r.skip_ws();
+    if (r.at() != '}') {
+        for (;;) {
+            r.skip_ws();
+            if (r.at() != '"') r.refuse("malformed");
+            const std::string key = r.str();
+            r.skip_ws();
+            if (r.at() != ':') r.refuse("malformed");
+            ++r.pos;
+            r.skip_ws();
+            if (key == "source") {
+                if (seen & 1u) r.refuse("duplicate_field");
+                seen |= 1u;
+                v.source = r.str();
+            } else if (key == "decision") {
+                if (seen & 2u) r.refuse("duplicate_field");
+                seen |= 2u;
+                wire_decision = r.str();
+            } else if (key == "ask") {
+                if (seen & 4u) r.refuse("duplicate_field");
+                seen |= 4u;
+                wire_ask = r.str();
+            } else if (key == "action") {
+                if (seen & 8u) r.refuse("duplicate_field");
+                seen |= 8u;
+                v.action = r.str();
+            } else if (key == "question") {
+                if (seen & 16u) r.refuse("duplicate_field");
+                seen |= 16u;
+                v.question = r.str();
+            } else if (key == "credential") {
+                if (seen & 32u) r.refuse("duplicate_field");
+                seen |= 32u;
+                v.credential = r.str();
+            } else if (key == "retry_after_ms") {
+                if (seen & 64u) r.refuse("duplicate_field");
+                seen |= 64u;
+                v.retry_after_ms = r.integer(INT64_MIN, INT64_MAX);
+            } else {
+                if (!unknown_keys.emplace(key, true).second) r.refuse("duplicate_key");
+                r.skip_value();
+            }
+            r.skip_ws();
+            if (r.at() != ',') break;
+            ++r.pos;
+        }
+    }
+    if (r.at() != '}') r.refuse("malformed");
+    ++r.pos;
+    --r.depth;
+    if ((seen & 7u) != 7u) r.refuse("missing_field");
+    if (const auto n = static_cast<std::uint64_t>(v.action.size()); n != 0 && (n < 1ULL || n > 128ULL)) r.refuse("bad_value");
+    if (const auto n = static_cast<std::uint64_t>(v.question.size()); n != 0 && (n < 1ULL || n > 128ULL)) r.refuse("bad_value");
+    if (const auto n = static_cast<std::uint64_t>(v.credential.size()); n != 0 && (n < 1ULL || n > 64ULL)) r.refuse("bad_value");
+    if (v.retry_after_ms < 0LL || v.retry_after_ms > 86400000LL) r.refuse("bad_value");
+    if (wire_decision) {
+        const auto parsed = parse_endpoint_refusal_decision(*wire_decision);
+        if (!parsed) r.refuse("bad_enum");
+        v.decision = *parsed;
+    }
+    if (wire_ask) {
+        const auto parsed = parse_endpoint_refusal_ask(*wire_ask);
+        if (!parsed) r.refuse("bad_enum");
+        v.ask = *parsed;
+    }
+    return v;
+}
+
+inline EndpointProducerCheck decode_endpoint_producer_check(Reader& r) {
+const int previous_ceiling=r.ceiling;struct LimitRestore{Reader&r;int previous;~LimitRestore(){r.ceiling=previous;}} restore{r,previous_ceiling};r.ceiling=1000;
+    if (r.at() != '{') r.refuse("wrong_type");
+    r.enter();
+    ++r.pos;
+    EndpointProducerCheck v;
+    std::optional<std::string> wire_state;
+    std::uint32_t seen = 0;
+    r.skip_ws();
+    if (r.at() != '}') {
+        for (;;) {
+            r.skip_ws();
+            if (r.at() != '"') r.refuse("malformed");
+            const std::string key = r.str();
+            r.skip_ws();
+            if (r.at() != ':') r.refuse("malformed");
+            ++r.pos;
+            r.skip_ws();
+            if (key == "kind") {
+                if (seen & 1u) r.refuse("duplicate_field");
+                seen |= 1u;
+                v.kind = r.str();
+            } else if (key == "copy") {
+                if (seen & 2u) r.refuse("duplicate_field");
+                seen |= 2u;
+                v.copy = r.str();
+            } else if (key == "state") {
+                if (seen & 4u) r.refuse("duplicate_field");
+                seen |= 4u;
+                wire_state = r.str();
+            } else if (key == "reason") {
+                if (seen & 8u) r.refuse("duplicate_field");
+                seen |= 8u;
+                v.reason = r.str();
+            } else if (key == "checked") {
+                if (seen & 16u) r.refuse("duplicate_field");
+                seen |= 16u;
+                v.checked = read_timestamp(r);
+            } else {
+                r.refuse("unknown_field");
+            }
+            r.skip_ws();
+            if (r.at() != ',') break;
+            ++r.pos;
+        }
+    }
+    if (r.at() != '}') r.refuse("malformed");
+    ++r.pos;
+    --r.depth;
+    if ((seen & 31u) != 31u) r.refuse("missing_field");
+    if (const auto n = static_cast<std::uint64_t>(v.kind.size()); n < 1ULL || n > 128ULL) r.refuse("bad_value");
+    for (std::size_t i = 0; i < v.kind.size(); ++i) { const auto c = static_cast<unsigned char>(v.kind[i]); if (c < 0x20 || c == 0x7f || (c == 0xc2 && i + 1 < v.kind.size() && static_cast<unsigned char>(v.kind[i + 1]) <= 0x9f)) r.refuse("bad_value"); }
+    if (const auto n = static_cast<std::uint64_t>(v.copy.size()); n > 256ULL) r.refuse("bad_value");
+    for (std::size_t i = 0; i < v.copy.size(); ++i) { const auto c = static_cast<unsigned char>(v.copy[i]); if (c < 0x20 || c == 0x7f || (c == 0xc2 && i + 1 < v.copy.size() && static_cast<unsigned char>(v.copy[i + 1]) <= 0x9f)) r.refuse("bad_value"); }
+    if (const auto n = static_cast<std::uint64_t>(v.reason.size()); n > 256ULL) r.refuse("bad_value");
+    for (std::size_t i = 0; i < v.reason.size(); ++i) { const auto c = static_cast<unsigned char>(v.reason[i]); if (c < 0x20 || c == 0x7f || (c == 0xc2 && i + 1 < v.reason.size() && static_cast<unsigned char>(v.reason[i + 1]) <= 0x9f)) r.refuse("bad_value"); }
+    if (wire_state) {
+        const auto parsed = parse_endpoint_producer_check_state(*wire_state);
+        if (!parsed) r.refuse("bad_enum");
+        v.state = *parsed;
+    }
+    return v;
+}
+
+inline EndpointServiceState decode_endpoint_service_state(Reader& r) {
+const int previous_ceiling=r.ceiling;struct LimitRestore{Reader&r;int previous;~LimitRestore(){r.ceiling=previous;}} restore{r,previous_ceiling};r.ceiling=1000;
+    if (r.at() != '{') r.refuse("wrong_type");
+    r.enter();
+    ++r.pos;
+    EndpointServiceState v;
+    std::map<std::string, bool> unknown_keys;
+    std::optional<std::string> wire_readiness;
+    std::uint32_t seen = 0;
+    r.skip_ws();
+    if (r.at() != '}') {
+        for (;;) {
+            r.skip_ws();
+            if (r.at() != '"') r.refuse("malformed");
+            const std::string key = r.str();
+            r.skip_ws();
+            if (r.at() != ':') r.refuse("malformed");
+            ++r.pos;
+            r.skip_ws();
+            if (key == "service") {
+                if (seen & 1u) r.refuse("duplicate_field");
+                seen |= 1u;
+                v.service = r.str();
+            } else if (key == "readiness") {
+                if (seen & 2u) r.refuse("duplicate_field");
+                seen |= 2u;
+                wire_readiness = r.str();
+            } else if (key == "reason") {
+                if (seen & 4u) r.refuse("duplicate_field");
+                seen |= 4u;
+                v.reason = r.str();
+            } else if (key == "guarantees") {
+                if (seen & 8u) r.refuse("duplicate_field");
+                seen |= 8u;
+                v.guarantees = r.str_list();
+            } else if (key == "capabilities") {
+                if (seen & 16u) r.refuse("duplicate_field");
+                seen |= 16u;
+                v.capabilities = str_map(r);
+            } else if (key == "definition_hash") {
+                if (seen & 32u) r.refuse("duplicate_field");
+                seen |= 32u;
+                v.definition_hash = r.str();
+            } else {
+                if (!unknown_keys.emplace(key, true).second) r.refuse("duplicate_key");
+                r.skip_value();
+            }
+            r.skip_ws();
+            if (r.at() != ',') break;
+            ++r.pos;
+        }
+    }
+    if (r.at() != '}') r.refuse("malformed");
+    ++r.pos;
+    --r.depth;
+    if ((seen & 63u) != 63u) r.refuse("missing_field");
+    if (const auto n = static_cast<std::uint64_t>(v.service.size()); n < 1ULL || n > 128ULL) r.refuse("bad_value");
+    for (std::size_t i = 0; i < v.service.size(); ++i) { const auto c = static_cast<unsigned char>(v.service[i]); if (c < 0x20 || c == 0x7f || (c == 0xc2 && i + 1 < v.service.size() && static_cast<unsigned char>(v.service[i + 1]) <= 0x9f)) r.refuse("bad_value"); }
+    if (const auto n = static_cast<std::uint64_t>(v.reason.size()); n > 256ULL) r.refuse("bad_value");
+    for (std::size_t i = 0; i < v.reason.size(); ++i) { const auto c = static_cast<unsigned char>(v.reason[i]); if (c < 0x20 || c == 0x7f || (c == 0xc2 && i + 1 < v.reason.size() && static_cast<unsigned char>(v.reason[i + 1]) <= 0x9f)) r.refuse("bad_value"); }
+    if (const auto n = static_cast<std::uint64_t>(v.guarantees.size()); n > 64ULL) r.refuse("bad_value");
+    for (const auto& oaElement : v.guarantees) {
+    if (const auto n = static_cast<std::uint64_t>(oaElement.size()); n < 1ULL || n > 128ULL) r.refuse("bad_value");
+    }
+    for (const auto& oaElement : v.guarantees) {
+    for (std::size_t i = 0; i < oaElement.size(); ++i) { const auto c = static_cast<unsigned char>(oaElement[i]); if (c < 0x20 || c == 0x7f || (c == 0xc2 && i + 1 < oaElement.size() && static_cast<unsigned char>(oaElement[i + 1]) <= 0x9f)) r.refuse("bad_value"); }
+    }
+    if (const auto n = static_cast<std::uint64_t>(v.capabilities.size()); n > 32ULL) r.refuse("bad_value");
+    for (const auto& oaEntry : v.capabilities) { const auto& oaElement = oaEntry.first;
+    if (const auto n = static_cast<std::uint64_t>(oaElement.size()); n < 1ULL || n > 64ULL) r.refuse("bad_value");
+    }
+    for (const auto& oaEntry : v.capabilities) { const auto& oaElement = oaEntry.first;
+    for (std::size_t i = 0; i < oaElement.size(); ++i) { const auto c = static_cast<unsigned char>(oaElement[i]); if (c < 0x20 || c == 0x7f || (c == 0xc2 && i + 1 < oaElement.size() && static_cast<unsigned char>(oaElement[i + 1]) <= 0x9f)) r.refuse("bad_value"); }
+    }
+    for (const auto& oaEntry : v.capabilities) { const auto& oaElement = oaEntry.second;
+    if (const auto n = static_cast<std::uint64_t>(oaElement.size()); n > 256ULL) r.refuse("bad_value");
+    }
+    if (const auto n = static_cast<std::uint64_t>(v.definition_hash.size()); n < 71ULL || n > 71ULL) r.refuse("bad_value");
+    for (std::size_t i = 0; i < v.definition_hash.size(); ++i) { const auto c = static_cast<unsigned char>(v.definition_hash[i]); if (c < 0x20 || c == 0x7f || (c == 0xc2 && i + 1 < v.definition_hash.size() && static_cast<unsigned char>(v.definition_hash[i + 1]) <= 0x9f)) r.refuse("bad_value"); }
+    if (wire_readiness) {
+        const auto parsed = parse_endpoint_service_readiness(*wire_readiness);
+        if (!parsed) r.refuse("bad_enum");
+        v.readiness = *parsed;
+    }
+    return v;
+}
+
+inline EndpointDescription decode_endpoint_description(Reader& r) {
+const int previous_ceiling=r.ceiling;struct LimitRestore{Reader&r;int previous;~LimitRestore(){r.ceiling=previous;}} restore{r,previous_ceiling};r.ceiling=1000;
+    if (r.at() != '{') r.refuse("wrong_type");
+    check_encoded_size(r, 1048576);
+    r.enter();
+    ++r.pos;
+    EndpointDescription v;
+    std::map<std::string, bool> unknown_keys;
+    std::optional<std::string> wire_outcome;
+    std::uint32_t seen = 0;
+    r.skip_ws();
+    if (r.at() != '}') {
+        for (;;) {
+            r.skip_ws();
+            if (r.at() != '"') r.refuse("malformed");
+            const std::string key = r.str();
+            r.skip_ws();
+            if (r.at() != ':') r.refuse("malformed");
+            ++r.pos;
+            r.skip_ws();
+            if (key == "outcome") {
+                if (seen & 1u) r.refuse("duplicate_field");
+                seen |= 1u;
+                wire_outcome = r.str();
+            } else if (key == "program") {
+                if (seen & 2u) r.refuse("duplicate_field");
+                seen |= 2u;
+                v.program = r.str();
+            } else if (key == "version") {
+                if (seen & 4u) r.refuse("duplicate_field");
+                seen |= 4u;
+                v.version = r.str();
+            } else if (key == "services") {
+                if (seen & 8u) r.refuse("duplicate_field");
+                seen |= 8u;
+                v.services = decode_list<EndpointServiceState>(r, decode_endpoint_service_state);
+            } else if (key == "refusal") {
+                if (seen & 16u) r.refuse("duplicate_field");
+                seen |= 16u;
+                v.refusal = decode_endpoint_refusal_detail(r);
+            } else if (key == "reason") {
+                if (seen & 32u) r.refuse("duplicate_field");
+                seen |= 32u;
+                v.reason = r.str();
+            } else if (key == "checks") {
+                if (seen & 64u) r.refuse("duplicate_field");
+                seen |= 64u;
+                v.checks = decode_list<EndpointProducerCheck>(r, decode_endpoint_producer_check);
+            } else {
+                if (!unknown_keys.emplace(key, true).second) r.refuse("duplicate_key");
+                r.skip_value();
+            }
+            r.skip_ws();
+            if (r.at() != ',') break;
+            ++r.pos;
+        }
+    }
+    if (r.at() != '}') r.refuse("malformed");
+    ++r.pos;
+    --r.depth;
+    if ((seen & 47u) != 47u) r.refuse("missing_field");
+    if (const auto n = static_cast<std::uint64_t>(v.program.size()); n > 256ULL) r.refuse("bad_value");
+    if (const auto n = static_cast<std::uint64_t>(v.version.size()); n > 256ULL) r.refuse("bad_value");
+    if (const auto n = static_cast<std::uint64_t>(v.services.size()); n > 64ULL) r.refuse("bad_value");
+    if (const auto n = static_cast<std::uint64_t>(v.reason.size()); n > 256ULL) r.refuse("bad_value");
+    for (std::size_t i = 0; i < v.reason.size(); ++i) { const auto c = static_cast<unsigned char>(v.reason[i]); if (c < 0x20 || c == 0x7f || (c == 0xc2 && i + 1 < v.reason.size() && static_cast<unsigned char>(v.reason[i + 1]) <= 0x9f)) r.refuse("bad_value"); }
+    if (const auto n = static_cast<std::uint64_t>(v.checks.size()); n > 64ULL) r.refuse("bad_value");
+    if (wire_outcome) {
+        const auto parsed = parse_endpoint_description_outcome(*wire_outcome);
+        if (!parsed) r.refuse("bad_enum");
+        v.outcome = *parsed;
+    }
+    return v;
+}
+
+inline EndpointDescriptionResult decode_endpoint_description_result(Reader& r) {
+    if (r.at() != '{') r.refuse("wrong_type");
+    r.enter();
+    ++r.pos;
+    EndpointDescriptionResult v;
+    std::uint32_t seen = 0;
+    r.skip_ws();
+    if (r.at() != '}') {
+        for (;;) {
+            r.skip_ws();
+            if (r.at() != '"') r.refuse("malformed");
+            const std::string key = r.str();
+            r.skip_ws();
+            if (r.at() != ':') r.refuse("malformed");
+            ++r.pos;
+            r.skip_ws();
+            if (key == "value") {
+                if (seen & 1u) r.refuse("duplicate_field");
+                seen |= 1u;
+                v.value = decode_endpoint_description(r);
+            } else {
+                r.refuse("unknown_field");
+            }
+            r.skip_ws();
+            if (r.at() != ',') break;
+            ++r.pos;
+        }
+    }
+    if (r.at() != '}') r.refuse("malformed");
+    ++r.pos;
+    --r.depth;
+    if ((seen & 1u) != 1u) r.refuse("missing_field");
+    return v;
+}
+
+inline OAAuthorizationDecideForAtLeastRevisionArguments decode_oa_authorization_decide_for_at_least_revision_arguments(Reader& r) {
+    if (r.at() != '{') r.refuse("wrong_type");
+    r.enter();
+    ++r.pos;
+    OAAuthorizationDecideForAtLeastRevisionArguments v;
+    std::uint32_t seen = 0;
+    r.skip_ws();
+    if (r.at() != '}') {
+        for (;;) {
+            r.skip_ws();
+            if (r.at() != '"') r.refuse("malformed");
+            const std::string key = r.str();
+            r.skip_ws();
+            if (r.at() != ':') r.refuse("malformed");
+            ++r.pos;
+            r.skip_ws();
+            if (key == "subject") {
+                if (seen & 1u) r.refuse("duplicate_field");
+                seen |= 1u;
+                v.subject = decode_subject(r);
+            } else if (key == "action") {
+                if (seen & 2u) r.refuse("duplicate_field");
+                seen |= 2u;
+                v.action = r.str();
+            } else if (key == "resource") {
+                if (seen & 4u) r.refuse("duplicate_field");
+                seen |= 4u;
+                v.resource = r.str();
+            } else if (key == "at_least_revision") {
+                if (seen & 8u) r.refuse("duplicate_field");
+                seen |= 8u;
+                v.at_least_revision = r.str();
+            } else {
+                r.refuse("unknown_field");
+            }
+            r.skip_ws();
+            if (r.at() != ',') break;
+            ++r.pos;
+        }
+    }
+    if (r.at() != '}') r.refuse("malformed");
+    ++r.pos;
+    --r.depth;
+    if ((seen & 15u) != 15u) r.refuse("missing_field");
+    if (const auto n = static_cast<std::uint64_t>(v.action.size()); n < 1ULL || n > 128ULL) r.refuse("bad_value");
+    for (std::size_t i = 0; i < v.action.size(); ++i) { const auto c = static_cast<unsigned char>(v.action[i]); if (c < 0x20 || c == 0x7f || (c == 0xc2 && i + 1 < v.action.size() && static_cast<unsigned char>(v.action[i + 1]) <= 0x9f)) r.refuse("bad_value"); }
+    if (const auto n = static_cast<std::uint64_t>(v.resource.size()); n < 1ULL || n > 1024ULL) r.refuse("bad_value");
+    for (std::size_t i = 0; i < v.resource.size(); ++i) { const auto c = static_cast<unsigned char>(v.resource[i]); if (c < 0x20 || c == 0x7f || (c == 0xc2 && i + 1 < v.resource.size() && static_cast<unsigned char>(v.resource[i + 1]) <= 0x9f)) r.refuse("bad_value"); }
+    if (const auto n = static_cast<std::uint64_t>(v.at_least_revision.size()); n > 128ULL) r.refuse("bad_value");
+    for (std::size_t i = 0; i < v.at_least_revision.size(); ++i) { const auto c = static_cast<unsigned char>(v.at_least_revision[i]); if (c < 0x20 || c == 0x7f || (c == 0xc2 && i + 1 < v.at_least_revision.size() && static_cast<unsigned char>(v.at_least_revision[i + 1]) <= 0x9f)) r.refuse("bad_value"); }
+    return v;
+}
+
 inline OAAuthorizationListActionDescriptionsArguments decode_oa_authorization_list_action_descriptions_arguments(Reader& r) {
     if (r.at() != '{') r.refuse("wrong_type");
     r.enter();
@@ -6652,6 +8304,48 @@ inline OAAuthorizationDecideForArguments decode_oa_authorization_decide_for_argu
     ++r.pos;
     --r.depth;
     if ((seen & 7u) != 7u) r.refuse("missing_field");
+    return v;
+}
+
+inline OAAuthorizationOperatorObservePolicyArguments decode_oa_authorization_operator_observe_policy_arguments(Reader& r) {
+    if (r.at() != '{') r.refuse("wrong_type");
+    r.enter();
+    ++r.pos;
+    OAAuthorizationOperatorObservePolicyArguments v;
+    std::uint32_t seen = 0;
+    r.skip_ws();
+    if (r.at() != '}') {
+        for (;;) {
+            r.skip_ws();
+            if (r.at() != '"') r.refuse("malformed");
+            const std::string key = r.str();
+            r.skip_ws();
+            if (r.at() != ':') r.refuse("malformed");
+            ++r.pos;
+            r.skip_ws();
+            if (key == "after") {
+                if (seen & 1u) r.refuse("duplicate_field");
+                seen |= 1u;
+                v.after = r.str();
+            } else if (key == "wait_ms") {
+                if (seen & 2u) r.refuse("duplicate_field");
+                seen |= 2u;
+                v.wait_ms = r.integer(INT64_MIN, INT64_MAX);
+            } else {
+                r.refuse("unknown_field");
+            }
+            r.skip_ws();
+            if (r.at() != ',') break;
+            ++r.pos;
+        }
+    }
+    if (r.at() != '}') r.refuse("malformed");
+    ++r.pos;
+    --r.depth;
+    if ((seen & 3u) != 3u) r.refuse("missing_field");
+    if (const auto n = static_cast<std::uint64_t>(v.after.size()); n > 256ULL) r.refuse("bad_value");
+    for (std::size_t i = 0; i < v.after.size(); ++i) { const auto c = static_cast<unsigned char>(v.after[i]); if (c < 0x20 || c == 0x7f || (c == 0xc2 && i + 1 < v.after.size() && static_cast<unsigned char>(v.after[i + 1]) <= 0x9f)) r.refuse("bad_value"); }
+    if (v.wait_ms < 0LL || v.wait_ms > 30000LL) r.refuse("bad_value");
     return v;
 }
 
@@ -7959,6 +9653,41 @@ inline OAServiceError decode_oa_service_error(Reader& r) {
     return v;
 }
 
+inline OAAuthorizationDecideForAtLeastRevisionResult decode_oa_authorization_decide_for_at_least_revision_result(Reader& r) {
+    if (r.at() != '{') r.refuse("wrong_type");
+    r.enter();
+    ++r.pos;
+    OAAuthorizationDecideForAtLeastRevisionResult v;
+    std::uint32_t seen = 0;
+    r.skip_ws();
+    if (r.at() != '}') {
+        for (;;) {
+            r.skip_ws();
+            if (r.at() != '"') r.refuse("malformed");
+            const std::string key = r.str();
+            r.skip_ws();
+            if (r.at() != ':') r.refuse("malformed");
+            ++r.pos;
+            r.skip_ws();
+            if (key == "value") {
+                if (seen & 1u) r.refuse("duplicate_field");
+                seen |= 1u;
+                v.value = decode_revision_decision(r);
+            } else {
+                r.refuse("unknown_field");
+            }
+            r.skip_ws();
+            if (r.at() != ',') break;
+            ++r.pos;
+        }
+    }
+    if (r.at() != '}') r.refuse("malformed");
+    ++r.pos;
+    --r.depth;
+    if ((seen & 1u) != 1u) r.refuse("missing_field");
+    return v;
+}
+
 inline OAAuthorizationListActionDescriptionsResult decode_oa_authorization_list_action_descriptions_result(Reader& r) {
     if (r.at() != '{') r.refuse("wrong_type");
     r.enter();
@@ -8049,6 +9778,41 @@ inline OAAuthorizationDecideForResult decode_oa_authorization_decide_for_result(
                 if (seen & 1u) r.refuse("duplicate_field");
                 seen |= 1u;
                 v.value = decode_decision(r);
+            } else {
+                r.refuse("unknown_field");
+            }
+            r.skip_ws();
+            if (r.at() != ',') break;
+            ++r.pos;
+        }
+    }
+    if (r.at() != '}') r.refuse("malformed");
+    ++r.pos;
+    --r.depth;
+    if ((seen & 1u) != 1u) r.refuse("missing_field");
+    return v;
+}
+
+inline OAAuthorizationOperatorObservePolicyResult decode_oa_authorization_operator_observe_policy_result(Reader& r) {
+    if (r.at() != '{') r.refuse("wrong_type");
+    r.enter();
+    ++r.pos;
+    OAAuthorizationOperatorObservePolicyResult v;
+    std::uint32_t seen = 0;
+    r.skip_ws();
+    if (r.at() != '}') {
+        for (;;) {
+            r.skip_ws();
+            if (r.at() != '"') r.refuse("malformed");
+            const std::string key = r.str();
+            r.skip_ws();
+            if (r.at() != ':') r.refuse("malformed");
+            ++r.pos;
+            r.skip_ws();
+            if (key == "value") {
+                if (seen & 1u) r.refuse("duplicate_field");
+                seen |= 1u;
+                v.value = decode_policy_observation(r);
             } else {
                 r.refuse("unknown_field");
             }
@@ -9084,9 +10848,749 @@ inline Request decode(std::string_view data) {
     return v;
 }
 
+// to_json writes one record as JSON, laid out as this definition's documents
+// are and without the document terminator; from_json<T> reads one and throws
+// Refusal for what the record's reader refuses.
+template <class T> T from_json(std::string_view data);
+
+inline std::string to_json(const Request& v) {
+    std::string out;
+    detail::enc_request(out, v, 0);
+    return out;
+}
+
+template <> inline Request from_json<Request>(std::string_view data) {
+    detail::Reader r{data};
+    r.skip_ws();
+    Request v = detail::decode_request(r);
+    r.skip_ws();
+    if (r.pos < r.buf.size()) r.refuse("trailing_bytes");
+    return v;
+}
+
+inline std::string to_json(const AppMetadata& v) {
+    std::string out;
+    detail::enc_app_metadata(out, v, 0);
+    return out;
+}
+
+template <> inline AppMetadata from_json<AppMetadata>(std::string_view data) {
+    detail::Reader r{data};
+    r.skip_ws();
+    AppMetadata v = detail::decode_app_metadata(r);
+    r.skip_ws();
+    if (r.pos < r.buf.size()) r.refuse("trailing_bytes");
+    return v;
+}
+
+inline std::string to_json(const HoldMetadata& v) {
+    std::string out;
+    detail::enc_hold_metadata(out, v, 0);
+    return out;
+}
+
+template <> inline HoldMetadata from_json<HoldMetadata>(std::string_view data) {
+    detail::Reader r{data};
+    r.skip_ws();
+    HoldMetadata v = detail::decode_hold_metadata(r);
+    r.skip_ws();
+    if (r.pos < r.buf.size()) r.refuse("trailing_bytes");
+    return v;
+}
+
+inline std::string to_json(const ResponseMetadata& v) {
+    std::string out;
+    detail::enc_response_metadata(out, v, 0);
+    return out;
+}
+
+template <> inline ResponseMetadata from_json<ResponseMetadata>(std::string_view data) {
+    detail::Reader r{data};
+    r.skip_ws();
+    ResponseMetadata v = detail::decode_response_metadata(r);
+    r.skip_ws();
+    if (r.pos < r.buf.size()) r.refuse("trailing_bytes");
+    return v;
+}
+
+inline std::string to_json(const Subject& v) {
+    std::string out;
+    detail::enc_subject(out, v, 0);
+    return out;
+}
+
+template <> inline Subject from_json<Subject>(std::string_view data) {
+    detail::Reader r{data};
+    r.skip_ws();
+    Subject v = detail::decode_subject(r);
+    r.skip_ws();
+    if (r.pos < r.buf.size()) r.refuse("trailing_bytes");
+    return v;
+}
+
+inline std::string to_json(const Decision& v) {
+    std::string out;
+    detail::enc_decision(out, v, 0);
+    return out;
+}
+
+template <> inline Decision from_json<Decision>(std::string_view data) {
+    detail::Reader r{data};
+    r.skip_ws();
+    Decision v = detail::decode_decision(r);
+    r.skip_ws();
+    if (r.pos < r.buf.size()) r.refuse("trailing_bytes");
+    return v;
+}
+
+inline std::string to_json(const RevisionDecision& v) {
+    std::string out;
+    detail::enc_revision_decision(out, v, 0);
+    return out;
+}
+
+template <> inline RevisionDecision from_json<RevisionDecision>(std::string_view data) {
+    detail::Reader r{data};
+    r.skip_ws();
+    RevisionDecision v = detail::decode_revision_decision(r);
+    r.skip_ws();
+    if (r.pos < r.buf.size()) r.refuse("trailing_bytes");
+    return v;
+}
+
+inline std::string to_json(const RefusalDetail& v) {
+    std::string out;
+    detail::enc_refusal_detail(out, v, 0);
+    return out;
+}
+
+template <> inline RefusalDetail from_json<RefusalDetail>(std::string_view data) {
+    detail::Reader r{data};
+    r.skip_ws();
+    RefusalDetail v = detail::decode_refusal_detail(r);
+    r.skip_ws();
+    if (r.pos < r.buf.size()) r.refuse("trailing_bytes");
+    return v;
+}
+
+inline std::string to_json(const PolicyRule& v) {
+    std::string out;
+    detail::enc_policy_rule(out, v, 0);
+    return out;
+}
+
+template <> inline PolicyRule from_json<PolicyRule>(std::string_view data) {
+    detail::Reader r{data};
+    r.skip_ws();
+    PolicyRule v = detail::decode_policy_rule(r);
+    r.skip_ws();
+    if (r.pos < r.buf.size()) r.refuse("trailing_bytes");
+    return v;
+}
+
+inline std::string to_json(const PolicyPage& v) {
+    std::string out;
+    detail::enc_policy_page(out, v, 0);
+    return out;
+}
+
+template <> inline PolicyPage from_json<PolicyPage>(std::string_view data) {
+    detail::Reader r{data};
+    r.skip_ws();
+    PolicyPage v = detail::decode_policy_page(r);
+    r.skip_ws();
+    if (r.pos < r.buf.size()) r.refuse("trailing_bytes");
+    return v;
+}
+
+inline std::string to_json(const PolicyObservation& v) {
+    std::string out;
+    detail::enc_policy_observation(out, v, 0);
+    return out;
+}
+
+template <> inline PolicyObservation from_json<PolicyObservation>(std::string_view data) {
+    detail::Reader r{data};
+    r.skip_ws();
+    PolicyObservation v = detail::decode_policy_observation(r);
+    r.skip_ws();
+    if (r.pos < r.buf.size()) r.refuse("trailing_bytes");
+    return v;
+}
+
+inline std::string to_json(const PolicyEdit& v) {
+    std::string out;
+    detail::enc_policy_edit(out, v, 0);
+    return out;
+}
+
+template <> inline PolicyEdit from_json<PolicyEdit>(std::string_view data) {
+    detail::Reader r{data};
+    r.skip_ws();
+    PolicyEdit v = detail::decode_policy_edit(r);
+    r.skip_ws();
+    if (r.pos < r.buf.size()) r.refuse("trailing_bytes");
+    return v;
+}
+
+inline std::string to_json(const RuleRecord& v) {
+    std::string out;
+    detail::enc_rule_record(out, v, 0);
+    return out;
+}
+
+template <> inline RuleRecord from_json<RuleRecord>(std::string_view data) {
+    detail::Reader r{data};
+    r.skip_ws();
+    RuleRecord v = detail::decode_rule_record(r);
+    r.skip_ws();
+    if (r.pos < r.buf.size()) r.refuse("trailing_bytes");
+    return v;
+}
+
+inline std::string to_json(const RuleRead& v) {
+    std::string out;
+    detail::enc_rule_read(out, v, 0);
+    return out;
+}
+
+template <> inline RuleRead from_json<RuleRead>(std::string_view data) {
+    detail::Reader r{data};
+    r.skip_ws();
+    RuleRead v = detail::decode_rule_read(r);
+    r.skip_ws();
+    if (r.pos < r.buf.size()) r.refuse("trailing_bytes");
+    return v;
+}
+
+inline std::string to_json(const CatalogEntry& v) {
+    std::string out;
+    detail::enc_catalog_entry(out, v, 0);
+    return out;
+}
+
+template <> inline CatalogEntry from_json<CatalogEntry>(std::string_view data) {
+    detail::Reader r{data};
+    r.skip_ws();
+    CatalogEntry v = detail::decode_catalog_entry(r);
+    r.skip_ws();
+    if (r.pos < r.buf.size()) r.refuse("trailing_bytes");
+    return v;
+}
+
+inline std::string to_json(const ActionDescription& v) {
+    std::string out;
+    detail::enc_action_description(out, v, 0);
+    return out;
+}
+
+template <> inline ActionDescription from_json<ActionDescription>(std::string_view data) {
+    detail::Reader r{data};
+    r.skip_ws();
+    ActionDescription v = detail::decode_action_description(r);
+    r.skip_ws();
+    if (r.pos < r.buf.size()) r.refuse("trailing_bytes");
+    return v;
+}
+
+inline std::string to_json(const PermissionDefinition& v) {
+    std::string out;
+    detail::enc_permission_definition(out, v, 0);
+    return out;
+}
+
+template <> inline PermissionDefinition from_json<PermissionDefinition>(std::string_view data) {
+    detail::Reader r{data};
+    r.skip_ws();
+    PermissionDefinition v = detail::decode_permission_definition(r);
+    r.skip_ws();
+    if (r.pos < r.buf.size()) r.refuse("trailing_bytes");
+    return v;
+}
+
+inline std::string to_json(const DescribedAction& v) {
+    std::string out;
+    detail::enc_described_action(out, v, 0);
+    return out;
+}
+
+template <> inline DescribedAction from_json<DescribedAction>(std::string_view data) {
+    detail::Reader r{data};
+    r.skip_ws();
+    DescribedAction v = detail::decode_described_action(r);
+    r.skip_ws();
+    if (r.pos < r.buf.size()) r.refuse("trailing_bytes");
+    return v;
+}
+
+inline std::string to_json(const ActionEdit& v) {
+    std::string out;
+    detail::enc_action_edit(out, v, 0);
+    return out;
+}
+
+template <> inline ActionEdit from_json<ActionEdit>(std::string_view data) {
+    detail::Reader r{data};
+    r.skip_ws();
+    ActionEdit v = detail::decode_action_edit(r);
+    r.skip_ws();
+    if (r.pos < r.buf.size()) r.refuse("trailing_bytes");
+    return v;
+}
+
+inline std::string to_json(const DescriptionEdit& v) {
+    std::string out;
+    detail::enc_description_edit(out, v, 0);
+    return out;
+}
+
+template <> inline DescriptionEdit from_json<DescriptionEdit>(std::string_view data) {
+    detail::Reader r{data};
+    r.skip_ws();
+    DescriptionEdit v = detail::decode_description_edit(r);
+    r.skip_ws();
+    if (r.pos < r.buf.size()) r.refuse("trailing_bytes");
+    return v;
+}
+
+inline std::string to_json(const DescriptionPage& v) {
+    std::string out;
+    detail::enc_description_page(out, v, 0);
+    return out;
+}
+
+template <> inline DescriptionPage from_json<DescriptionPage>(std::string_view data) {
+    detail::Reader r{data};
+    r.skip_ws();
+    DescriptionPage v = detail::decode_description_page(r);
+    r.skip_ws();
+    if (r.pos < r.buf.size()) r.refuse("trailing_bytes");
+    return v;
+}
+
+inline std::string to_json(const AccountDefault& v) {
+    std::string out;
+    detail::enc_account_default(out, v, 0);
+    return out;
+}
+
+template <> inline AccountDefault from_json<AccountDefault>(std::string_view data) {
+    detail::Reader r{data};
+    r.skip_ws();
+    AccountDefault v = detail::decode_account_default(r);
+    r.skip_ws();
+    if (r.pos < r.buf.size()) r.refuse("trailing_bytes");
+    return v;
+}
+
+inline std::string to_json(const DefaultPage& v) {
+    std::string out;
+    detail::enc_default_page(out, v, 0);
+    return out;
+}
+
+template <> inline DefaultPage from_json<DefaultPage>(std::string_view data) {
+    detail::Reader r{data};
+    r.skip_ws();
+    DefaultPage v = detail::decode_default_page(r);
+    r.skip_ws();
+    if (r.pos < r.buf.size()) r.refuse("trailing_bytes");
+    return v;
+}
+
+inline std::string to_json(const DefaultEdit& v) {
+    std::string out;
+    detail::enc_default_edit(out, v, 0);
+    return out;
+}
+
+template <> inline DefaultEdit from_json<DefaultEdit>(std::string_view data) {
+    detail::Reader r{data};
+    r.skip_ws();
+    DefaultEdit v = detail::decode_default_edit(r);
+    r.skip_ws();
+    if (r.pos < r.buf.size()) r.refuse("trailing_bytes");
+    return v;
+}
+
+inline std::string to_json(const DecisionExplanation& v) {
+    std::string out;
+    detail::enc_decision_explanation(out, v, 0);
+    return out;
+}
+
+template <> inline DecisionExplanation from_json<DecisionExplanation>(std::string_view data) {
+    detail::Reader r{data};
+    r.skip_ws();
+    DecisionExplanation v = detail::decode_decision_explanation(r);
+    r.skip_ws();
+    if (r.pos < r.buf.size()) r.refuse("trailing_bytes");
+    return v;
+}
+
+inline std::string to_json(const PermissionKey& v) {
+    std::string out;
+    detail::enc_permission_key(out, v, 0);
+    return out;
+}
+
+template <> inline PermissionKey from_json<PermissionKey>(std::string_view data) {
+    detail::Reader r{data};
+    r.skip_ws();
+    PermissionKey v = detail::decode_permission_key(r);
+    r.skip_ws();
+    if (r.pos < r.buf.size()) r.refuse("trailing_bytes");
+    return v;
+}
+
+inline std::string to_json(const ResourceSelector& v) {
+    std::string out;
+    detail::enc_resource_selector(out, v, 0);
+    return out;
+}
+
+template <> inline ResourceSelector from_json<ResourceSelector>(std::string_view data) {
+    detail::Reader r{data};
+    r.skip_ws();
+    ResourceSelector v = detail::decode_resource_selector(r);
+    r.skip_ws();
+    if (r.pos < r.buf.size()) r.refuse("trailing_bytes");
+    return v;
+}
+
+inline std::string to_json(const PermissionSelection& v) {
+    std::string out;
+    detail::enc_permission_selection(out, v, 0);
+    return out;
+}
+
+template <> inline PermissionSelection from_json<PermissionSelection>(std::string_view data) {
+    detail::Reader r{data};
+    r.skip_ws();
+    PermissionSelection v = detail::decode_permission_selection(r);
+    r.skip_ws();
+    if (r.pos < r.buf.size()) r.refuse("trailing_bytes");
+    return v;
+}
+
+inline std::string to_json(const ConcreteResource& v) {
+    std::string out;
+    detail::enc_concrete_resource(out, v, 0);
+    return out;
+}
+
+template <> inline ConcreteResource from_json<ConcreteResource>(std::string_view data) {
+    detail::Reader r{data};
+    r.skip_ws();
+    ConcreteResource v = detail::decode_concrete_resource(r);
+    r.skip_ws();
+    if (r.pos < r.buf.size()) r.refuse("trailing_bytes");
+    return v;
+}
+
+inline std::string to_json(const CheckBatchRequest& v) {
+    std::string out;
+    detail::enc_check_batch_request(out, v, 0);
+    return out;
+}
+
+template <> inline CheckBatchRequest from_json<CheckBatchRequest>(std::string_view data) {
+    detail::Reader r{data};
+    r.skip_ws();
+    CheckBatchRequest v = detail::decode_check_batch_request(r);
+    r.skip_ws();
+    if (r.pos < r.buf.size()) r.refuse("trailing_bytes");
+    return v;
+}
+
+inline std::string to_json(const BatchDecision& v) {
+    std::string out;
+    detail::enc_batch_decision(out, v, 0);
+    return out;
+}
+
+template <> inline BatchDecision from_json<BatchDecision>(std::string_view data) {
+    detail::Reader r{data};
+    r.skip_ws();
+    BatchDecision v = detail::decode_batch_decision(r);
+    r.skip_ws();
+    if (r.pos < r.buf.size()) r.refuse("trailing_bytes");
+    return v;
+}
+
+inline std::string to_json(const SelectorPermissionDefinition& v) {
+    std::string out;
+    detail::enc_selector_permission_definition(out, v, 0);
+    return out;
+}
+
+template <> inline SelectorPermissionDefinition from_json<SelectorPermissionDefinition>(std::string_view data) {
+    detail::Reader r{data};
+    r.skip_ws();
+    SelectorPermissionDefinition v = detail::decode_selector_permission_definition(r);
+    r.skip_ws();
+    if (r.pos < r.buf.size()) r.refuse("trailing_bytes");
+    return v;
+}
+
+inline std::string to_json(const PermissionDefinitionPage& v) {
+    std::string out;
+    detail::enc_permission_definition_page(out, v, 0);
+    return out;
+}
+
+template <> inline PermissionDefinitionPage from_json<PermissionDefinitionPage>(std::string_view data) {
+    detail::Reader r{data};
+    r.skip_ws();
+    PermissionDefinitionPage v = detail::decode_permission_definition_page(r);
+    r.skip_ws();
+    if (r.pos < r.buf.size()) r.refuse("trailing_bytes");
+    return v;
+}
+
+inline std::string to_json(const PermissionBundleDefinition& v) {
+    std::string out;
+    detail::enc_permission_bundle_definition(out, v, 0);
+    return out;
+}
+
+template <> inline PermissionBundleDefinition from_json<PermissionBundleDefinition>(std::string_view data) {
+    detail::Reader r{data};
+    r.skip_ws();
+    PermissionBundleDefinition v = detail::decode_permission_bundle_definition(r);
+    r.skip_ws();
+    if (r.pos < r.buf.size()) r.refuse("trailing_bytes");
+    return v;
+}
+
+inline std::string to_json(const PermissionBundlePage& v) {
+    std::string out;
+    detail::enc_permission_bundle_page(out, v, 0);
+    return out;
+}
+
+template <> inline PermissionBundlePage from_json<PermissionBundlePage>(std::string_view data) {
+    detail::Reader r{data};
+    r.skip_ws();
+    PermissionBundlePage v = detail::decode_permission_bundle_page(r);
+    r.skip_ws();
+    if (r.pos < r.buf.size()) r.refuse("trailing_bytes");
+    return v;
+}
+
+inline std::string to_json(const BundleExpansion& v) {
+    std::string out;
+    detail::enc_bundle_expansion(out, v, 0);
+    return out;
+}
+
+template <> inline BundleExpansion from_json<BundleExpansion>(std::string_view data) {
+    detail::Reader r{data};
+    r.skip_ws();
+    BundleExpansion v = detail::decode_bundle_expansion(r);
+    r.skip_ws();
+    if (r.pos < r.buf.size()) r.refuse("trailing_bytes");
+    return v;
+}
+
+inline std::string to_json(const PermissionEffect& v) {
+    std::string out;
+    detail::enc_permission_effect(out, v, 0);
+    return out;
+}
+
+template <> inline PermissionEffect from_json<PermissionEffect>(std::string_view data) {
+    detail::Reader r{data};
+    r.skip_ws();
+    PermissionEffect v = detail::decode_permission_effect(r);
+    r.skip_ws();
+    if (r.pos < r.buf.size()) r.refuse("trailing_bytes");
+    return v;
+}
+
+inline std::string to_json(const SelectorRule& v) {
+    std::string out;
+    detail::enc_selector_rule(out, v, 0);
+    return out;
+}
+
+template <> inline SelectorRule from_json<SelectorRule>(std::string_view data) {
+    detail::Reader r{data};
+    r.skip_ws();
+    SelectorRule v = detail::decode_selector_rule(r);
+    r.skip_ws();
+    if (r.pos < r.buf.size()) r.refuse("trailing_bytes");
+    return v;
+}
+
+inline std::string to_json(const BundleOrigin& v) {
+    std::string out;
+    detail::enc_bundle_origin(out, v, 0);
+    return out;
+}
+
+template <> inline BundleOrigin from_json<BundleOrigin>(std::string_view data) {
+    detail::Reader r{data};
+    r.skip_ws();
+    BundleOrigin v = detail::decode_bundle_origin(r);
+    r.skip_ws();
+    if (r.pos < r.buf.size()) r.refuse("trailing_bytes");
+    return v;
+}
+
+inline std::string to_json(const SelectorRuleRecord& v) {
+    std::string out;
+    detail::enc_selector_rule_record(out, v, 0);
+    return out;
+}
+
+template <> inline SelectorRuleRecord from_json<SelectorRuleRecord>(std::string_view data) {
+    detail::Reader r{data};
+    r.skip_ws();
+    SelectorRuleRecord v = detail::decode_selector_rule_record(r);
+    r.skip_ws();
+    if (r.pos < r.buf.size()) r.refuse("trailing_bytes");
+    return v;
+}
+
+inline std::string to_json(const SelectorRulePage& v) {
+    std::string out;
+    detail::enc_selector_rule_page(out, v, 0);
+    return out;
+}
+
+template <> inline SelectorRulePage from_json<SelectorRulePage>(std::string_view data) {
+    detail::Reader r{data};
+    r.skip_ws();
+    SelectorRulePage v = detail::decode_selector_rule_page(r);
+    r.skip_ws();
+    if (r.pos < r.buf.size()) r.refuse("trailing_bytes");
+    return v;
+}
+
+inline std::string to_json(const SelectorRuleRead& v) {
+    std::string out;
+    detail::enc_selector_rule_read(out, v, 0);
+    return out;
+}
+
+template <> inline SelectorRuleRead from_json<SelectorRuleRead>(std::string_view data) {
+    detail::Reader r{data};
+    r.skip_ws();
+    SelectorRuleRead v = detail::decode_selector_rule_read(r);
+    r.skip_ws();
+    if (r.pos < r.buf.size()) r.refuse("trailing_bytes");
+    return v;
+}
+
+inline std::string to_json(const SelectorEdit& v) {
+    std::string out;
+    detail::enc_selector_edit(out, v, 0);
+    return out;
+}
+
+template <> inline SelectorEdit from_json<SelectorEdit>(std::string_view data) {
+    detail::Reader r{data};
+    r.skip_ws();
+    SelectorEdit v = detail::decode_selector_edit(r);
+    r.skip_ws();
+    if (r.pos < r.buf.size()) r.refuse("trailing_bytes");
+    return v;
+}
+
+inline std::string to_json(const LegacyOperationRequest& v) {
+    std::string out;
+    detail::enc_legacy_operation_request(out, v, 0);
+    return out;
+}
+
+template <> inline LegacyOperationRequest from_json<LegacyOperationRequest>(std::string_view data) {
+    detail::Reader r{data};
+    r.skip_ws();
+    LegacyOperationRequest v = detail::decode_legacy_operation_request(r);
+    r.skip_ws();
+    if (r.pos < r.buf.size()) r.refuse("trailing_bytes");
+    return v;
+}
+
+inline std::string to_json(const EndpointRefusalDetail& v) {
+    std::string out;
+    detail::enc_endpoint_refusal_detail(out, v, 0);
+    return out;
+}
+
+template <> inline EndpointRefusalDetail from_json<EndpointRefusalDetail>(std::string_view data) {
+    detail::Reader r{data};
+    r.skip_ws();
+    EndpointRefusalDetail v = detail::decode_endpoint_refusal_detail(r);
+    r.skip_ws();
+    if (r.pos < r.buf.size()) r.refuse("trailing_bytes");
+    return v;
+}
+
+inline std::string to_json(const EndpointProducerCheck& v) {
+    std::string out;
+    detail::enc_endpoint_producer_check(out, v, 0);
+    return out;
+}
+
+template <> inline EndpointProducerCheck from_json<EndpointProducerCheck>(std::string_view data) {
+    detail::Reader r{data};
+    r.skip_ws();
+    EndpointProducerCheck v = detail::decode_endpoint_producer_check(r);
+    r.skip_ws();
+    if (r.pos < r.buf.size()) r.refuse("trailing_bytes");
+    return v;
+}
+
+inline std::string to_json(const EndpointServiceState& v) {
+    std::string out;
+    detail::enc_endpoint_service_state(out, v, 0);
+    return out;
+}
+
+template <> inline EndpointServiceState from_json<EndpointServiceState>(std::string_view data) {
+    detail::Reader r{data};
+    r.skip_ws();
+    EndpointServiceState v = detail::decode_endpoint_service_state(r);
+    r.skip_ws();
+    if (r.pos < r.buf.size()) r.refuse("trailing_bytes");
+    return v;
+}
+
+inline std::string to_json(const EndpointDescription& v) {
+    std::string out;
+    detail::enc_endpoint_description(out, v, 0);
+    return out;
+}
+
+template <> inline EndpointDescription from_json<EndpointDescription>(std::string_view data) {
+    detail::Reader r{data};
+    r.skip_ws();
+    EndpointDescription v = detail::decode_endpoint_description(r);
+    r.skip_ws();
+    if (r.pos < r.buf.size()) r.refuse("trailing_bytes");
+    return v;
+}
+
+inline std::string to_json(const EndpointDescriptionResult& v) {
+    std::string out;
+    detail::enc_endpoint_description_result(out, v, 0);
+    return out;
+}
+
+template <> inline EndpointDescriptionResult from_json<EndpointDescriptionResult>(std::string_view data) {
+    detail::Reader r{data};
+    r.skip_ws();
+    EndpointDescriptionResult v = detail::decode_endpoint_description_result(r);
+    r.skip_ws();
+    if (r.pos < r.buf.size()) r.refuse("trailing_bytes");
+    return v;
+}
+
 namespace detail {
 // kRefusals is in the order two of them are chosen between.
-inline const std::vector<std::string> kRefusals = {"malformed", "bad_string", "number_spelling", "wrong_type", "depth_exceeded", "duplicate_key", "duplicate_field", "unknown_field", "missing_field", "bad_enum", "bad_binary", "trailing_bytes"};
+inline const std::vector<std::string> kRefusals = {"malformed", "bad_string", "number_spelling", "wrong_type", "depth_exceeded", "duplicate_key", "duplicate_field", "unknown_field", "missing_field", "bad_enum", "bad_binary", "bad_value", "trailing_bytes"};
 
 inline int refusal_rank(std::string_view word) {
     for (std::size_t i = 0; i < kRefusals.size(); ++i)
@@ -9119,24 +11623,43 @@ inline std::string service_reply(const OAServiceFrame& request,const Raw& payloa
 
 // The base-protocol service every dispatcher answers beside its own.
 inline constexpr std::string_view kEndpointContract="abstraction.facade/endpoint@1";
+inline constexpr std::string_view kEndpointV2Contract="abstraction.facade/endpoint@2";
 // One service an endpoint hosts, as a dispatcher of any generated namespace
 // reports it to describe_endpoint.
 struct DescribedService{std::string contract;bool ready;std::string why;};
 namespace detail {
 template<class H>auto ready_hook(int)->decltype((void)static_cast<H*>(nullptr)->ready(),static_cast<bool(*)(void*,std::string&)>(nullptr)){return [](void* h,std::string& why)->bool{auto r=static_cast<H*>(h)->ready();why=r.second;return r.first;};}
 template<class H>bool(*ready_hook(long))(void*,std::string&){return nullptr;}
+using EndpointMetadata=std::pair<std::vector<std::string>,std::map<std::string,std::string>>;
+template<class H>auto metadata_hook(int)->decltype((void)static_cast<H*>(nullptr)->describe_metadata(),static_cast<EndpointMetadata(*)(void*)>(nullptr)){return [](void*h)->EndpointMetadata{return static_cast<H*>(h)->describe_metadata();};}
+template<class H>EndpointMetadata(*metadata_hook(long))(void*){return nullptr;}
+template<class S>auto described_hash(const S&s,int)->decltype(s.describe_service_definition_hash()){return s.describe_service_definition_hash();}
+template<class S>std::string described_hash(const S&,long){return std::string();}
+template<class S>auto described_metadata(const S&s,int)->decltype(s.describe_service_metadata()){return s.describe_service_metadata();}
+template<class S>std::pair<std::vector<std::string>,std::map<std::string,std::string>> described_metadata(const S&,long){return {};}
 }  // namespace detail
 // Answers an abstraction.facade/endpoint@1 Describe frame for an endpoint
 // hosting services, in that order: each is a dispatcher of any generated
 // namespace. program and version are the provider's own display name and
 // version, never authority. A frame for another service reads unknown_service.
-template<class... Services>std::string describe_endpoint(std::string_view frame,const std::string& program,const std::string& version,const Services&... services){
+template<class... Services>std::string describe_endpoint_with_checks(std::string_view frame,const std::string& program,const std::string& version,const std::vector<EndpointProducerCheck>& checks,const Services&... services){
  auto v=detail::service_payload(frame);
- if(v.service!=kEndpointContract){ServiceError e("unknown_service","");return detail::service_reply(v,"",&e);}
+ if(v.service!=kEndpointContract&&v.service!=kEndpointV2Contract){ServiceError e("unknown_service","");return detail::service_reply(v,"",&e);}
  if(v.method!="Describe"){ServiceError e("unknown_method","");return detail::service_reply(v,"",&e);}
  detail::Reader r{v.arguments};r.skip_ws();bool empty=false;
  if(r.pos<r.buf.size()&&r.buf[r.pos]=='{'){r.pos++;r.skip_ws();if(r.pos<r.buf.size()&&r.buf[r.pos]=='}'){r.pos++;r.skip_ws();empty=r.pos==r.buf.size();}}
  if(!empty){ServiceError e("unknown_field","");return detail::service_reply(v,"",&e);}
+ if(v.service==kEndpointV2Contract){
+  auto bounded=[&](){EndpointDescriptionResult result;result.value.outcome=EndpointDescriptionOutcome::Unavailable;result.value.reason="bound:reply_bytes";Raw payload;detail::enc_endpoint_description_result(payload,result,1);return detail::service_reply(v,payload);};
+  try{
+   EndpointDescriptionResult result;auto& description=result.value;description.outcome=EndpointDescriptionOutcome::Described;description.program=program;description.version=version;description.checks=checks;
+   bool supported=true;auto add=[&](const auto& service){auto s=service.describe_service();EndpointServiceState state;state.service=s.contract;state.readiness=s.ready?EndpointServiceReadiness::Ready:EndpointServiceReadiness::NotReady;state.reason=s.ready?std::string():s.why;state.definition_hash=detail::described_hash(service,0);if(state.definition_hash.empty())supported=false;auto metadata=detail::described_metadata(service,0);state.guarantees=metadata.first;state.capabilities=metadata.second;description.services.push_back(state);};
+   (void)add;(add(services),...);
+   if(!supported){description={};description.outcome=EndpointDescriptionOutcome::Unsupported;description.reason="unsupported:not_implemented";}
+   Raw payload;detail::enc_endpoint_description_result(payload,result,1);detail::Reader reader{payload};reader.depth=1;detail::decode_endpoint_description_result(reader);
+   auto reply=detail::service_reply(v,payload);if(reply.size()>1048576)return bounded();return reply;
+  }catch(const Refusal&){return bounded();}
+ }
  try{
   Raw out="{\"value\":{\"outcome\":\"described\",\"program\":";detail::esc(out,program);out+=",\"version\":";detail::esc(out,version);out+=",\"services\":[";
   bool first=true;
@@ -9147,12 +11670,23 @@ template<class... Services>std::string describe_endpoint(std::string_view frame,
   return detail::service_reply(v,out);
  }catch(const Refusal&e){ServiceError error(e.word,"");return detail::service_reply(v,"",&error);}
 }
+template<class... Services>std::string describe_endpoint(std::string_view frame,const std::string& program,const std::string& version,const Services&... services){return describe_endpoint_with_checks(frame,program,version,std::vector<EndpointProducerCheck>{},services...);}
 struct Authorization{virtual ~Authorization()=default;
+virtual RevisionDecision decide_for_at_least_revision(const Subject& subject,const std::string& action,const std::string& resource,const std::string& at_least_revision)=0;
 virtual DescriptionPage list_action_descriptions(const std::string& cursor,const std::int64_t& limit)=0;
 virtual Decision decide(const std::string& action,const std::string& resource)=0;
 virtual Decision decide_for(const Subject& subject,const std::string& action,const std::string& resource)=0;
 };
 template<class Transport>struct AuthorizationClient:Authorization{Transport& transport_;explicit AuthorizationClient(Transport&t):transport_(t){}
+RevisionDecision decide_for_at_least_revision(const Subject& subject,const std::string& action,const std::string& resource,const std::string& at_least_revision)override{detail::OAAuthorizationDecideForAtLeastRevisionArguments args;
+args.subject=subject;
+args.action=action;
+args.resource=resource;
+args.at_least_revision=at_least_revision;
+detail::OAServiceFrame v;v.version=1;v.service="abstraction.rights/authorization@1";v.method="DecideForAtLeastRevision";detail::enc_oa_authorization_decide_for_at_least_revision_arguments(v.arguments,args,1);std::string frame;detail::enc_oa_service_frame(frame,v,0);detail::service_payload(frame);
+auto response=transport_.exchange_frame(frame);auto payload=detail::service_response(response,v.service,v.method);detail::Reader r{payload};r.depth=1;r.skip_ws();auto result=detail::decode_oa_authorization_decide_for_at_least_revision_result(r);r.skip_ws();if(r.pos!=r.buf.size())r.refuse("trailing_bytes");
+return result.value;
+}
 DescriptionPage list_action_descriptions(const std::string& cursor,const std::int64_t& limit)override{detail::OAAuthorizationListActionDescriptionsArguments args;
 args.cursor=cursor;
 args.limit=limit;
@@ -9179,10 +11713,14 @@ return result.value;
 struct AuthorizationService{inline static constexpr std::string_view kWireName="abstraction.rights/authorization@1";inline static constexpr std::string_view kCapability="abstraction.rights";template<class Transport>using Client=AuthorizationClient<Transport>;};
 struct AuthorizationDispatcher:FrameWriter,FrameExchanger{Authorization&handler;explicit AuthorizationDispatcher(Authorization&h):handler(h){}
 // A handler whose own type has ready(), returning a pair of bool and std::string, reports its readiness through describe_service.
-template<class H,class=decltype(static_cast<Authorization&>(*static_cast<H*>(nullptr)))>explicit AuthorizationDispatcher(H&h):handler(h),ready_self_(&h),ready_hook_(detail::ready_hook<H>(0)){}
+template<class H,class=decltype(static_cast<Authorization&>(*static_cast<H*>(nullptr)))>explicit AuthorizationDispatcher(H&h):handler(h),ready_self_(&h),ready_hook_(detail::ready_hook<H>(0)),metadata_hook_(detail::metadata_hook<H>(0)){}
 // This dispatcher's service as abstraction.facade/endpoint@1 Describe lists it.
 DescribedService describe_service()const{DescribedService s{"abstraction.rights/authorization@1",true,std::string()};if(ready_hook_){s.ready=ready_hook_(ready_self_,s.why);if(s.ready)s.why.clear();}return s;}
+std::string describe_service_definition_hash()const{return "sha256:afbbcbeabf3be35ca790e10f178dc78e9e6830e2e8025eba81783ea47d4a44fe";}
+std::pair<std::vector<std::string>,std::map<std::string,std::string>> describe_service_metadata()const{if(metadata_hook_)return metadata_hook_(ready_self_);return {};}
 void write_frame(std::string_view frame)override{auto v=detail::service_payload(frame);if(v.service!="abstraction.rights/authorization@1")throw DispatchError("unknown_service");
+if(v.method=="DecideForAtLeastRevision"){
+throw DispatchError("wrong_mode");}
 if(v.method=="ListActionDescriptions"){
 throw DispatchError("wrong_mode");}
 if(v.method=="Decide"){
@@ -9190,8 +11728,10 @@ throw DispatchError("wrong_mode");}
 if(v.method=="DecideFor"){
 throw DispatchError("wrong_mode");}
 throw DispatchError("unknown_method");}
-std::string exchange_frame(std::string_view frame)override{auto v=detail::service_payload(frame);if(v.service==kEndpointContract)return describe_endpoint(frame,std::string(),std::string(),*this);if(v.service!="abstraction.rights/authorization@1"){ServiceError e("unknown_service","");return detail::service_reply(v,"",&e);}
+std::string exchange_frame(std::string_view frame)override{auto v=detail::service_payload(frame);if(v.service==kEndpointContract)return describe_endpoint(frame,std::string(),std::string(),*this);if(v.service==kEndpointV2Contract)return describe_endpoint(frame,std::string(),std::string(),*this);if(v.service!="abstraction.rights/authorization@1"){ServiceError e("unknown_service","");return detail::service_reply(v,"",&e);}
 try{
+if(v.method=="DecideForAtLeastRevision"){
+detail::Reader r{v.arguments};r.depth=1;r.skip_ws();auto args=detail::decode_oa_authorization_decide_for_at_least_revision_arguments(r);r.skip_ws();if(r.pos!=r.buf.size())r.refuse("trailing_bytes");auto payload=invoke_decide_for_at_least_revision(args);return detail::service_reply(v,payload);}
 if(v.method=="ListActionDescriptions"){
 detail::Reader r{v.arguments};r.depth=1;r.skip_ws();auto args=detail::decode_oa_authorization_list_action_descriptions_arguments(r);r.skip_ws();if(r.pos!=r.buf.size())r.refuse("trailing_bytes");auto payload=invoke_list_action_descriptions(args);return detail::service_reply(v,payload);}
 if(v.method=="Decide"){
@@ -9201,6 +11741,17 @@ detail::Reader r{v.arguments};r.depth=1;r.skip_ws();auto args=detail::decode_oa_
 throw ServiceError("unknown_method","");}catch(const ServiceError&e){return detail::service_reply(v,"",&e);}catch(const Refusal&e){ServiceError error(e.word,"");return detail::service_reply(v,"",&error);}
 }
 private:
+Raw invoke_decide_for_at_least_revision(const detail::OAAuthorizationDecideForAtLeastRevisionArguments&args){
+RevisionDecision result{};
+try{
+result=handler.decide_for_at_least_revision(args.subject,args.action,args.resource,args.at_least_revision);
+}catch(const ServiceError&){throw;}catch(...){throw ServiceError("handler_error","handler failed");}
+try{
+detail::OAAuthorizationDecideForAtLeastRevisionResult value;
+value.value=result;
+Raw payload;detail::enc_oa_authorization_decide_for_at_least_revision_result(payload,value,1);detail::Reader r{payload};r.depth=1;r.skip_ws();detail::decode_oa_authorization_decide_for_at_least_revision_result(r);r.skip_ws();if(r.pos!=r.buf.size())r.refuse("trailing_bytes");return payload;
+}catch(...){throw ServiceError("invalid_result","");}
+}
 Raw invoke_list_action_descriptions(const detail::OAAuthorizationListActionDescriptionsArguments&args){
 DescriptionPage result{};
 try{
@@ -9237,8 +11788,10 @@ Raw payload;detail::enc_oa_authorization_decide_for_result(payload,value,1);deta
 private:
 void* ready_self_=nullptr;
 bool(*ready_hook_)(void*,std::string&)=nullptr;
+std::pair<std::vector<std::string>,std::map<std::string,std::string>>(*metadata_hook_)(void*)=nullptr;
 };
 struct AuthorizationOperator{virtual ~AuthorizationOperator()=default;
+virtual PolicyObservation observe_policy(const std::string& after,const std::int64_t& wait_ms)=0;
 virtual DescriptionEdit register_described_action(const std::string& expected_revision,const ActionDescription& description)=0;
 virtual PolicyEdit apply_first_use_allow(const std::string& expected_revision,const std::string& question_id)=0;
 virtual PolicyPage list_policy(const std::string& cursor,const std::int64_t& limit)=0;
@@ -9256,6 +11809,13 @@ virtual DefaultPage list_defaults()=0;
 virtual DefaultEdit set_default(const std::string& expected_revision,const std::string& name,const bool& on)=0;
 };
 template<class Transport>struct AuthorizationOperatorClient:AuthorizationOperator{Transport& transport_;explicit AuthorizationOperatorClient(Transport&t):transport_(t){}
+PolicyObservation observe_policy(const std::string& after,const std::int64_t& wait_ms)override{detail::OAAuthorizationOperatorObservePolicyArguments args;
+args.after=after;
+args.wait_ms=wait_ms;
+detail::OAServiceFrame v;v.version=1;v.service="abstraction.rights/operator@1";v.method="ObservePolicy";detail::enc_oa_authorization_operator_observe_policy_arguments(v.arguments,args,1);std::string frame;detail::enc_oa_service_frame(frame,v,0);detail::service_payload(frame);
+auto response=transport_.exchange_frame(frame);auto payload=detail::service_response(response,v.service,v.method);detail::Reader r{payload};r.depth=1;r.skip_ws();auto result=detail::decode_oa_authorization_operator_observe_policy_result(r);r.skip_ws();if(r.pos!=r.buf.size())r.refuse("trailing_bytes");
+return result.value;
+}
 DescriptionEdit register_described_action(const std::string& expected_revision,const ActionDescription& description)override{detail::OAAuthorizationOperatorRegisterDescribedActionArguments args;
 args.expected_revision=expected_revision;
 args.description=description;
@@ -9373,14 +11933,25 @@ detail::OAServiceFrame v;v.version=1;v.service="abstraction.rights/operator@1";v
 auto response=transport_.exchange_frame(frame);auto payload=detail::service_response(response,v.service,v.method);detail::Reader r{payload};r.depth=1;r.skip_ws();auto result=detail::decode_oa_authorization_operator_set_default_result(r);r.skip_ws();if(r.pos!=r.buf.size())r.refuse("trailing_bytes");
 return result.value;
 }
+auto observe_policy_pages(const std::string& after,const std::int64_t& wait_ms){if(wait_ms<0||wait_ms>30000)throw std::invalid_argument("observe wait_ms is 0..30000");detail::OAAuthorizationOperatorObservePolicyArguments _observe_args;
+_observe_args.after=after;
+_observe_args.wait_ms=wait_ms;
+using PageType=PolicyObservation;struct Range {struct End{};struct Iterator {AuthorizationOperatorClient* client;detail::OAAuthorizationOperatorObservePolicyArguments* args;PageType* value;bool* closed;
+Iterator& operator++(){if(!*closed){auto page=client->observe_policy(args->after,args->wait_ms);args->after=page.next;*value=page;}return *this;}
+const PageType& operator*()const{return *value;}bool operator!=(End)const{return !*closed;}void close(){*closed=true;}
+};AuthorizationOperatorClient* client;detail::OAAuthorizationOperatorObservePolicyArguments args;PageType value{};bool closed=false;Iterator begin(){Iterator it{client,&args,&value,&closed};++it;return it;}End end(){return {};}};return Range{this,_observe_args};}
 };
 struct AuthorizationOperatorService{inline static constexpr std::string_view kWireName="abstraction.rights/operator@1";inline static constexpr std::string_view kCapability="abstraction.rights";template<class Transport>using Client=AuthorizationOperatorClient<Transport>;};
 struct AuthorizationOperatorDispatcher:FrameWriter,FrameExchanger{AuthorizationOperator&handler;explicit AuthorizationOperatorDispatcher(AuthorizationOperator&h):handler(h){}
 // A handler whose own type has ready(), returning a pair of bool and std::string, reports its readiness through describe_service.
-template<class H,class=decltype(static_cast<AuthorizationOperator&>(*static_cast<H*>(nullptr)))>explicit AuthorizationOperatorDispatcher(H&h):handler(h),ready_self_(&h),ready_hook_(detail::ready_hook<H>(0)){}
+template<class H,class=decltype(static_cast<AuthorizationOperator&>(*static_cast<H*>(nullptr)))>explicit AuthorizationOperatorDispatcher(H&h):handler(h),ready_self_(&h),ready_hook_(detail::ready_hook<H>(0)),metadata_hook_(detail::metadata_hook<H>(0)){}
 // This dispatcher's service as abstraction.facade/endpoint@1 Describe lists it.
 DescribedService describe_service()const{DescribedService s{"abstraction.rights/operator@1",true,std::string()};if(ready_hook_){s.ready=ready_hook_(ready_self_,s.why);if(s.ready)s.why.clear();}return s;}
+std::string describe_service_definition_hash()const{return "sha256:25e83138975aa53bfa85eedc696dba7e5fff243a3118d0e45621e20c1e058546";}
+std::pair<std::vector<std::string>,std::map<std::string,std::string>> describe_service_metadata()const{if(metadata_hook_)return metadata_hook_(ready_self_);return {};}
 void write_frame(std::string_view frame)override{auto v=detail::service_payload(frame);if(v.service!="abstraction.rights/operator@1")throw DispatchError("unknown_service");
+if(v.method=="ObservePolicy"){
+throw DispatchError("wrong_mode");}
 if(v.method=="RegisterDescribedAction"){
 throw DispatchError("wrong_mode");}
 if(v.method=="ApplyFirstUseAllow"){
@@ -9412,8 +11983,10 @@ throw DispatchError("wrong_mode");}
 if(v.method=="SetDefault"){
 throw DispatchError("wrong_mode");}
 throw DispatchError("unknown_method");}
-std::string exchange_frame(std::string_view frame)override{auto v=detail::service_payload(frame);if(v.service==kEndpointContract)return describe_endpoint(frame,std::string(),std::string(),*this);if(v.service!="abstraction.rights/operator@1"){ServiceError e("unknown_service","");return detail::service_reply(v,"",&e);}
+std::string exchange_frame(std::string_view frame)override{auto v=detail::service_payload(frame);if(v.service==kEndpointContract)return describe_endpoint(frame,std::string(),std::string(),*this);if(v.service==kEndpointV2Contract)return describe_endpoint(frame,std::string(),std::string(),*this);if(v.service!="abstraction.rights/operator@1"){ServiceError e("unknown_service","");return detail::service_reply(v,"",&e);}
 try{
+if(v.method=="ObservePolicy"){
+detail::Reader r{v.arguments};r.depth=1;r.skip_ws();auto args=detail::decode_oa_authorization_operator_observe_policy_arguments(r);r.skip_ws();if(r.pos!=r.buf.size())r.refuse("trailing_bytes");auto payload=invoke_observe_policy(args);return detail::service_reply(v,payload);}
 if(v.method=="RegisterDescribedAction"){
 detail::Reader r{v.arguments};r.depth=1;r.skip_ws();auto args=detail::decode_oa_authorization_operator_register_described_action_arguments(r);r.skip_ws();if(r.pos!=r.buf.size())r.refuse("trailing_bytes");auto payload=invoke_register_described_action(args);return detail::service_reply(v,payload);}
 if(v.method=="ApplyFirstUseAllow"){
@@ -9447,6 +12020,17 @@ detail::Reader r{v.arguments};r.depth=1;r.skip_ws();auto args=detail::decode_oa_
 throw ServiceError("unknown_method","");}catch(const ServiceError&e){return detail::service_reply(v,"",&e);}catch(const Refusal&e){ServiceError error(e.word,"");return detail::service_reply(v,"",&error);}
 }
 private:
+Raw invoke_observe_policy(const detail::OAAuthorizationOperatorObservePolicyArguments&args){
+PolicyObservation result{};
+try{
+result=handler.observe_policy(args.after,args.wait_ms);
+}catch(const ServiceError&){throw;}catch(...){throw ServiceError("handler_error","handler failed");}
+try{
+detail::OAAuthorizationOperatorObservePolicyResult value;
+value.value=result;
+Raw payload;detail::enc_oa_authorization_operator_observe_policy_result(payload,value,1);detail::Reader r{payload};r.depth=1;r.skip_ws();detail::decode_oa_authorization_operator_observe_policy_result(r);r.skip_ws();if(r.pos!=r.buf.size())r.refuse("trailing_bytes");return payload;
+}catch(...){throw ServiceError("invalid_result","");}
+}
 Raw invoke_register_described_action(const detail::OAAuthorizationOperatorRegisterDescribedActionArguments&args){
 DescriptionEdit result{};
 try{
@@ -9616,6 +12200,7 @@ Raw payload;detail::enc_oa_authorization_operator_set_default_result(payload,val
 private:
 void* ready_self_=nullptr;
 bool(*ready_hook_)(void*,std::string&)=nullptr;
+std::pair<std::vector<std::string>,std::map<std::string,std::string>>(*metadata_hook_)(void*)=nullptr;
 };
 struct SelectorAuthorization{virtual ~SelectorAuthorization()=default;
 virtual PermissionDefinitionPage list_permission_definitions(const std::string& cursor,const std::int64_t& limit)=0;
@@ -9663,9 +12248,11 @@ return result.value;
 struct SelectorAuthorizationService{inline static constexpr std::string_view kWireName="abstraction.rights/authorization@2";inline static constexpr std::string_view kCapability="abstraction.rights";template<class Transport>using Client=SelectorAuthorizationClient<Transport>;};
 struct SelectorAuthorizationDispatcher:FrameWriter,FrameExchanger{SelectorAuthorization&handler;explicit SelectorAuthorizationDispatcher(SelectorAuthorization&h):handler(h){}
 // A handler whose own type has ready(), returning a pair of bool and std::string, reports its readiness through describe_service.
-template<class H,class=decltype(static_cast<SelectorAuthorization&>(*static_cast<H*>(nullptr)))>explicit SelectorAuthorizationDispatcher(H&h):handler(h),ready_self_(&h),ready_hook_(detail::ready_hook<H>(0)){}
+template<class H,class=decltype(static_cast<SelectorAuthorization&>(*static_cast<H*>(nullptr)))>explicit SelectorAuthorizationDispatcher(H&h):handler(h),ready_self_(&h),ready_hook_(detail::ready_hook<H>(0)),metadata_hook_(detail::metadata_hook<H>(0)){}
 // This dispatcher's service as abstraction.facade/endpoint@1 Describe lists it.
 DescribedService describe_service()const{DescribedService s{"abstraction.rights/authorization@2",true,std::string()};if(ready_hook_){s.ready=ready_hook_(ready_self_,s.why);if(s.ready)s.why.clear();}return s;}
+std::string describe_service_definition_hash()const{return "sha256:fe19e206eb5ff95a02c9dc2267fc5879d19787628caefbfb9588e6665eac8b17";}
+std::pair<std::vector<std::string>,std::map<std::string,std::string>> describe_service_metadata()const{if(metadata_hook_)return metadata_hook_(ready_self_);return {};}
 void write_frame(std::string_view frame)override{auto v=detail::service_payload(frame);if(v.service!="abstraction.rights/authorization@2")throw DispatchError("unknown_service");
 if(v.method=="ListPermissionDefinitions"){
 throw DispatchError("wrong_mode");}
@@ -9678,7 +12265,7 @@ throw DispatchError("wrong_mode");}
 if(v.method=="CheckLegacyOperationFor"){
 throw DispatchError("wrong_mode");}
 throw DispatchError("unknown_method");}
-std::string exchange_frame(std::string_view frame)override{auto v=detail::service_payload(frame);if(v.service==kEndpointContract)return describe_endpoint(frame,std::string(),std::string(),*this);if(v.service!="abstraction.rights/authorization@2"){ServiceError e("unknown_service","");return detail::service_reply(v,"",&e);}
+std::string exchange_frame(std::string_view frame)override{auto v=detail::service_payload(frame);if(v.service==kEndpointContract)return describe_endpoint(frame,std::string(),std::string(),*this);if(v.service==kEndpointV2Contract)return describe_endpoint(frame,std::string(),std::string(),*this);if(v.service!="abstraction.rights/authorization@2"){ServiceError e("unknown_service","");return detail::service_reply(v,"",&e);}
 try{
 if(v.method=="ListPermissionDefinitions"){
 detail::Reader r{v.arguments};r.depth=1;r.skip_ws();auto args=detail::decode_oa_selector_authorization_list_permission_definitions_arguments(r);r.skip_ws();if(r.pos!=r.buf.size())r.refuse("trailing_bytes");auto payload=invoke_list_permission_definitions(args);return detail::service_reply(v,payload);}
@@ -9751,6 +12338,7 @@ Raw payload;detail::enc_oa_selector_authorization_check_legacy_operation_for_res
 private:
 void* ready_self_=nullptr;
 bool(*ready_hook_)(void*,std::string&)=nullptr;
+std::pair<std::vector<std::string>,std::map<std::string,std::string>>(*metadata_hook_)(void*)=nullptr;
 };
 struct SelectorAuthorizationOperator{virtual ~SelectorAuthorizationOperator()=default;
 virtual SelectorRulePage list_selector_rules(const std::string& cursor,const std::int64_t& limit)=0;
@@ -9831,9 +12419,11 @@ return result.value;
 struct SelectorAuthorizationOperatorService{inline static constexpr std::string_view kWireName="abstraction.rights/operator@2";inline static constexpr std::string_view kCapability="abstraction.rights";template<class Transport>using Client=SelectorAuthorizationOperatorClient<Transport>;};
 struct SelectorAuthorizationOperatorDispatcher:FrameWriter,FrameExchanger{SelectorAuthorizationOperator&handler;explicit SelectorAuthorizationOperatorDispatcher(SelectorAuthorizationOperator&h):handler(h){}
 // A handler whose own type has ready(), returning a pair of bool and std::string, reports its readiness through describe_service.
-template<class H,class=decltype(static_cast<SelectorAuthorizationOperator&>(*static_cast<H*>(nullptr)))>explicit SelectorAuthorizationOperatorDispatcher(H&h):handler(h),ready_self_(&h),ready_hook_(detail::ready_hook<H>(0)){}
+template<class H,class=decltype(static_cast<SelectorAuthorizationOperator&>(*static_cast<H*>(nullptr)))>explicit SelectorAuthorizationOperatorDispatcher(H&h):handler(h),ready_self_(&h),ready_hook_(detail::ready_hook<H>(0)),metadata_hook_(detail::metadata_hook<H>(0)){}
 // This dispatcher's service as abstraction.facade/endpoint@1 Describe lists it.
 DescribedService describe_service()const{DescribedService s{"abstraction.rights/operator@2",true,std::string()};if(ready_hook_){s.ready=ready_hook_(ready_self_,s.why);if(s.ready)s.why.clear();}return s;}
+std::string describe_service_definition_hash()const{return "sha256:344e51e2af488dccd9c95c1054488c7918cf60b8cfbc77af905503fb94bfbdab";}
+std::pair<std::vector<std::string>,std::map<std::string,std::string>> describe_service_metadata()const{if(metadata_hook_)return metadata_hook_(ready_self_);return {};}
 void write_frame(std::string_view frame)override{auto v=detail::service_payload(frame);if(v.service!="abstraction.rights/operator@2")throw DispatchError("unknown_service");
 if(v.method=="ListSelectorRules"){
 throw DispatchError("wrong_mode");}
@@ -9852,7 +12442,7 @@ throw DispatchError("wrong_mode");}
 if(v.method=="UndoPermissionEffect"){
 throw DispatchError("wrong_mode");}
 throw DispatchError("unknown_method");}
-std::string exchange_frame(std::string_view frame)override{auto v=detail::service_payload(frame);if(v.service==kEndpointContract)return describe_endpoint(frame,std::string(),std::string(),*this);if(v.service!="abstraction.rights/operator@2"){ServiceError e("unknown_service","");return detail::service_reply(v,"",&e);}
+std::string exchange_frame(std::string_view frame)override{auto v=detail::service_payload(frame);if(v.service==kEndpointContract)return describe_endpoint(frame,std::string(),std::string(),*this);if(v.service==kEndpointV2Contract)return describe_endpoint(frame,std::string(),std::string(),*this);if(v.service!="abstraction.rights/operator@2"){ServiceError e("unknown_service","");return detail::service_reply(v,"",&e);}
 try{
 if(v.method=="ListSelectorRules"){
 detail::Reader r{v.arguments};r.depth=1;r.skip_ws();auto args=detail::decode_oa_selector_authorization_operator_list_selector_rules_arguments(r);r.skip_ws();if(r.pos!=r.buf.size())r.refuse("trailing_bytes");auto payload=invoke_list_selector_rules(args);return detail::service_reply(v,payload);}
@@ -9964,293 +12554,315 @@ Raw payload;detail::enc_oa_selector_authorization_operator_undo_permission_effec
 private:
 void* ready_self_=nullptr;
 bool(*ready_hook_)(void*,std::string&)=nullptr;
+std::pair<std::vector<std::string>,std::map<std::string,std::string>>(*metadata_hook_)(void*)=nullptr;
 };
 
 namespace detail {
-inline Request decode_request_at(std::string_view in,int depth,int limit,std::size_t& consumed){detail::Reader r{in};if(depth<0||limit<1)r.refuse("depth_exceeded");r.depth=depth;r.limit=limit<detail::kDepthLimit?limit:detail::kDepthLimit;r.skip_ws();auto v=detail::decode_request(r);consumed=r.pos;return v;}
-inline std::string encode_request_at(const Request& v,int depth){detail::Reader r{""};if(depth<0||depth>=detail::kDepthLimit)r.refuse("depth_exceeded");std::string out;detail::enc_request(out,v,depth);std::size_t n=0;decode_request_at(out,depth,detail::kDepthLimit,n);return out;}
+inline Request decode_request_at(std::string_view in,int depth,int limit,std::size_t& consumed){detail::Reader r{in};if(depth<0||limit<1)r.refuse("depth_exceeded");r.depth=depth;r.limit=limit<64?limit:64;r.skip_ws();auto v=detail::decode_request(r);consumed=r.pos;return v;}
+inline std::string encode_request_at(const Request& v,int depth){detail::Reader r{""};if(depth<0||depth>=64)r.refuse("depth_exceeded");std::string out;detail::enc_request(out,v,depth);std::size_t n=0;decode_request_at(out,depth,64,n);return out;}
 }  // namespace detail
 inline std::string encode_request(const Request& v){return detail::encode_request_at(v,0)+"\n";}
-inline Request decode_request(std::string_view in){std::size_t n=0;auto v=detail::decode_request_at(in,0,detail::kDepthLimit,n);detail::Reader r{in};r.pos=n;r.skip_ws();if(r.pos!=in.size())r.refuse("trailing_bytes");return v;}
+inline Request decode_request(std::string_view in){std::size_t n=0;auto v=detail::decode_request_at(in,0,64,n);detail::Reader r{in};r.pos=n;r.skip_ws();if(r.pos!=in.size())r.refuse("trailing_bytes");return v;}
 
 namespace detail {
-inline AppMetadata decode_app_metadata_at(std::string_view in,int depth,int limit,std::size_t& consumed){detail::Reader r{in};if(depth<0||limit<1)r.refuse("depth_exceeded");r.depth=depth;r.limit=limit<detail::kDepthLimit?limit:detail::kDepthLimit;r.skip_ws();auto v=detail::decode_app_metadata(r);consumed=r.pos;return v;}
-inline std::string encode_app_metadata_at(const AppMetadata& v,int depth){detail::Reader r{""};if(depth<0||depth>=detail::kDepthLimit)r.refuse("depth_exceeded");std::string out;detail::enc_app_metadata(out,v,depth);std::size_t n=0;decode_app_metadata_at(out,depth,detail::kDepthLimit,n);return out;}
+inline AppMetadata decode_app_metadata_at(std::string_view in,int depth,int limit,std::size_t& consumed){detail::Reader r{in};if(depth<0||limit<1)r.refuse("depth_exceeded");r.depth=depth;r.limit=limit<64?limit:64;r.skip_ws();auto v=detail::decode_app_metadata(r);consumed=r.pos;return v;}
+inline std::string encode_app_metadata_at(const AppMetadata& v,int depth){detail::Reader r{""};if(depth<0||depth>=64)r.refuse("depth_exceeded");std::string out;detail::enc_app_metadata(out,v,depth);std::size_t n=0;decode_app_metadata_at(out,depth,64,n);return out;}
 }  // namespace detail
 inline std::string encode_app_metadata(const AppMetadata& v){return detail::encode_app_metadata_at(v,0)+"\n";}
-inline AppMetadata decode_app_metadata(std::string_view in){std::size_t n=0;auto v=detail::decode_app_metadata_at(in,0,detail::kDepthLimit,n);detail::Reader r{in};r.pos=n;r.skip_ws();if(r.pos!=in.size())r.refuse("trailing_bytes");return v;}
+inline AppMetadata decode_app_metadata(std::string_view in){std::size_t n=0;auto v=detail::decode_app_metadata_at(in,0,64,n);detail::Reader r{in};r.pos=n;r.skip_ws();if(r.pos!=in.size())r.refuse("trailing_bytes");return v;}
 
 namespace detail {
-inline HoldMetadata decode_hold_metadata_at(std::string_view in,int depth,int limit,std::size_t& consumed){detail::Reader r{in};if(depth<0||limit<1)r.refuse("depth_exceeded");r.depth=depth;r.limit=limit<detail::kDepthLimit?limit:detail::kDepthLimit;r.skip_ws();auto v=detail::decode_hold_metadata(r);consumed=r.pos;return v;}
-inline std::string encode_hold_metadata_at(const HoldMetadata& v,int depth){detail::Reader r{""};if(depth<0||depth>=detail::kDepthLimit)r.refuse("depth_exceeded");std::string out;detail::enc_hold_metadata(out,v,depth);std::size_t n=0;decode_hold_metadata_at(out,depth,detail::kDepthLimit,n);return out;}
+inline HoldMetadata decode_hold_metadata_at(std::string_view in,int depth,int limit,std::size_t& consumed){detail::Reader r{in};if(depth<0||limit<1)r.refuse("depth_exceeded");r.depth=depth;r.limit=limit<64?limit:64;r.skip_ws();auto v=detail::decode_hold_metadata(r);consumed=r.pos;return v;}
+inline std::string encode_hold_metadata_at(const HoldMetadata& v,int depth){detail::Reader r{""};if(depth<0||depth>=64)r.refuse("depth_exceeded");std::string out;detail::enc_hold_metadata(out,v,depth);std::size_t n=0;decode_hold_metadata_at(out,depth,64,n);return out;}
 }  // namespace detail
 inline std::string encode_hold_metadata(const HoldMetadata& v){return detail::encode_hold_metadata_at(v,0)+"\n";}
-inline HoldMetadata decode_hold_metadata(std::string_view in){std::size_t n=0;auto v=detail::decode_hold_metadata_at(in,0,detail::kDepthLimit,n);detail::Reader r{in};r.pos=n;r.skip_ws();if(r.pos!=in.size())r.refuse("trailing_bytes");return v;}
+inline HoldMetadata decode_hold_metadata(std::string_view in){std::size_t n=0;auto v=detail::decode_hold_metadata_at(in,0,64,n);detail::Reader r{in};r.pos=n;r.skip_ws();if(r.pos!=in.size())r.refuse("trailing_bytes");return v;}
 
 namespace detail {
-inline ResponseMetadata decode_response_metadata_at(std::string_view in,int depth,int limit,std::size_t& consumed){detail::Reader r{in};if(depth<0||limit<1)r.refuse("depth_exceeded");r.depth=depth;r.limit=limit<detail::kDepthLimit?limit:detail::kDepthLimit;r.skip_ws();auto v=detail::decode_response_metadata(r);consumed=r.pos;return v;}
-inline std::string encode_response_metadata_at(const ResponseMetadata& v,int depth){detail::Reader r{""};if(depth<0||depth>=detail::kDepthLimit)r.refuse("depth_exceeded");std::string out;detail::enc_response_metadata(out,v,depth);std::size_t n=0;decode_response_metadata_at(out,depth,detail::kDepthLimit,n);return out;}
+inline ResponseMetadata decode_response_metadata_at(std::string_view in,int depth,int limit,std::size_t& consumed){detail::Reader r{in};if(depth<0||limit<1)r.refuse("depth_exceeded");r.depth=depth;r.limit=limit<64?limit:64;r.skip_ws();auto v=detail::decode_response_metadata(r);consumed=r.pos;return v;}
+inline std::string encode_response_metadata_at(const ResponseMetadata& v,int depth){detail::Reader r{""};if(depth<0||depth>=64)r.refuse("depth_exceeded");std::string out;detail::enc_response_metadata(out,v,depth);std::size_t n=0;decode_response_metadata_at(out,depth,64,n);return out;}
 }  // namespace detail
 inline std::string encode_response_metadata(const ResponseMetadata& v){return detail::encode_response_metadata_at(v,0)+"\n";}
-inline ResponseMetadata decode_response_metadata(std::string_view in){std::size_t n=0;auto v=detail::decode_response_metadata_at(in,0,detail::kDepthLimit,n);detail::Reader r{in};r.pos=n;r.skip_ws();if(r.pos!=in.size())r.refuse("trailing_bytes");return v;}
+inline ResponseMetadata decode_response_metadata(std::string_view in){std::size_t n=0;auto v=detail::decode_response_metadata_at(in,0,64,n);detail::Reader r{in};r.pos=n;r.skip_ws();if(r.pos!=in.size())r.refuse("trailing_bytes");return v;}
 
 namespace detail {
-inline Subject decode_subject_at(std::string_view in,int depth,int limit,std::size_t& consumed){detail::Reader r{in};if(depth<0||limit<1)r.refuse("depth_exceeded");r.depth=depth;r.limit=limit<detail::kDepthLimit?limit:detail::kDepthLimit;r.skip_ws();auto v=detail::decode_subject(r);consumed=r.pos;return v;}
-inline std::string encode_subject_at(const Subject& v,int depth){detail::Reader r{""};if(depth<0||depth>=detail::kDepthLimit)r.refuse("depth_exceeded");std::string out;detail::enc_subject(out,v,depth);std::size_t n=0;decode_subject_at(out,depth,detail::kDepthLimit,n);return out;}
+inline Subject decode_subject_at(std::string_view in,int depth,int limit,std::size_t& consumed){detail::Reader r{in};if(depth<0||limit<1)r.refuse("depth_exceeded");r.depth=depth;r.limit=limit<64?limit:64;r.skip_ws();auto v=detail::decode_subject(r);consumed=r.pos;return v;}
+inline std::string encode_subject_at(const Subject& v,int depth){detail::Reader r{""};if(depth<0||depth>=64)r.refuse("depth_exceeded");std::string out;detail::enc_subject(out,v,depth);std::size_t n=0;decode_subject_at(out,depth,64,n);return out;}
 }  // namespace detail
 inline std::string encode_subject(const Subject& v){return detail::encode_subject_at(v,0)+"\n";}
-inline Subject decode_subject(std::string_view in){std::size_t n=0;auto v=detail::decode_subject_at(in,0,detail::kDepthLimit,n);detail::Reader r{in};r.pos=n;r.skip_ws();if(r.pos!=in.size())r.refuse("trailing_bytes");return v;}
+inline Subject decode_subject(std::string_view in){std::size_t n=0;auto v=detail::decode_subject_at(in,0,64,n);detail::Reader r{in};r.pos=n;r.skip_ws();if(r.pos!=in.size())r.refuse("trailing_bytes");return v;}
 
 namespace detail {
-inline Decision decode_decision_at(std::string_view in,int depth,int limit,std::size_t& consumed){detail::Reader r{in};if(depth<0||limit<1)r.refuse("depth_exceeded");r.depth=depth;r.limit=limit<detail::kDepthLimit?limit:detail::kDepthLimit;r.skip_ws();auto v=detail::decode_decision(r);consumed=r.pos;return v;}
-inline std::string encode_decision_at(const Decision& v,int depth){detail::Reader r{""};if(depth<0||depth>=detail::kDepthLimit)r.refuse("depth_exceeded");std::string out;detail::enc_decision(out,v,depth);std::size_t n=0;decode_decision_at(out,depth,detail::kDepthLimit,n);return out;}
+inline Decision decode_decision_at(std::string_view in,int depth,int limit,std::size_t& consumed){detail::Reader r{in};if(depth<0||limit<1)r.refuse("depth_exceeded");r.depth=depth;r.limit=limit<64?limit:64;r.skip_ws();auto v=detail::decode_decision(r);consumed=r.pos;return v;}
+inline std::string encode_decision_at(const Decision& v,int depth){detail::Reader r{""};if(depth<0||depth>=64)r.refuse("depth_exceeded");std::string out;detail::enc_decision(out,v,depth);std::size_t n=0;decode_decision_at(out,depth,64,n);return out;}
 }  // namespace detail
 inline std::string encode_decision(const Decision& v){return detail::encode_decision_at(v,0)+"\n";}
-inline Decision decode_decision(std::string_view in){std::size_t n=0;auto v=detail::decode_decision_at(in,0,detail::kDepthLimit,n);detail::Reader r{in};r.pos=n;r.skip_ws();if(r.pos!=in.size())r.refuse("trailing_bytes");return v;}
+inline Decision decode_decision(std::string_view in){std::size_t n=0;auto v=detail::decode_decision_at(in,0,64,n);detail::Reader r{in};r.pos=n;r.skip_ws();if(r.pos!=in.size())r.refuse("trailing_bytes");return v;}
 
 namespace detail {
-inline PolicyRule decode_policy_rule_at(std::string_view in,int depth,int limit,std::size_t& consumed){detail::Reader r{in};if(depth<0||limit<1)r.refuse("depth_exceeded");r.depth=depth;r.limit=limit<detail::kDepthLimit?limit:detail::kDepthLimit;r.skip_ws();auto v=detail::decode_policy_rule(r);consumed=r.pos;return v;}
-inline std::string encode_policy_rule_at(const PolicyRule& v,int depth){detail::Reader r{""};if(depth<0||depth>=detail::kDepthLimit)r.refuse("depth_exceeded");std::string out;detail::enc_policy_rule(out,v,depth);std::size_t n=0;decode_policy_rule_at(out,depth,detail::kDepthLimit,n);return out;}
+inline RevisionDecision decode_revision_decision_at(std::string_view in,int depth,int limit,std::size_t& consumed){detail::Reader r{in};if(depth<0||limit<1)r.refuse("depth_exceeded");r.depth=depth;r.limit=limit<64?limit:64;r.skip_ws();auto v=detail::decode_revision_decision(r);consumed=r.pos;return v;}
+inline std::string encode_revision_decision_at(const RevisionDecision& v,int depth){detail::Reader r{""};if(depth<0||depth>=64)r.refuse("depth_exceeded");std::string out;detail::enc_revision_decision(out,v,depth);std::size_t n=0;decode_revision_decision_at(out,depth,64,n);return out;}
+}  // namespace detail
+inline std::string encode_revision_decision(const RevisionDecision& v){return detail::encode_revision_decision_at(v,0)+"\n";}
+inline RevisionDecision decode_revision_decision(std::string_view in){std::size_t n=0;auto v=detail::decode_revision_decision_at(in,0,64,n);detail::Reader r{in};r.pos=n;r.skip_ws();if(r.pos!=in.size())r.refuse("trailing_bytes");return v;}
+
+namespace detail {
+inline RefusalDetail decode_refusal_detail_at(std::string_view in,int depth,int limit,std::size_t& consumed){detail::Reader r{in};if(depth<0||limit<1)r.refuse("depth_exceeded");r.depth=depth;r.limit=limit<64?limit:64;r.skip_ws();auto v=detail::decode_refusal_detail(r);consumed=r.pos;return v;}
+inline std::string encode_refusal_detail_at(const RefusalDetail& v,int depth){detail::Reader r{""};if(depth<0||depth>=64)r.refuse("depth_exceeded");std::string out;detail::enc_refusal_detail(out,v,depth);std::size_t n=0;decode_refusal_detail_at(out,depth,64,n);return out;}
+}  // namespace detail
+inline std::string encode_refusal_detail(const RefusalDetail& v){return detail::encode_refusal_detail_at(v,0)+"\n";}
+inline RefusalDetail decode_refusal_detail(std::string_view in){std::size_t n=0;auto v=detail::decode_refusal_detail_at(in,0,64,n);detail::Reader r{in};r.pos=n;r.skip_ws();if(r.pos!=in.size())r.refuse("trailing_bytes");return v;}
+
+namespace detail {
+inline PolicyRule decode_policy_rule_at(std::string_view in,int depth,int limit,std::size_t& consumed){detail::Reader r{in};if(depth<0||limit<1)r.refuse("depth_exceeded");r.depth=depth;r.limit=limit<64?limit:64;r.skip_ws();auto v=detail::decode_policy_rule(r);consumed=r.pos;return v;}
+inline std::string encode_policy_rule_at(const PolicyRule& v,int depth){detail::Reader r{""};if(depth<0||depth>=64)r.refuse("depth_exceeded");std::string out;detail::enc_policy_rule(out,v,depth);std::size_t n=0;decode_policy_rule_at(out,depth,64,n);return out;}
 }  // namespace detail
 inline std::string encode_policy_rule(const PolicyRule& v){return detail::encode_policy_rule_at(v,0)+"\n";}
-inline PolicyRule decode_policy_rule(std::string_view in){std::size_t n=0;auto v=detail::decode_policy_rule_at(in,0,detail::kDepthLimit,n);detail::Reader r{in};r.pos=n;r.skip_ws();if(r.pos!=in.size())r.refuse("trailing_bytes");return v;}
+inline PolicyRule decode_policy_rule(std::string_view in){std::size_t n=0;auto v=detail::decode_policy_rule_at(in,0,64,n);detail::Reader r{in};r.pos=n;r.skip_ws();if(r.pos!=in.size())r.refuse("trailing_bytes");return v;}
 
 namespace detail {
-inline PolicyPage decode_policy_page_at(std::string_view in,int depth,int limit,std::size_t& consumed){detail::Reader r{in};if(depth<0||limit<1)r.refuse("depth_exceeded");r.depth=depth;r.limit=limit<detail::kDepthLimit?limit:detail::kDepthLimit;r.skip_ws();auto v=detail::decode_policy_page(r);consumed=r.pos;return v;}
-inline std::string encode_policy_page_at(const PolicyPage& v,int depth){detail::Reader r{""};if(depth<0||depth>=detail::kDepthLimit)r.refuse("depth_exceeded");std::string out;detail::enc_policy_page(out,v,depth);std::size_t n=0;decode_policy_page_at(out,depth,detail::kDepthLimit,n);return out;}
+inline PolicyPage decode_policy_page_at(std::string_view in,int depth,int limit,std::size_t& consumed){detail::Reader r{in};if(depth<0||limit<1)r.refuse("depth_exceeded");r.depth=depth;r.limit=limit<64?limit:64;r.skip_ws();auto v=detail::decode_policy_page(r);consumed=r.pos;return v;}
+inline std::string encode_policy_page_at(const PolicyPage& v,int depth){detail::Reader r{""};if(depth<0||depth>=64)r.refuse("depth_exceeded");std::string out;detail::enc_policy_page(out,v,depth);std::size_t n=0;decode_policy_page_at(out,depth,64,n);return out;}
 }  // namespace detail
 inline std::string encode_policy_page(const PolicyPage& v){return detail::encode_policy_page_at(v,0)+"\n";}
-inline PolicyPage decode_policy_page(std::string_view in){std::size_t n=0;auto v=detail::decode_policy_page_at(in,0,detail::kDepthLimit,n);detail::Reader r{in};r.pos=n;r.skip_ws();if(r.pos!=in.size())r.refuse("trailing_bytes");return v;}
+inline PolicyPage decode_policy_page(std::string_view in){std::size_t n=0;auto v=detail::decode_policy_page_at(in,0,64,n);detail::Reader r{in};r.pos=n;r.skip_ws();if(r.pos!=in.size())r.refuse("trailing_bytes");return v;}
 
 namespace detail {
-inline PolicyEdit decode_policy_edit_at(std::string_view in,int depth,int limit,std::size_t& consumed){detail::Reader r{in};if(depth<0||limit<1)r.refuse("depth_exceeded");r.depth=depth;r.limit=limit<detail::kDepthLimit?limit:detail::kDepthLimit;r.skip_ws();auto v=detail::decode_policy_edit(r);consumed=r.pos;return v;}
-inline std::string encode_policy_edit_at(const PolicyEdit& v,int depth){detail::Reader r{""};if(depth<0||depth>=detail::kDepthLimit)r.refuse("depth_exceeded");std::string out;detail::enc_policy_edit(out,v,depth);std::size_t n=0;decode_policy_edit_at(out,depth,detail::kDepthLimit,n);return out;}
+inline PolicyObservation decode_policy_observation_at(std::string_view in,int depth,int limit,std::size_t& consumed){detail::Reader r{in};if(depth<0||limit<1)r.refuse("depth_exceeded");r.depth=depth;r.limit=limit<64?limit:64;r.skip_ws();auto v=detail::decode_policy_observation(r);consumed=r.pos;return v;}
+inline std::string encode_policy_observation_at(const PolicyObservation& v,int depth){detail::Reader r{""};if(depth<0||depth>=64)r.refuse("depth_exceeded");std::string out;detail::enc_policy_observation(out,v,depth);std::size_t n=0;decode_policy_observation_at(out,depth,64,n);return out;}
+}  // namespace detail
+inline std::string encode_policy_observation(const PolicyObservation& v){return detail::encode_policy_observation_at(v,0)+"\n";}
+inline PolicyObservation decode_policy_observation(std::string_view in){std::size_t n=0;auto v=detail::decode_policy_observation_at(in,0,64,n);detail::Reader r{in};r.pos=n;r.skip_ws();if(r.pos!=in.size())r.refuse("trailing_bytes");return v;}
+
+namespace detail {
+inline PolicyEdit decode_policy_edit_at(std::string_view in,int depth,int limit,std::size_t& consumed){detail::Reader r{in};if(depth<0||limit<1)r.refuse("depth_exceeded");r.depth=depth;r.limit=limit<64?limit:64;r.skip_ws();auto v=detail::decode_policy_edit(r);consumed=r.pos;return v;}
+inline std::string encode_policy_edit_at(const PolicyEdit& v,int depth){detail::Reader r{""};if(depth<0||depth>=64)r.refuse("depth_exceeded");std::string out;detail::enc_policy_edit(out,v,depth);std::size_t n=0;decode_policy_edit_at(out,depth,64,n);return out;}
 }  // namespace detail
 inline std::string encode_policy_edit(const PolicyEdit& v){return detail::encode_policy_edit_at(v,0)+"\n";}
-inline PolicyEdit decode_policy_edit(std::string_view in){std::size_t n=0;auto v=detail::decode_policy_edit_at(in,0,detail::kDepthLimit,n);detail::Reader r{in};r.pos=n;r.skip_ws();if(r.pos!=in.size())r.refuse("trailing_bytes");return v;}
+inline PolicyEdit decode_policy_edit(std::string_view in){std::size_t n=0;auto v=detail::decode_policy_edit_at(in,0,64,n);detail::Reader r{in};r.pos=n;r.skip_ws();if(r.pos!=in.size())r.refuse("trailing_bytes");return v;}
 
 namespace detail {
-inline RuleRecord decode_rule_record_at(std::string_view in,int depth,int limit,std::size_t& consumed){detail::Reader r{in};if(depth<0||limit<1)r.refuse("depth_exceeded");r.depth=depth;r.limit=limit<detail::kDepthLimit?limit:detail::kDepthLimit;r.skip_ws();auto v=detail::decode_rule_record(r);consumed=r.pos;return v;}
-inline std::string encode_rule_record_at(const RuleRecord& v,int depth){detail::Reader r{""};if(depth<0||depth>=detail::kDepthLimit)r.refuse("depth_exceeded");std::string out;detail::enc_rule_record(out,v,depth);std::size_t n=0;decode_rule_record_at(out,depth,detail::kDepthLimit,n);return out;}
+inline RuleRecord decode_rule_record_at(std::string_view in,int depth,int limit,std::size_t& consumed){detail::Reader r{in};if(depth<0||limit<1)r.refuse("depth_exceeded");r.depth=depth;r.limit=limit<64?limit:64;r.skip_ws();auto v=detail::decode_rule_record(r);consumed=r.pos;return v;}
+inline std::string encode_rule_record_at(const RuleRecord& v,int depth){detail::Reader r{""};if(depth<0||depth>=64)r.refuse("depth_exceeded");std::string out;detail::enc_rule_record(out,v,depth);std::size_t n=0;decode_rule_record_at(out,depth,64,n);return out;}
 }  // namespace detail
 inline std::string encode_rule_record(const RuleRecord& v){return detail::encode_rule_record_at(v,0)+"\n";}
-inline RuleRecord decode_rule_record(std::string_view in){std::size_t n=0;auto v=detail::decode_rule_record_at(in,0,detail::kDepthLimit,n);detail::Reader r{in};r.pos=n;r.skip_ws();if(r.pos!=in.size())r.refuse("trailing_bytes");return v;}
+inline RuleRecord decode_rule_record(std::string_view in){std::size_t n=0;auto v=detail::decode_rule_record_at(in,0,64,n);detail::Reader r{in};r.pos=n;r.skip_ws();if(r.pos!=in.size())r.refuse("trailing_bytes");return v;}
 
 namespace detail {
-inline RuleRead decode_rule_read_at(std::string_view in,int depth,int limit,std::size_t& consumed){detail::Reader r{in};if(depth<0||limit<1)r.refuse("depth_exceeded");r.depth=depth;r.limit=limit<detail::kDepthLimit?limit:detail::kDepthLimit;r.skip_ws();auto v=detail::decode_rule_read(r);consumed=r.pos;return v;}
-inline std::string encode_rule_read_at(const RuleRead& v,int depth){detail::Reader r{""};if(depth<0||depth>=detail::kDepthLimit)r.refuse("depth_exceeded");std::string out;detail::enc_rule_read(out,v,depth);std::size_t n=0;decode_rule_read_at(out,depth,detail::kDepthLimit,n);return out;}
+inline RuleRead decode_rule_read_at(std::string_view in,int depth,int limit,std::size_t& consumed){detail::Reader r{in};if(depth<0||limit<1)r.refuse("depth_exceeded");r.depth=depth;r.limit=limit<64?limit:64;r.skip_ws();auto v=detail::decode_rule_read(r);consumed=r.pos;return v;}
+inline std::string encode_rule_read_at(const RuleRead& v,int depth){detail::Reader r{""};if(depth<0||depth>=64)r.refuse("depth_exceeded");std::string out;detail::enc_rule_read(out,v,depth);std::size_t n=0;decode_rule_read_at(out,depth,64,n);return out;}
 }  // namespace detail
 inline std::string encode_rule_read(const RuleRead& v){return detail::encode_rule_read_at(v,0)+"\n";}
-inline RuleRead decode_rule_read(std::string_view in){std::size_t n=0;auto v=detail::decode_rule_read_at(in,0,detail::kDepthLimit,n);detail::Reader r{in};r.pos=n;r.skip_ws();if(r.pos!=in.size())r.refuse("trailing_bytes");return v;}
+inline RuleRead decode_rule_read(std::string_view in){std::size_t n=0;auto v=detail::decode_rule_read_at(in,0,64,n);detail::Reader r{in};r.pos=n;r.skip_ws();if(r.pos!=in.size())r.refuse("trailing_bytes");return v;}
 
 namespace detail {
-inline CatalogEntry decode_catalog_entry_at(std::string_view in,int depth,int limit,std::size_t& consumed){detail::Reader r{in};if(depth<0||limit<1)r.refuse("depth_exceeded");r.depth=depth;r.limit=limit<detail::kDepthLimit?limit:detail::kDepthLimit;r.skip_ws();auto v=detail::decode_catalog_entry(r);consumed=r.pos;return v;}
-inline std::string encode_catalog_entry_at(const CatalogEntry& v,int depth){detail::Reader r{""};if(depth<0||depth>=detail::kDepthLimit)r.refuse("depth_exceeded");std::string out;detail::enc_catalog_entry(out,v,depth);std::size_t n=0;decode_catalog_entry_at(out,depth,detail::kDepthLimit,n);return out;}
+inline CatalogEntry decode_catalog_entry_at(std::string_view in,int depth,int limit,std::size_t& consumed){detail::Reader r{in};if(depth<0||limit<1)r.refuse("depth_exceeded");r.depth=depth;r.limit=limit<64?limit:64;r.skip_ws();auto v=detail::decode_catalog_entry(r);consumed=r.pos;return v;}
+inline std::string encode_catalog_entry_at(const CatalogEntry& v,int depth){detail::Reader r{""};if(depth<0||depth>=64)r.refuse("depth_exceeded");std::string out;detail::enc_catalog_entry(out,v,depth);std::size_t n=0;decode_catalog_entry_at(out,depth,64,n);return out;}
 }  // namespace detail
 inline std::string encode_catalog_entry(const CatalogEntry& v){return detail::encode_catalog_entry_at(v,0)+"\n";}
-inline CatalogEntry decode_catalog_entry(std::string_view in){std::size_t n=0;auto v=detail::decode_catalog_entry_at(in,0,detail::kDepthLimit,n);detail::Reader r{in};r.pos=n;r.skip_ws();if(r.pos!=in.size())r.refuse("trailing_bytes");return v;}
+inline CatalogEntry decode_catalog_entry(std::string_view in){std::size_t n=0;auto v=detail::decode_catalog_entry_at(in,0,64,n);detail::Reader r{in};r.pos=n;r.skip_ws();if(r.pos!=in.size())r.refuse("trailing_bytes");return v;}
 
 namespace detail {
-inline ActionDescription decode_action_description_at(std::string_view in,int depth,int limit,std::size_t& consumed){detail::Reader r{in};if(depth<0||limit<1)r.refuse("depth_exceeded");r.depth=depth;r.limit=limit<detail::kDepthLimit?limit:detail::kDepthLimit;r.skip_ws();auto v=detail::decode_action_description(r);consumed=r.pos;return v;}
-inline std::string encode_action_description_at(const ActionDescription& v,int depth){detail::Reader r{""};if(depth<0||depth>=detail::kDepthLimit)r.refuse("depth_exceeded");std::string out;detail::enc_action_description(out,v,depth);std::size_t n=0;decode_action_description_at(out,depth,detail::kDepthLimit,n);return out;}
+inline ActionDescription decode_action_description_at(std::string_view in,int depth,int limit,std::size_t& consumed){detail::Reader r{in};if(depth<0||limit<1)r.refuse("depth_exceeded");r.depth=depth;r.limit=limit<64?limit:64;r.skip_ws();auto v=detail::decode_action_description(r);consumed=r.pos;return v;}
+inline std::string encode_action_description_at(const ActionDescription& v,int depth){detail::Reader r{""};if(depth<0||depth>=64)r.refuse("depth_exceeded");std::string out;detail::enc_action_description(out,v,depth);std::size_t n=0;decode_action_description_at(out,depth,64,n);return out;}
 }  // namespace detail
 inline std::string encode_action_description(const ActionDescription& v){return detail::encode_action_description_at(v,0)+"\n";}
-inline ActionDescription decode_action_description(std::string_view in){std::size_t n=0;auto v=detail::decode_action_description_at(in,0,detail::kDepthLimit,n);detail::Reader r{in};r.pos=n;r.skip_ws();if(r.pos!=in.size())r.refuse("trailing_bytes");return v;}
+inline ActionDescription decode_action_description(std::string_view in){std::size_t n=0;auto v=detail::decode_action_description_at(in,0,64,n);detail::Reader r{in};r.pos=n;r.skip_ws();if(r.pos!=in.size())r.refuse("trailing_bytes");return v;}
 
 namespace detail {
-inline PermissionDefinition decode_permission_definition_at(std::string_view in,int depth,int limit,std::size_t& consumed){detail::Reader r{in};if(depth<0||limit<1)r.refuse("depth_exceeded");r.depth=depth;r.limit=limit<detail::kDepthLimit?limit:detail::kDepthLimit;r.skip_ws();auto v=detail::decode_permission_definition(r);consumed=r.pos;return v;}
-inline std::string encode_permission_definition_at(const PermissionDefinition& v,int depth){detail::Reader r{""};if(depth<0||depth>=detail::kDepthLimit)r.refuse("depth_exceeded");std::string out;detail::enc_permission_definition(out,v,depth);std::size_t n=0;decode_permission_definition_at(out,depth,detail::kDepthLimit,n);return out;}
+inline PermissionDefinition decode_permission_definition_at(std::string_view in,int depth,int limit,std::size_t& consumed){detail::Reader r{in};if(depth<0||limit<1)r.refuse("depth_exceeded");r.depth=depth;r.limit=limit<64?limit:64;r.skip_ws();auto v=detail::decode_permission_definition(r);consumed=r.pos;return v;}
+inline std::string encode_permission_definition_at(const PermissionDefinition& v,int depth){detail::Reader r{""};if(depth<0||depth>=64)r.refuse("depth_exceeded");std::string out;detail::enc_permission_definition(out,v,depth);std::size_t n=0;decode_permission_definition_at(out,depth,64,n);return out;}
 }  // namespace detail
 inline std::string encode_permission_definition(const PermissionDefinition& v){return detail::encode_permission_definition_at(v,0)+"\n";}
-inline PermissionDefinition decode_permission_definition(std::string_view in){std::size_t n=0;auto v=detail::decode_permission_definition_at(in,0,detail::kDepthLimit,n);detail::Reader r{in};r.pos=n;r.skip_ws();if(r.pos!=in.size())r.refuse("trailing_bytes");return v;}
+inline PermissionDefinition decode_permission_definition(std::string_view in){std::size_t n=0;auto v=detail::decode_permission_definition_at(in,0,64,n);detail::Reader r{in};r.pos=n;r.skip_ws();if(r.pos!=in.size())r.refuse("trailing_bytes");return v;}
 
 namespace detail {
-inline DescribedAction decode_described_action_at(std::string_view in,int depth,int limit,std::size_t& consumed){detail::Reader r{in};if(depth<0||limit<1)r.refuse("depth_exceeded");r.depth=depth;r.limit=limit<detail::kDepthLimit?limit:detail::kDepthLimit;r.skip_ws();auto v=detail::decode_described_action(r);consumed=r.pos;return v;}
-inline std::string encode_described_action_at(const DescribedAction& v,int depth){detail::Reader r{""};if(depth<0||depth>=detail::kDepthLimit)r.refuse("depth_exceeded");std::string out;detail::enc_described_action(out,v,depth);std::size_t n=0;decode_described_action_at(out,depth,detail::kDepthLimit,n);return out;}
+inline DescribedAction decode_described_action_at(std::string_view in,int depth,int limit,std::size_t& consumed){detail::Reader r{in};if(depth<0||limit<1)r.refuse("depth_exceeded");r.depth=depth;r.limit=limit<64?limit:64;r.skip_ws();auto v=detail::decode_described_action(r);consumed=r.pos;return v;}
+inline std::string encode_described_action_at(const DescribedAction& v,int depth){detail::Reader r{""};if(depth<0||depth>=64)r.refuse("depth_exceeded");std::string out;detail::enc_described_action(out,v,depth);std::size_t n=0;decode_described_action_at(out,depth,64,n);return out;}
 }  // namespace detail
 inline std::string encode_described_action(const DescribedAction& v){return detail::encode_described_action_at(v,0)+"\n";}
-inline DescribedAction decode_described_action(std::string_view in){std::size_t n=0;auto v=detail::decode_described_action_at(in,0,detail::kDepthLimit,n);detail::Reader r{in};r.pos=n;r.skip_ws();if(r.pos!=in.size())r.refuse("trailing_bytes");return v;}
+inline DescribedAction decode_described_action(std::string_view in){std::size_t n=0;auto v=detail::decode_described_action_at(in,0,64,n);detail::Reader r{in};r.pos=n;r.skip_ws();if(r.pos!=in.size())r.refuse("trailing_bytes");return v;}
 
 namespace detail {
-inline ActionEdit decode_action_edit_at(std::string_view in,int depth,int limit,std::size_t& consumed){detail::Reader r{in};if(depth<0||limit<1)r.refuse("depth_exceeded");r.depth=depth;r.limit=limit<detail::kDepthLimit?limit:detail::kDepthLimit;r.skip_ws();auto v=detail::decode_action_edit(r);consumed=r.pos;return v;}
-inline std::string encode_action_edit_at(const ActionEdit& v,int depth){detail::Reader r{""};if(depth<0||depth>=detail::kDepthLimit)r.refuse("depth_exceeded");std::string out;detail::enc_action_edit(out,v,depth);std::size_t n=0;decode_action_edit_at(out,depth,detail::kDepthLimit,n);return out;}
+inline ActionEdit decode_action_edit_at(std::string_view in,int depth,int limit,std::size_t& consumed){detail::Reader r{in};if(depth<0||limit<1)r.refuse("depth_exceeded");r.depth=depth;r.limit=limit<64?limit:64;r.skip_ws();auto v=detail::decode_action_edit(r);consumed=r.pos;return v;}
+inline std::string encode_action_edit_at(const ActionEdit& v,int depth){detail::Reader r{""};if(depth<0||depth>=64)r.refuse("depth_exceeded");std::string out;detail::enc_action_edit(out,v,depth);std::size_t n=0;decode_action_edit_at(out,depth,64,n);return out;}
 }  // namespace detail
 inline std::string encode_action_edit(const ActionEdit& v){return detail::encode_action_edit_at(v,0)+"\n";}
-inline ActionEdit decode_action_edit(std::string_view in){std::size_t n=0;auto v=detail::decode_action_edit_at(in,0,detail::kDepthLimit,n);detail::Reader r{in};r.pos=n;r.skip_ws();if(r.pos!=in.size())r.refuse("trailing_bytes");return v;}
+inline ActionEdit decode_action_edit(std::string_view in){std::size_t n=0;auto v=detail::decode_action_edit_at(in,0,64,n);detail::Reader r{in};r.pos=n;r.skip_ws();if(r.pos!=in.size())r.refuse("trailing_bytes");return v;}
 
 namespace detail {
-inline DescriptionEdit decode_description_edit_at(std::string_view in,int depth,int limit,std::size_t& consumed){detail::Reader r{in};if(depth<0||limit<1)r.refuse("depth_exceeded");r.depth=depth;r.limit=limit<detail::kDepthLimit?limit:detail::kDepthLimit;r.skip_ws();auto v=detail::decode_description_edit(r);consumed=r.pos;return v;}
-inline std::string encode_description_edit_at(const DescriptionEdit& v,int depth){detail::Reader r{""};if(depth<0||depth>=detail::kDepthLimit)r.refuse("depth_exceeded");std::string out;detail::enc_description_edit(out,v,depth);std::size_t n=0;decode_description_edit_at(out,depth,detail::kDepthLimit,n);return out;}
+inline DescriptionEdit decode_description_edit_at(std::string_view in,int depth,int limit,std::size_t& consumed){detail::Reader r{in};if(depth<0||limit<1)r.refuse("depth_exceeded");r.depth=depth;r.limit=limit<64?limit:64;r.skip_ws();auto v=detail::decode_description_edit(r);consumed=r.pos;return v;}
+inline std::string encode_description_edit_at(const DescriptionEdit& v,int depth){detail::Reader r{""};if(depth<0||depth>=64)r.refuse("depth_exceeded");std::string out;detail::enc_description_edit(out,v,depth);std::size_t n=0;decode_description_edit_at(out,depth,64,n);return out;}
 }  // namespace detail
 inline std::string encode_description_edit(const DescriptionEdit& v){return detail::encode_description_edit_at(v,0)+"\n";}
-inline DescriptionEdit decode_description_edit(std::string_view in){std::size_t n=0;auto v=detail::decode_description_edit_at(in,0,detail::kDepthLimit,n);detail::Reader r{in};r.pos=n;r.skip_ws();if(r.pos!=in.size())r.refuse("trailing_bytes");return v;}
+inline DescriptionEdit decode_description_edit(std::string_view in){std::size_t n=0;auto v=detail::decode_description_edit_at(in,0,64,n);detail::Reader r{in};r.pos=n;r.skip_ws();if(r.pos!=in.size())r.refuse("trailing_bytes");return v;}
 
 namespace detail {
-inline DescriptionPage decode_description_page_at(std::string_view in,int depth,int limit,std::size_t& consumed){detail::Reader r{in};if(depth<0||limit<1)r.refuse("depth_exceeded");r.depth=depth;r.limit=limit<detail::kDepthLimit?limit:detail::kDepthLimit;r.skip_ws();auto v=detail::decode_description_page(r);consumed=r.pos;return v;}
-inline std::string encode_description_page_at(const DescriptionPage& v,int depth){detail::Reader r{""};if(depth<0||depth>=detail::kDepthLimit)r.refuse("depth_exceeded");std::string out;detail::enc_description_page(out,v,depth);std::size_t n=0;decode_description_page_at(out,depth,detail::kDepthLimit,n);return out;}
+inline DescriptionPage decode_description_page_at(std::string_view in,int depth,int limit,std::size_t& consumed){detail::Reader r{in};if(depth<0||limit<1)r.refuse("depth_exceeded");r.depth=depth;r.limit=limit<64?limit:64;r.skip_ws();auto v=detail::decode_description_page(r);consumed=r.pos;return v;}
+inline std::string encode_description_page_at(const DescriptionPage& v,int depth){detail::Reader r{""};if(depth<0||depth>=64)r.refuse("depth_exceeded");std::string out;detail::enc_description_page(out,v,depth);std::size_t n=0;decode_description_page_at(out,depth,64,n);return out;}
 }  // namespace detail
 inline std::string encode_description_page(const DescriptionPage& v){return detail::encode_description_page_at(v,0)+"\n";}
-inline DescriptionPage decode_description_page(std::string_view in){std::size_t n=0;auto v=detail::decode_description_page_at(in,0,detail::kDepthLimit,n);detail::Reader r{in};r.pos=n;r.skip_ws();if(r.pos!=in.size())r.refuse("trailing_bytes");return v;}
+inline DescriptionPage decode_description_page(std::string_view in){std::size_t n=0;auto v=detail::decode_description_page_at(in,0,64,n);detail::Reader r{in};r.pos=n;r.skip_ws();if(r.pos!=in.size())r.refuse("trailing_bytes");return v;}
 
 namespace detail {
-inline AccountDefault decode_account_default_at(std::string_view in,int depth,int limit,std::size_t& consumed){detail::Reader r{in};if(depth<0||limit<1)r.refuse("depth_exceeded");r.depth=depth;r.limit=limit<detail::kDepthLimit?limit:detail::kDepthLimit;r.skip_ws();auto v=detail::decode_account_default(r);consumed=r.pos;return v;}
-inline std::string encode_account_default_at(const AccountDefault& v,int depth){detail::Reader r{""};if(depth<0||depth>=detail::kDepthLimit)r.refuse("depth_exceeded");std::string out;detail::enc_account_default(out,v,depth);std::size_t n=0;decode_account_default_at(out,depth,detail::kDepthLimit,n);return out;}
+inline AccountDefault decode_account_default_at(std::string_view in,int depth,int limit,std::size_t& consumed){detail::Reader r{in};if(depth<0||limit<1)r.refuse("depth_exceeded");r.depth=depth;r.limit=limit<64?limit:64;r.skip_ws();auto v=detail::decode_account_default(r);consumed=r.pos;return v;}
+inline std::string encode_account_default_at(const AccountDefault& v,int depth){detail::Reader r{""};if(depth<0||depth>=64)r.refuse("depth_exceeded");std::string out;detail::enc_account_default(out,v,depth);std::size_t n=0;decode_account_default_at(out,depth,64,n);return out;}
 }  // namespace detail
 inline std::string encode_account_default(const AccountDefault& v){return detail::encode_account_default_at(v,0)+"\n";}
-inline AccountDefault decode_account_default(std::string_view in){std::size_t n=0;auto v=detail::decode_account_default_at(in,0,detail::kDepthLimit,n);detail::Reader r{in};r.pos=n;r.skip_ws();if(r.pos!=in.size())r.refuse("trailing_bytes");return v;}
+inline AccountDefault decode_account_default(std::string_view in){std::size_t n=0;auto v=detail::decode_account_default_at(in,0,64,n);detail::Reader r{in};r.pos=n;r.skip_ws();if(r.pos!=in.size())r.refuse("trailing_bytes");return v;}
 
 namespace detail {
-inline DefaultPage decode_default_page_at(std::string_view in,int depth,int limit,std::size_t& consumed){detail::Reader r{in};if(depth<0||limit<1)r.refuse("depth_exceeded");r.depth=depth;r.limit=limit<detail::kDepthLimit?limit:detail::kDepthLimit;r.skip_ws();auto v=detail::decode_default_page(r);consumed=r.pos;return v;}
-inline std::string encode_default_page_at(const DefaultPage& v,int depth){detail::Reader r{""};if(depth<0||depth>=detail::kDepthLimit)r.refuse("depth_exceeded");std::string out;detail::enc_default_page(out,v,depth);std::size_t n=0;decode_default_page_at(out,depth,detail::kDepthLimit,n);return out;}
+inline DefaultPage decode_default_page_at(std::string_view in,int depth,int limit,std::size_t& consumed){detail::Reader r{in};if(depth<0||limit<1)r.refuse("depth_exceeded");r.depth=depth;r.limit=limit<64?limit:64;r.skip_ws();auto v=detail::decode_default_page(r);consumed=r.pos;return v;}
+inline std::string encode_default_page_at(const DefaultPage& v,int depth){detail::Reader r{""};if(depth<0||depth>=64)r.refuse("depth_exceeded");std::string out;detail::enc_default_page(out,v,depth);std::size_t n=0;decode_default_page_at(out,depth,64,n);return out;}
 }  // namespace detail
 inline std::string encode_default_page(const DefaultPage& v){return detail::encode_default_page_at(v,0)+"\n";}
-inline DefaultPage decode_default_page(std::string_view in){std::size_t n=0;auto v=detail::decode_default_page_at(in,0,detail::kDepthLimit,n);detail::Reader r{in};r.pos=n;r.skip_ws();if(r.pos!=in.size())r.refuse("trailing_bytes");return v;}
+inline DefaultPage decode_default_page(std::string_view in){std::size_t n=0;auto v=detail::decode_default_page_at(in,0,64,n);detail::Reader r{in};r.pos=n;r.skip_ws();if(r.pos!=in.size())r.refuse("trailing_bytes");return v;}
 
 namespace detail {
-inline DefaultEdit decode_default_edit_at(std::string_view in,int depth,int limit,std::size_t& consumed){detail::Reader r{in};if(depth<0||limit<1)r.refuse("depth_exceeded");r.depth=depth;r.limit=limit<detail::kDepthLimit?limit:detail::kDepthLimit;r.skip_ws();auto v=detail::decode_default_edit(r);consumed=r.pos;return v;}
-inline std::string encode_default_edit_at(const DefaultEdit& v,int depth){detail::Reader r{""};if(depth<0||depth>=detail::kDepthLimit)r.refuse("depth_exceeded");std::string out;detail::enc_default_edit(out,v,depth);std::size_t n=0;decode_default_edit_at(out,depth,detail::kDepthLimit,n);return out;}
+inline DefaultEdit decode_default_edit_at(std::string_view in,int depth,int limit,std::size_t& consumed){detail::Reader r{in};if(depth<0||limit<1)r.refuse("depth_exceeded");r.depth=depth;r.limit=limit<64?limit:64;r.skip_ws();auto v=detail::decode_default_edit(r);consumed=r.pos;return v;}
+inline std::string encode_default_edit_at(const DefaultEdit& v,int depth){detail::Reader r{""};if(depth<0||depth>=64)r.refuse("depth_exceeded");std::string out;detail::enc_default_edit(out,v,depth);std::size_t n=0;decode_default_edit_at(out,depth,64,n);return out;}
 }  // namespace detail
 inline std::string encode_default_edit(const DefaultEdit& v){return detail::encode_default_edit_at(v,0)+"\n";}
-inline DefaultEdit decode_default_edit(std::string_view in){std::size_t n=0;auto v=detail::decode_default_edit_at(in,0,detail::kDepthLimit,n);detail::Reader r{in};r.pos=n;r.skip_ws();if(r.pos!=in.size())r.refuse("trailing_bytes");return v;}
+inline DefaultEdit decode_default_edit(std::string_view in){std::size_t n=0;auto v=detail::decode_default_edit_at(in,0,64,n);detail::Reader r{in};r.pos=n;r.skip_ws();if(r.pos!=in.size())r.refuse("trailing_bytes");return v;}
 
 namespace detail {
-inline DecisionExplanation decode_decision_explanation_at(std::string_view in,int depth,int limit,std::size_t& consumed){detail::Reader r{in};if(depth<0||limit<1)r.refuse("depth_exceeded");r.depth=depth;r.limit=limit<detail::kDepthLimit?limit:detail::kDepthLimit;r.skip_ws();auto v=detail::decode_decision_explanation(r);consumed=r.pos;return v;}
-inline std::string encode_decision_explanation_at(const DecisionExplanation& v,int depth){detail::Reader r{""};if(depth<0||depth>=detail::kDepthLimit)r.refuse("depth_exceeded");std::string out;detail::enc_decision_explanation(out,v,depth);std::size_t n=0;decode_decision_explanation_at(out,depth,detail::kDepthLimit,n);return out;}
+inline DecisionExplanation decode_decision_explanation_at(std::string_view in,int depth,int limit,std::size_t& consumed){detail::Reader r{in};if(depth<0||limit<1)r.refuse("depth_exceeded");r.depth=depth;r.limit=limit<64?limit:64;r.skip_ws();auto v=detail::decode_decision_explanation(r);consumed=r.pos;return v;}
+inline std::string encode_decision_explanation_at(const DecisionExplanation& v,int depth){detail::Reader r{""};if(depth<0||depth>=64)r.refuse("depth_exceeded");std::string out;detail::enc_decision_explanation(out,v,depth);std::size_t n=0;decode_decision_explanation_at(out,depth,64,n);return out;}
 }  // namespace detail
 inline std::string encode_decision_explanation(const DecisionExplanation& v){return detail::encode_decision_explanation_at(v,0)+"\n";}
-inline DecisionExplanation decode_decision_explanation(std::string_view in){std::size_t n=0;auto v=detail::decode_decision_explanation_at(in,0,detail::kDepthLimit,n);detail::Reader r{in};r.pos=n;r.skip_ws();if(r.pos!=in.size())r.refuse("trailing_bytes");return v;}
+inline DecisionExplanation decode_decision_explanation(std::string_view in){std::size_t n=0;auto v=detail::decode_decision_explanation_at(in,0,64,n);detail::Reader r{in};r.pos=n;r.skip_ws();if(r.pos!=in.size())r.refuse("trailing_bytes");return v;}
 
 namespace detail {
-inline PermissionKey decode_permission_key_at(std::string_view in,int depth,int limit,std::size_t& consumed){detail::Reader r{in};if(depth<0||limit<1)r.refuse("depth_exceeded");r.depth=depth;r.limit=limit<detail::kDepthLimit?limit:detail::kDepthLimit;r.skip_ws();auto v=detail::decode_permission_key(r);consumed=r.pos;return v;}
-inline std::string encode_permission_key_at(const PermissionKey& v,int depth){detail::Reader r{""};if(depth<0||depth>=detail::kDepthLimit)r.refuse("depth_exceeded");std::string out;detail::enc_permission_key(out,v,depth);std::size_t n=0;decode_permission_key_at(out,depth,detail::kDepthLimit,n);return out;}
+inline PermissionKey decode_permission_key_at(std::string_view in,int depth,int limit,std::size_t& consumed){detail::Reader r{in};if(depth<0||limit<1)r.refuse("depth_exceeded");r.depth=depth;r.limit=limit<64?limit:64;r.skip_ws();auto v=detail::decode_permission_key(r);consumed=r.pos;return v;}
+inline std::string encode_permission_key_at(const PermissionKey& v,int depth){detail::Reader r{""};if(depth<0||depth>=64)r.refuse("depth_exceeded");std::string out;detail::enc_permission_key(out,v,depth);std::size_t n=0;decode_permission_key_at(out,depth,64,n);return out;}
 }  // namespace detail
 inline std::string encode_permission_key(const PermissionKey& v){return detail::encode_permission_key_at(v,0)+"\n";}
-inline PermissionKey decode_permission_key(std::string_view in){std::size_t n=0;auto v=detail::decode_permission_key_at(in,0,detail::kDepthLimit,n);detail::Reader r{in};r.pos=n;r.skip_ws();if(r.pos!=in.size())r.refuse("trailing_bytes");return v;}
+inline PermissionKey decode_permission_key(std::string_view in){std::size_t n=0;auto v=detail::decode_permission_key_at(in,0,64,n);detail::Reader r{in};r.pos=n;r.skip_ws();if(r.pos!=in.size())r.refuse("trailing_bytes");return v;}
 
 namespace detail {
-inline ResourceSelector decode_resource_selector_at(std::string_view in,int depth,int limit,std::size_t& consumed){detail::Reader r{in};if(depth<0||limit<1)r.refuse("depth_exceeded");r.depth=depth;r.limit=limit<detail::kDepthLimit?limit:detail::kDepthLimit;r.skip_ws();auto v=detail::decode_resource_selector(r);consumed=r.pos;return v;}
-inline std::string encode_resource_selector_at(const ResourceSelector& v,int depth){detail::Reader r{""};if(depth<0||depth>=detail::kDepthLimit)r.refuse("depth_exceeded");std::string out;detail::enc_resource_selector(out,v,depth);std::size_t n=0;decode_resource_selector_at(out,depth,detail::kDepthLimit,n);return out;}
+inline ResourceSelector decode_resource_selector_at(std::string_view in,int depth,int limit,std::size_t& consumed){detail::Reader r{in};if(depth<0||limit<1)r.refuse("depth_exceeded");r.depth=depth;r.limit=limit<64?limit:64;r.skip_ws();auto v=detail::decode_resource_selector(r);consumed=r.pos;return v;}
+inline std::string encode_resource_selector_at(const ResourceSelector& v,int depth){detail::Reader r{""};if(depth<0||depth>=64)r.refuse("depth_exceeded");std::string out;detail::enc_resource_selector(out,v,depth);std::size_t n=0;decode_resource_selector_at(out,depth,64,n);return out;}
 }  // namespace detail
 inline std::string encode_resource_selector(const ResourceSelector& v){return detail::encode_resource_selector_at(v,0)+"\n";}
-inline ResourceSelector decode_resource_selector(std::string_view in){std::size_t n=0;auto v=detail::decode_resource_selector_at(in,0,detail::kDepthLimit,n);detail::Reader r{in};r.pos=n;r.skip_ws();if(r.pos!=in.size())r.refuse("trailing_bytes");return v;}
+inline ResourceSelector decode_resource_selector(std::string_view in){std::size_t n=0;auto v=detail::decode_resource_selector_at(in,0,64,n);detail::Reader r{in};r.pos=n;r.skip_ws();if(r.pos!=in.size())r.refuse("trailing_bytes");return v;}
 
 namespace detail {
-inline PermissionSelection decode_permission_selection_at(std::string_view in,int depth,int limit,std::size_t& consumed){detail::Reader r{in};if(depth<0||limit<1)r.refuse("depth_exceeded");r.depth=depth;r.limit=limit<detail::kDepthLimit?limit:detail::kDepthLimit;r.skip_ws();auto v=detail::decode_permission_selection(r);consumed=r.pos;return v;}
-inline std::string encode_permission_selection_at(const PermissionSelection& v,int depth){detail::Reader r{""};if(depth<0||depth>=detail::kDepthLimit)r.refuse("depth_exceeded");std::string out;detail::enc_permission_selection(out,v,depth);std::size_t n=0;decode_permission_selection_at(out,depth,detail::kDepthLimit,n);return out;}
+inline PermissionSelection decode_permission_selection_at(std::string_view in,int depth,int limit,std::size_t& consumed){detail::Reader r{in};if(depth<0||limit<1)r.refuse("depth_exceeded");r.depth=depth;r.limit=limit<64?limit:64;r.skip_ws();auto v=detail::decode_permission_selection(r);consumed=r.pos;return v;}
+inline std::string encode_permission_selection_at(const PermissionSelection& v,int depth){detail::Reader r{""};if(depth<0||depth>=64)r.refuse("depth_exceeded");std::string out;detail::enc_permission_selection(out,v,depth);std::size_t n=0;decode_permission_selection_at(out,depth,64,n);return out;}
 }  // namespace detail
 inline std::string encode_permission_selection(const PermissionSelection& v){return detail::encode_permission_selection_at(v,0)+"\n";}
-inline PermissionSelection decode_permission_selection(std::string_view in){std::size_t n=0;auto v=detail::decode_permission_selection_at(in,0,detail::kDepthLimit,n);detail::Reader r{in};r.pos=n;r.skip_ws();if(r.pos!=in.size())r.refuse("trailing_bytes");return v;}
+inline PermissionSelection decode_permission_selection(std::string_view in){std::size_t n=0;auto v=detail::decode_permission_selection_at(in,0,64,n);detail::Reader r{in};r.pos=n;r.skip_ws();if(r.pos!=in.size())r.refuse("trailing_bytes");return v;}
 
 namespace detail {
-inline ConcreteResource decode_concrete_resource_at(std::string_view in,int depth,int limit,std::size_t& consumed){detail::Reader r{in};if(depth<0||limit<1)r.refuse("depth_exceeded");r.depth=depth;r.limit=limit<detail::kDepthLimit?limit:detail::kDepthLimit;r.skip_ws();auto v=detail::decode_concrete_resource(r);consumed=r.pos;return v;}
-inline std::string encode_concrete_resource_at(const ConcreteResource& v,int depth){detail::Reader r{""};if(depth<0||depth>=detail::kDepthLimit)r.refuse("depth_exceeded");std::string out;detail::enc_concrete_resource(out,v,depth);std::size_t n=0;decode_concrete_resource_at(out,depth,detail::kDepthLimit,n);return out;}
+inline ConcreteResource decode_concrete_resource_at(std::string_view in,int depth,int limit,std::size_t& consumed){detail::Reader r{in};if(depth<0||limit<1)r.refuse("depth_exceeded");r.depth=depth;r.limit=limit<64?limit:64;r.skip_ws();auto v=detail::decode_concrete_resource(r);consumed=r.pos;return v;}
+inline std::string encode_concrete_resource_at(const ConcreteResource& v,int depth){detail::Reader r{""};if(depth<0||depth>=64)r.refuse("depth_exceeded");std::string out;detail::enc_concrete_resource(out,v,depth);std::size_t n=0;decode_concrete_resource_at(out,depth,64,n);return out;}
 }  // namespace detail
 inline std::string encode_concrete_resource(const ConcreteResource& v){return detail::encode_concrete_resource_at(v,0)+"\n";}
-inline ConcreteResource decode_concrete_resource(std::string_view in){std::size_t n=0;auto v=detail::decode_concrete_resource_at(in,0,detail::kDepthLimit,n);detail::Reader r{in};r.pos=n;r.skip_ws();if(r.pos!=in.size())r.refuse("trailing_bytes");return v;}
+inline ConcreteResource decode_concrete_resource(std::string_view in){std::size_t n=0;auto v=detail::decode_concrete_resource_at(in,0,64,n);detail::Reader r{in};r.pos=n;r.skip_ws();if(r.pos!=in.size())r.refuse("trailing_bytes");return v;}
 
 namespace detail {
-inline CheckBatchRequest decode_check_batch_request_at(std::string_view in,int depth,int limit,std::size_t& consumed){detail::Reader r{in};if(depth<0||limit<1)r.refuse("depth_exceeded");r.depth=depth;r.limit=limit<detail::kDepthLimit?limit:detail::kDepthLimit;r.skip_ws();auto v=detail::decode_check_batch_request(r);consumed=r.pos;return v;}
-inline std::string encode_check_batch_request_at(const CheckBatchRequest& v,int depth){detail::Reader r{""};if(depth<0||depth>=detail::kDepthLimit)r.refuse("depth_exceeded");std::string out;detail::enc_check_batch_request(out,v,depth);std::size_t n=0;decode_check_batch_request_at(out,depth,detail::kDepthLimit,n);return out;}
+inline CheckBatchRequest decode_check_batch_request_at(std::string_view in,int depth,int limit,std::size_t& consumed){detail::Reader r{in};if(depth<0||limit<1)r.refuse("depth_exceeded");r.depth=depth;r.limit=limit<64?limit:64;r.skip_ws();auto v=detail::decode_check_batch_request(r);consumed=r.pos;return v;}
+inline std::string encode_check_batch_request_at(const CheckBatchRequest& v,int depth){detail::Reader r{""};if(depth<0||depth>=64)r.refuse("depth_exceeded");std::string out;detail::enc_check_batch_request(out,v,depth);std::size_t n=0;decode_check_batch_request_at(out,depth,64,n);return out;}
 }  // namespace detail
 inline std::string encode_check_batch_request(const CheckBatchRequest& v){return detail::encode_check_batch_request_at(v,0)+"\n";}
-inline CheckBatchRequest decode_check_batch_request(std::string_view in){std::size_t n=0;auto v=detail::decode_check_batch_request_at(in,0,detail::kDepthLimit,n);detail::Reader r{in};r.pos=n;r.skip_ws();if(r.pos!=in.size())r.refuse("trailing_bytes");return v;}
+inline CheckBatchRequest decode_check_batch_request(std::string_view in){std::size_t n=0;auto v=detail::decode_check_batch_request_at(in,0,64,n);detail::Reader r{in};r.pos=n;r.skip_ws();if(r.pos!=in.size())r.refuse("trailing_bytes");return v;}
 
 namespace detail {
-inline BatchDecision decode_batch_decision_at(std::string_view in,int depth,int limit,std::size_t& consumed){detail::Reader r{in};if(depth<0||limit<1)r.refuse("depth_exceeded");r.depth=depth;r.limit=limit<detail::kDepthLimit?limit:detail::kDepthLimit;r.skip_ws();auto v=detail::decode_batch_decision(r);consumed=r.pos;return v;}
-inline std::string encode_batch_decision_at(const BatchDecision& v,int depth){detail::Reader r{""};if(depth<0||depth>=detail::kDepthLimit)r.refuse("depth_exceeded");std::string out;detail::enc_batch_decision(out,v,depth);std::size_t n=0;decode_batch_decision_at(out,depth,detail::kDepthLimit,n);return out;}
+inline BatchDecision decode_batch_decision_at(std::string_view in,int depth,int limit,std::size_t& consumed){detail::Reader r{in};if(depth<0||limit<1)r.refuse("depth_exceeded");r.depth=depth;r.limit=limit<64?limit:64;r.skip_ws();auto v=detail::decode_batch_decision(r);consumed=r.pos;return v;}
+inline std::string encode_batch_decision_at(const BatchDecision& v,int depth){detail::Reader r{""};if(depth<0||depth>=64)r.refuse("depth_exceeded");std::string out;detail::enc_batch_decision(out,v,depth);std::size_t n=0;decode_batch_decision_at(out,depth,64,n);return out;}
 }  // namespace detail
 inline std::string encode_batch_decision(const BatchDecision& v){return detail::encode_batch_decision_at(v,0)+"\n";}
-inline BatchDecision decode_batch_decision(std::string_view in){std::size_t n=0;auto v=detail::decode_batch_decision_at(in,0,detail::kDepthLimit,n);detail::Reader r{in};r.pos=n;r.skip_ws();if(r.pos!=in.size())r.refuse("trailing_bytes");return v;}
+inline BatchDecision decode_batch_decision(std::string_view in){std::size_t n=0;auto v=detail::decode_batch_decision_at(in,0,64,n);detail::Reader r{in};r.pos=n;r.skip_ws();if(r.pos!=in.size())r.refuse("trailing_bytes");return v;}
 
 namespace detail {
-inline SelectorPermissionDefinition decode_selector_permission_definition_at(std::string_view in,int depth,int limit,std::size_t& consumed){detail::Reader r{in};if(depth<0||limit<1)r.refuse("depth_exceeded");r.depth=depth;r.limit=limit<detail::kDepthLimit?limit:detail::kDepthLimit;r.skip_ws();auto v=detail::decode_selector_permission_definition(r);consumed=r.pos;return v;}
-inline std::string encode_selector_permission_definition_at(const SelectorPermissionDefinition& v,int depth){detail::Reader r{""};if(depth<0||depth>=detail::kDepthLimit)r.refuse("depth_exceeded");std::string out;detail::enc_selector_permission_definition(out,v,depth);std::size_t n=0;decode_selector_permission_definition_at(out,depth,detail::kDepthLimit,n);return out;}
+inline SelectorPermissionDefinition decode_selector_permission_definition_at(std::string_view in,int depth,int limit,std::size_t& consumed){detail::Reader r{in};if(depth<0||limit<1)r.refuse("depth_exceeded");r.depth=depth;r.limit=limit<64?limit:64;r.skip_ws();auto v=detail::decode_selector_permission_definition(r);consumed=r.pos;return v;}
+inline std::string encode_selector_permission_definition_at(const SelectorPermissionDefinition& v,int depth){detail::Reader r{""};if(depth<0||depth>=64)r.refuse("depth_exceeded");std::string out;detail::enc_selector_permission_definition(out,v,depth);std::size_t n=0;decode_selector_permission_definition_at(out,depth,64,n);return out;}
 }  // namespace detail
 inline std::string encode_selector_permission_definition(const SelectorPermissionDefinition& v){return detail::encode_selector_permission_definition_at(v,0)+"\n";}
-inline SelectorPermissionDefinition decode_selector_permission_definition(std::string_view in){std::size_t n=0;auto v=detail::decode_selector_permission_definition_at(in,0,detail::kDepthLimit,n);detail::Reader r{in};r.pos=n;r.skip_ws();if(r.pos!=in.size())r.refuse("trailing_bytes");return v;}
+inline SelectorPermissionDefinition decode_selector_permission_definition(std::string_view in){std::size_t n=0;auto v=detail::decode_selector_permission_definition_at(in,0,64,n);detail::Reader r{in};r.pos=n;r.skip_ws();if(r.pos!=in.size())r.refuse("trailing_bytes");return v;}
 
 namespace detail {
-inline PermissionDefinitionPage decode_permission_definition_page_at(std::string_view in,int depth,int limit,std::size_t& consumed){detail::Reader r{in};if(depth<0||limit<1)r.refuse("depth_exceeded");r.depth=depth;r.limit=limit<detail::kDepthLimit?limit:detail::kDepthLimit;r.skip_ws();auto v=detail::decode_permission_definition_page(r);consumed=r.pos;return v;}
-inline std::string encode_permission_definition_page_at(const PermissionDefinitionPage& v,int depth){detail::Reader r{""};if(depth<0||depth>=detail::kDepthLimit)r.refuse("depth_exceeded");std::string out;detail::enc_permission_definition_page(out,v,depth);std::size_t n=0;decode_permission_definition_page_at(out,depth,detail::kDepthLimit,n);return out;}
+inline PermissionDefinitionPage decode_permission_definition_page_at(std::string_view in,int depth,int limit,std::size_t& consumed){detail::Reader r{in};if(depth<0||limit<1)r.refuse("depth_exceeded");r.depth=depth;r.limit=limit<64?limit:64;r.skip_ws();auto v=detail::decode_permission_definition_page(r);consumed=r.pos;return v;}
+inline std::string encode_permission_definition_page_at(const PermissionDefinitionPage& v,int depth){detail::Reader r{""};if(depth<0||depth>=64)r.refuse("depth_exceeded");std::string out;detail::enc_permission_definition_page(out,v,depth);std::size_t n=0;decode_permission_definition_page_at(out,depth,64,n);return out;}
 }  // namespace detail
 inline std::string encode_permission_definition_page(const PermissionDefinitionPage& v){return detail::encode_permission_definition_page_at(v,0)+"\n";}
-inline PermissionDefinitionPage decode_permission_definition_page(std::string_view in){std::size_t n=0;auto v=detail::decode_permission_definition_page_at(in,0,detail::kDepthLimit,n);detail::Reader r{in};r.pos=n;r.skip_ws();if(r.pos!=in.size())r.refuse("trailing_bytes");return v;}
+inline PermissionDefinitionPage decode_permission_definition_page(std::string_view in){std::size_t n=0;auto v=detail::decode_permission_definition_page_at(in,0,64,n);detail::Reader r{in};r.pos=n;r.skip_ws();if(r.pos!=in.size())r.refuse("trailing_bytes");return v;}
 
 namespace detail {
-inline PermissionBundleDefinition decode_permission_bundle_definition_at(std::string_view in,int depth,int limit,std::size_t& consumed){detail::Reader r{in};if(depth<0||limit<1)r.refuse("depth_exceeded");r.depth=depth;r.limit=limit<detail::kDepthLimit?limit:detail::kDepthLimit;r.skip_ws();auto v=detail::decode_permission_bundle_definition(r);consumed=r.pos;return v;}
-inline std::string encode_permission_bundle_definition_at(const PermissionBundleDefinition& v,int depth){detail::Reader r{""};if(depth<0||depth>=detail::kDepthLimit)r.refuse("depth_exceeded");std::string out;detail::enc_permission_bundle_definition(out,v,depth);std::size_t n=0;decode_permission_bundle_definition_at(out,depth,detail::kDepthLimit,n);return out;}
+inline PermissionBundleDefinition decode_permission_bundle_definition_at(std::string_view in,int depth,int limit,std::size_t& consumed){detail::Reader r{in};if(depth<0||limit<1)r.refuse("depth_exceeded");r.depth=depth;r.limit=limit<64?limit:64;r.skip_ws();auto v=detail::decode_permission_bundle_definition(r);consumed=r.pos;return v;}
+inline std::string encode_permission_bundle_definition_at(const PermissionBundleDefinition& v,int depth){detail::Reader r{""};if(depth<0||depth>=64)r.refuse("depth_exceeded");std::string out;detail::enc_permission_bundle_definition(out,v,depth);std::size_t n=0;decode_permission_bundle_definition_at(out,depth,64,n);return out;}
 }  // namespace detail
 inline std::string encode_permission_bundle_definition(const PermissionBundleDefinition& v){return detail::encode_permission_bundle_definition_at(v,0)+"\n";}
-inline PermissionBundleDefinition decode_permission_bundle_definition(std::string_view in){std::size_t n=0;auto v=detail::decode_permission_bundle_definition_at(in,0,detail::kDepthLimit,n);detail::Reader r{in};r.pos=n;r.skip_ws();if(r.pos!=in.size())r.refuse("trailing_bytes");return v;}
+inline PermissionBundleDefinition decode_permission_bundle_definition(std::string_view in){std::size_t n=0;auto v=detail::decode_permission_bundle_definition_at(in,0,64,n);detail::Reader r{in};r.pos=n;r.skip_ws();if(r.pos!=in.size())r.refuse("trailing_bytes");return v;}
 
 namespace detail {
-inline PermissionBundlePage decode_permission_bundle_page_at(std::string_view in,int depth,int limit,std::size_t& consumed){detail::Reader r{in};if(depth<0||limit<1)r.refuse("depth_exceeded");r.depth=depth;r.limit=limit<detail::kDepthLimit?limit:detail::kDepthLimit;r.skip_ws();auto v=detail::decode_permission_bundle_page(r);consumed=r.pos;return v;}
-inline std::string encode_permission_bundle_page_at(const PermissionBundlePage& v,int depth){detail::Reader r{""};if(depth<0||depth>=detail::kDepthLimit)r.refuse("depth_exceeded");std::string out;detail::enc_permission_bundle_page(out,v,depth);std::size_t n=0;decode_permission_bundle_page_at(out,depth,detail::kDepthLimit,n);return out;}
+inline PermissionBundlePage decode_permission_bundle_page_at(std::string_view in,int depth,int limit,std::size_t& consumed){detail::Reader r{in};if(depth<0||limit<1)r.refuse("depth_exceeded");r.depth=depth;r.limit=limit<64?limit:64;r.skip_ws();auto v=detail::decode_permission_bundle_page(r);consumed=r.pos;return v;}
+inline std::string encode_permission_bundle_page_at(const PermissionBundlePage& v,int depth){detail::Reader r{""};if(depth<0||depth>=64)r.refuse("depth_exceeded");std::string out;detail::enc_permission_bundle_page(out,v,depth);std::size_t n=0;decode_permission_bundle_page_at(out,depth,64,n);return out;}
 }  // namespace detail
 inline std::string encode_permission_bundle_page(const PermissionBundlePage& v){return detail::encode_permission_bundle_page_at(v,0)+"\n";}
-inline PermissionBundlePage decode_permission_bundle_page(std::string_view in){std::size_t n=0;auto v=detail::decode_permission_bundle_page_at(in,0,detail::kDepthLimit,n);detail::Reader r{in};r.pos=n;r.skip_ws();if(r.pos!=in.size())r.refuse("trailing_bytes");return v;}
+inline PermissionBundlePage decode_permission_bundle_page(std::string_view in){std::size_t n=0;auto v=detail::decode_permission_bundle_page_at(in,0,64,n);detail::Reader r{in};r.pos=n;r.skip_ws();if(r.pos!=in.size())r.refuse("trailing_bytes");return v;}
 
 namespace detail {
-inline BundleExpansion decode_bundle_expansion_at(std::string_view in,int depth,int limit,std::size_t& consumed){detail::Reader r{in};if(depth<0||limit<1)r.refuse("depth_exceeded");r.depth=depth;r.limit=limit<detail::kDepthLimit?limit:detail::kDepthLimit;r.skip_ws();auto v=detail::decode_bundle_expansion(r);consumed=r.pos;return v;}
-inline std::string encode_bundle_expansion_at(const BundleExpansion& v,int depth){detail::Reader r{""};if(depth<0||depth>=detail::kDepthLimit)r.refuse("depth_exceeded");std::string out;detail::enc_bundle_expansion(out,v,depth);std::size_t n=0;decode_bundle_expansion_at(out,depth,detail::kDepthLimit,n);return out;}
+inline BundleExpansion decode_bundle_expansion_at(std::string_view in,int depth,int limit,std::size_t& consumed){detail::Reader r{in};if(depth<0||limit<1)r.refuse("depth_exceeded");r.depth=depth;r.limit=limit<64?limit:64;r.skip_ws();auto v=detail::decode_bundle_expansion(r);consumed=r.pos;return v;}
+inline std::string encode_bundle_expansion_at(const BundleExpansion& v,int depth){detail::Reader r{""};if(depth<0||depth>=64)r.refuse("depth_exceeded");std::string out;detail::enc_bundle_expansion(out,v,depth);std::size_t n=0;decode_bundle_expansion_at(out,depth,64,n);return out;}
 }  // namespace detail
 inline std::string encode_bundle_expansion(const BundleExpansion& v){return detail::encode_bundle_expansion_at(v,0)+"\n";}
-inline BundleExpansion decode_bundle_expansion(std::string_view in){std::size_t n=0;auto v=detail::decode_bundle_expansion_at(in,0,detail::kDepthLimit,n);detail::Reader r{in};r.pos=n;r.skip_ws();if(r.pos!=in.size())r.refuse("trailing_bytes");return v;}
+inline BundleExpansion decode_bundle_expansion(std::string_view in){std::size_t n=0;auto v=detail::decode_bundle_expansion_at(in,0,64,n);detail::Reader r{in};r.pos=n;r.skip_ws();if(r.pos!=in.size())r.refuse("trailing_bytes");return v;}
 
 namespace detail {
-inline PermissionEffect decode_permission_effect_at(std::string_view in,int depth,int limit,std::size_t& consumed){detail::Reader r{in};if(depth<0||limit<1)r.refuse("depth_exceeded");r.depth=depth;r.limit=limit<detail::kDepthLimit?limit:detail::kDepthLimit;r.skip_ws();auto v=detail::decode_permission_effect(r);consumed=r.pos;return v;}
-inline std::string encode_permission_effect_at(const PermissionEffect& v,int depth){detail::Reader r{""};if(depth<0||depth>=detail::kDepthLimit)r.refuse("depth_exceeded");std::string out;detail::enc_permission_effect(out,v,depth);std::size_t n=0;decode_permission_effect_at(out,depth,detail::kDepthLimit,n);return out;}
+inline PermissionEffect decode_permission_effect_at(std::string_view in,int depth,int limit,std::size_t& consumed){detail::Reader r{in};if(depth<0||limit<1)r.refuse("depth_exceeded");r.depth=depth;r.limit=limit<64?limit:64;r.skip_ws();auto v=detail::decode_permission_effect(r);consumed=r.pos;return v;}
+inline std::string encode_permission_effect_at(const PermissionEffect& v,int depth){detail::Reader r{""};if(depth<0||depth>=64)r.refuse("depth_exceeded");std::string out;detail::enc_permission_effect(out,v,depth);std::size_t n=0;decode_permission_effect_at(out,depth,64,n);return out;}
 }  // namespace detail
 inline std::string encode_permission_effect(const PermissionEffect& v){return detail::encode_permission_effect_at(v,0)+"\n";}
-inline PermissionEffect decode_permission_effect(std::string_view in){std::size_t n=0;auto v=detail::decode_permission_effect_at(in,0,detail::kDepthLimit,n);detail::Reader r{in};r.pos=n;r.skip_ws();if(r.pos!=in.size())r.refuse("trailing_bytes");return v;}
+inline PermissionEffect decode_permission_effect(std::string_view in){std::size_t n=0;auto v=detail::decode_permission_effect_at(in,0,64,n);detail::Reader r{in};r.pos=n;r.skip_ws();if(r.pos!=in.size())r.refuse("trailing_bytes");return v;}
 
 namespace detail {
-inline SelectorRule decode_selector_rule_at(std::string_view in,int depth,int limit,std::size_t& consumed){detail::Reader r{in};if(depth<0||limit<1)r.refuse("depth_exceeded");r.depth=depth;r.limit=limit<detail::kDepthLimit?limit:detail::kDepthLimit;r.skip_ws();auto v=detail::decode_selector_rule(r);consumed=r.pos;return v;}
-inline std::string encode_selector_rule_at(const SelectorRule& v,int depth){detail::Reader r{""};if(depth<0||depth>=detail::kDepthLimit)r.refuse("depth_exceeded");std::string out;detail::enc_selector_rule(out,v,depth);std::size_t n=0;decode_selector_rule_at(out,depth,detail::kDepthLimit,n);return out;}
+inline SelectorRule decode_selector_rule_at(std::string_view in,int depth,int limit,std::size_t& consumed){detail::Reader r{in};if(depth<0||limit<1)r.refuse("depth_exceeded");r.depth=depth;r.limit=limit<64?limit:64;r.skip_ws();auto v=detail::decode_selector_rule(r);consumed=r.pos;return v;}
+inline std::string encode_selector_rule_at(const SelectorRule& v,int depth){detail::Reader r{""};if(depth<0||depth>=64)r.refuse("depth_exceeded");std::string out;detail::enc_selector_rule(out,v,depth);std::size_t n=0;decode_selector_rule_at(out,depth,64,n);return out;}
 }  // namespace detail
 inline std::string encode_selector_rule(const SelectorRule& v){return detail::encode_selector_rule_at(v,0)+"\n";}
-inline SelectorRule decode_selector_rule(std::string_view in){std::size_t n=0;auto v=detail::decode_selector_rule_at(in,0,detail::kDepthLimit,n);detail::Reader r{in};r.pos=n;r.skip_ws();if(r.pos!=in.size())r.refuse("trailing_bytes");return v;}
+inline SelectorRule decode_selector_rule(std::string_view in){std::size_t n=0;auto v=detail::decode_selector_rule_at(in,0,64,n);detail::Reader r{in};r.pos=n;r.skip_ws();if(r.pos!=in.size())r.refuse("trailing_bytes");return v;}
 
 namespace detail {
-inline BundleOrigin decode_bundle_origin_at(std::string_view in,int depth,int limit,std::size_t& consumed){detail::Reader r{in};if(depth<0||limit<1)r.refuse("depth_exceeded");r.depth=depth;r.limit=limit<detail::kDepthLimit?limit:detail::kDepthLimit;r.skip_ws();auto v=detail::decode_bundle_origin(r);consumed=r.pos;return v;}
-inline std::string encode_bundle_origin_at(const BundleOrigin& v,int depth){detail::Reader r{""};if(depth<0||depth>=detail::kDepthLimit)r.refuse("depth_exceeded");std::string out;detail::enc_bundle_origin(out,v,depth);std::size_t n=0;decode_bundle_origin_at(out,depth,detail::kDepthLimit,n);return out;}
+inline BundleOrigin decode_bundle_origin_at(std::string_view in,int depth,int limit,std::size_t& consumed){detail::Reader r{in};if(depth<0||limit<1)r.refuse("depth_exceeded");r.depth=depth;r.limit=limit<64?limit:64;r.skip_ws();auto v=detail::decode_bundle_origin(r);consumed=r.pos;return v;}
+inline std::string encode_bundle_origin_at(const BundleOrigin& v,int depth){detail::Reader r{""};if(depth<0||depth>=64)r.refuse("depth_exceeded");std::string out;detail::enc_bundle_origin(out,v,depth);std::size_t n=0;decode_bundle_origin_at(out,depth,64,n);return out;}
 }  // namespace detail
 inline std::string encode_bundle_origin(const BundleOrigin& v){return detail::encode_bundle_origin_at(v,0)+"\n";}
-inline BundleOrigin decode_bundle_origin(std::string_view in){std::size_t n=0;auto v=detail::decode_bundle_origin_at(in,0,detail::kDepthLimit,n);detail::Reader r{in};r.pos=n;r.skip_ws();if(r.pos!=in.size())r.refuse("trailing_bytes");return v;}
+inline BundleOrigin decode_bundle_origin(std::string_view in){std::size_t n=0;auto v=detail::decode_bundle_origin_at(in,0,64,n);detail::Reader r{in};r.pos=n;r.skip_ws();if(r.pos!=in.size())r.refuse("trailing_bytes");return v;}
 
 namespace detail {
-inline SelectorRuleRecord decode_selector_rule_record_at(std::string_view in,int depth,int limit,std::size_t& consumed){detail::Reader r{in};if(depth<0||limit<1)r.refuse("depth_exceeded");r.depth=depth;r.limit=limit<detail::kDepthLimit?limit:detail::kDepthLimit;r.skip_ws();auto v=detail::decode_selector_rule_record(r);consumed=r.pos;return v;}
-inline std::string encode_selector_rule_record_at(const SelectorRuleRecord& v,int depth){detail::Reader r{""};if(depth<0||depth>=detail::kDepthLimit)r.refuse("depth_exceeded");std::string out;detail::enc_selector_rule_record(out,v,depth);std::size_t n=0;decode_selector_rule_record_at(out,depth,detail::kDepthLimit,n);return out;}
+inline SelectorRuleRecord decode_selector_rule_record_at(std::string_view in,int depth,int limit,std::size_t& consumed){detail::Reader r{in};if(depth<0||limit<1)r.refuse("depth_exceeded");r.depth=depth;r.limit=limit<64?limit:64;r.skip_ws();auto v=detail::decode_selector_rule_record(r);consumed=r.pos;return v;}
+inline std::string encode_selector_rule_record_at(const SelectorRuleRecord& v,int depth){detail::Reader r{""};if(depth<0||depth>=64)r.refuse("depth_exceeded");std::string out;detail::enc_selector_rule_record(out,v,depth);std::size_t n=0;decode_selector_rule_record_at(out,depth,64,n);return out;}
 }  // namespace detail
 inline std::string encode_selector_rule_record(const SelectorRuleRecord& v){return detail::encode_selector_rule_record_at(v,0)+"\n";}
-inline SelectorRuleRecord decode_selector_rule_record(std::string_view in){std::size_t n=0;auto v=detail::decode_selector_rule_record_at(in,0,detail::kDepthLimit,n);detail::Reader r{in};r.pos=n;r.skip_ws();if(r.pos!=in.size())r.refuse("trailing_bytes");return v;}
+inline SelectorRuleRecord decode_selector_rule_record(std::string_view in){std::size_t n=0;auto v=detail::decode_selector_rule_record_at(in,0,64,n);detail::Reader r{in};r.pos=n;r.skip_ws();if(r.pos!=in.size())r.refuse("trailing_bytes");return v;}
 
 namespace detail {
-inline SelectorRulePage decode_selector_rule_page_at(std::string_view in,int depth,int limit,std::size_t& consumed){detail::Reader r{in};if(depth<0||limit<1)r.refuse("depth_exceeded");r.depth=depth;r.limit=limit<detail::kDepthLimit?limit:detail::kDepthLimit;r.skip_ws();auto v=detail::decode_selector_rule_page(r);consumed=r.pos;return v;}
-inline std::string encode_selector_rule_page_at(const SelectorRulePage& v,int depth){detail::Reader r{""};if(depth<0||depth>=detail::kDepthLimit)r.refuse("depth_exceeded");std::string out;detail::enc_selector_rule_page(out,v,depth);std::size_t n=0;decode_selector_rule_page_at(out,depth,detail::kDepthLimit,n);return out;}
+inline SelectorRulePage decode_selector_rule_page_at(std::string_view in,int depth,int limit,std::size_t& consumed){detail::Reader r{in};if(depth<0||limit<1)r.refuse("depth_exceeded");r.depth=depth;r.limit=limit<64?limit:64;r.skip_ws();auto v=detail::decode_selector_rule_page(r);consumed=r.pos;return v;}
+inline std::string encode_selector_rule_page_at(const SelectorRulePage& v,int depth){detail::Reader r{""};if(depth<0||depth>=64)r.refuse("depth_exceeded");std::string out;detail::enc_selector_rule_page(out,v,depth);std::size_t n=0;decode_selector_rule_page_at(out,depth,64,n);return out;}
 }  // namespace detail
 inline std::string encode_selector_rule_page(const SelectorRulePage& v){return detail::encode_selector_rule_page_at(v,0)+"\n";}
-inline SelectorRulePage decode_selector_rule_page(std::string_view in){std::size_t n=0;auto v=detail::decode_selector_rule_page_at(in,0,detail::kDepthLimit,n);detail::Reader r{in};r.pos=n;r.skip_ws();if(r.pos!=in.size())r.refuse("trailing_bytes");return v;}
+inline SelectorRulePage decode_selector_rule_page(std::string_view in){std::size_t n=0;auto v=detail::decode_selector_rule_page_at(in,0,64,n);detail::Reader r{in};r.pos=n;r.skip_ws();if(r.pos!=in.size())r.refuse("trailing_bytes");return v;}
 
 namespace detail {
-inline SelectorRuleRead decode_selector_rule_read_at(std::string_view in,int depth,int limit,std::size_t& consumed){detail::Reader r{in};if(depth<0||limit<1)r.refuse("depth_exceeded");r.depth=depth;r.limit=limit<detail::kDepthLimit?limit:detail::kDepthLimit;r.skip_ws();auto v=detail::decode_selector_rule_read(r);consumed=r.pos;return v;}
-inline std::string encode_selector_rule_read_at(const SelectorRuleRead& v,int depth){detail::Reader r{""};if(depth<0||depth>=detail::kDepthLimit)r.refuse("depth_exceeded");std::string out;detail::enc_selector_rule_read(out,v,depth);std::size_t n=0;decode_selector_rule_read_at(out,depth,detail::kDepthLimit,n);return out;}
+inline SelectorRuleRead decode_selector_rule_read_at(std::string_view in,int depth,int limit,std::size_t& consumed){detail::Reader r{in};if(depth<0||limit<1)r.refuse("depth_exceeded");r.depth=depth;r.limit=limit<64?limit:64;r.skip_ws();auto v=detail::decode_selector_rule_read(r);consumed=r.pos;return v;}
+inline std::string encode_selector_rule_read_at(const SelectorRuleRead& v,int depth){detail::Reader r{""};if(depth<0||depth>=64)r.refuse("depth_exceeded");std::string out;detail::enc_selector_rule_read(out,v,depth);std::size_t n=0;decode_selector_rule_read_at(out,depth,64,n);return out;}
 }  // namespace detail
 inline std::string encode_selector_rule_read(const SelectorRuleRead& v){return detail::encode_selector_rule_read_at(v,0)+"\n";}
-inline SelectorRuleRead decode_selector_rule_read(std::string_view in){std::size_t n=0;auto v=detail::decode_selector_rule_read_at(in,0,detail::kDepthLimit,n);detail::Reader r{in};r.pos=n;r.skip_ws();if(r.pos!=in.size())r.refuse("trailing_bytes");return v;}
+inline SelectorRuleRead decode_selector_rule_read(std::string_view in){std::size_t n=0;auto v=detail::decode_selector_rule_read_at(in,0,64,n);detail::Reader r{in};r.pos=n;r.skip_ws();if(r.pos!=in.size())r.refuse("trailing_bytes");return v;}
 
 namespace detail {
-inline SelectorEdit decode_selector_edit_at(std::string_view in,int depth,int limit,std::size_t& consumed){detail::Reader r{in};if(depth<0||limit<1)r.refuse("depth_exceeded");r.depth=depth;r.limit=limit<detail::kDepthLimit?limit:detail::kDepthLimit;r.skip_ws();auto v=detail::decode_selector_edit(r);consumed=r.pos;return v;}
-inline std::string encode_selector_edit_at(const SelectorEdit& v,int depth){detail::Reader r{""};if(depth<0||depth>=detail::kDepthLimit)r.refuse("depth_exceeded");std::string out;detail::enc_selector_edit(out,v,depth);std::size_t n=0;decode_selector_edit_at(out,depth,detail::kDepthLimit,n);return out;}
+inline SelectorEdit decode_selector_edit_at(std::string_view in,int depth,int limit,std::size_t& consumed){detail::Reader r{in};if(depth<0||limit<1)r.refuse("depth_exceeded");r.depth=depth;r.limit=limit<64?limit:64;r.skip_ws();auto v=detail::decode_selector_edit(r);consumed=r.pos;return v;}
+inline std::string encode_selector_edit_at(const SelectorEdit& v,int depth){detail::Reader r{""};if(depth<0||depth>=64)r.refuse("depth_exceeded");std::string out;detail::enc_selector_edit(out,v,depth);std::size_t n=0;decode_selector_edit_at(out,depth,64,n);return out;}
 }  // namespace detail
 inline std::string encode_selector_edit(const SelectorEdit& v){return detail::encode_selector_edit_at(v,0)+"\n";}
-inline SelectorEdit decode_selector_edit(std::string_view in){std::size_t n=0;auto v=detail::decode_selector_edit_at(in,0,detail::kDepthLimit,n);detail::Reader r{in};r.pos=n;r.skip_ws();if(r.pos!=in.size())r.refuse("trailing_bytes");return v;}
+inline SelectorEdit decode_selector_edit(std::string_view in){std::size_t n=0;auto v=detail::decode_selector_edit_at(in,0,64,n);detail::Reader r{in};r.pos=n;r.skip_ws();if(r.pos!=in.size())r.refuse("trailing_bytes");return v;}
 
 namespace detail {
-inline LegacyOperationRequest decode_legacy_operation_request_at(std::string_view in,int depth,int limit,std::size_t& consumed){detail::Reader r{in};if(depth<0||limit<1)r.refuse("depth_exceeded");r.depth=depth;r.limit=limit<detail::kDepthLimit?limit:detail::kDepthLimit;r.skip_ws();auto v=detail::decode_legacy_operation_request(r);consumed=r.pos;return v;}
-inline std::string encode_legacy_operation_request_at(const LegacyOperationRequest& v,int depth){detail::Reader r{""};if(depth<0||depth>=detail::kDepthLimit)r.refuse("depth_exceeded");std::string out;detail::enc_legacy_operation_request(out,v,depth);std::size_t n=0;decode_legacy_operation_request_at(out,depth,detail::kDepthLimit,n);return out;}
+inline LegacyOperationRequest decode_legacy_operation_request_at(std::string_view in,int depth,int limit,std::size_t& consumed){detail::Reader r{in};if(depth<0||limit<1)r.refuse("depth_exceeded");r.depth=depth;r.limit=limit<64?limit:64;r.skip_ws();auto v=detail::decode_legacy_operation_request(r);consumed=r.pos;return v;}
+inline std::string encode_legacy_operation_request_at(const LegacyOperationRequest& v,int depth){detail::Reader r{""};if(depth<0||depth>=64)r.refuse("depth_exceeded");std::string out;detail::enc_legacy_operation_request(out,v,depth);std::size_t n=0;decode_legacy_operation_request_at(out,depth,64,n);return out;}
 }  // namespace detail
 inline std::string encode_legacy_operation_request(const LegacyOperationRequest& v){return detail::encode_legacy_operation_request_at(v,0)+"\n";}
-inline LegacyOperationRequest decode_legacy_operation_request(std::string_view in){std::size_t n=0;auto v=detail::decode_legacy_operation_request_at(in,0,detail::kDepthLimit,n);detail::Reader r{in};r.pos=n;r.skip_ws();if(r.pos!=in.size())r.refuse("trailing_bytes");return v;}
+inline LegacyOperationRequest decode_legacy_operation_request(std::string_view in){std::size_t n=0;auto v=detail::decode_legacy_operation_request_at(in,0,64,n);detail::Reader r{in};r.pos=n;r.skip_ws();if(r.pos!=in.size())r.refuse("trailing_bytes");return v;}
 
 }  // namespace abstraction::rights::api

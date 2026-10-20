@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	cursorcodec "github.com/openabstractions/abstraction-watch/go/cursor"
 	"strconv"
 	"strings"
 	"time"
@@ -126,22 +127,23 @@ func (r *selectorReceiver) CheckLegacyOperationFor(subject wire.Subject, request
 }
 
 // A cursor binds one native subject, host epoch, page kind and shared revision.
-func (r *receiver) selectorOffset(subject wire.Subject, kind, revision, cursor string, limit int64, total int) (int, string, wire.PolicyPageOutcome) {
+func (r *receiver) selectorOffset(subject wire.Subject, kind, revision, cursor string, limit int64, total int) (int, cursorcodec.Envelope, wire.PolicyPageOutcome) {
 	if limit < 1 || limit > 64 || len(cursor) > 256 || !utf8.ValidString(cursor) {
-		return 0, "", wire.PolicyPageOutcomeInvalid
+		return 0, cursorcodec.Envelope{}, wire.PolicyPageOutcomeInvalid
 	}
 	data, _ := json.Marshal(subject)
 	sum := sha256.Sum256(data)
-	prefix := kind + ":" + r.host.operatorEpoch + ":" + hex.EncodeToString(sum[:]) + ":" + revision + ":"
+	codec := cursorcodec.Codec{Separator: ":", Scoped: true}
+	binding := cursorcodec.Envelope{Epoch: kind + ":" + r.host.operatorEpoch, Scope: hex.EncodeToString(sum[:]) + ":" + revision}
 	if cursor == "" {
-		return 0, prefix, wire.PolicyPageOutcomePage
+		return 0, binding, wire.PolicyPageOutcomePage
 	}
-	word, ok := strings.CutPrefix(cursor, prefix)
+	word, ok := codec.Open(cursor, binding)
 	n, err := strconv.Atoi(word)
 	if !ok || err != nil || n < 0 || n > total || strconv.Itoa(n) != word {
-		return 0, "", wire.PolicyPageOutcomeGap
+		return 0, cursorcodec.Envelope{}, wire.PolicyPageOutcomeGap
 	}
-	return n, prefix, wire.PolicyPageOutcomePage
+	return n, binding, wire.PolicyPageOutcomePage
 }
 func (r *selectorReceiver) ListPermissionDefinitions(cursor string, limit int64) (wire.PermissionDefinitionPage, error) {
 	refuse := func(out wire.PolicyPageOutcome) wire.PermissionDefinitionPage {
@@ -158,7 +160,7 @@ func (r *selectorReceiver) ListPermissionDefinitions(cursor string, limit int64)
 	if err != nil {
 		return refuse(wire.PolicyPageOutcomeUnavailable), nil
 	}
-	offset, prefix, outcome := r.selectorOffset(subject, "definitions", revision, cursor, limit, len(definitions))
+	offset, binding, outcome := r.selectorOffset(subject, "definitions", revision, cursor, limit, len(definitions))
 	if outcome != wire.PolicyPageOutcomePage {
 		return refuse(outcome), nil
 	}
@@ -176,7 +178,8 @@ func (r *selectorReceiver) ListPermissionDefinitions(cursor string, limit int64)
 	}
 	page.Complete = offset == len(definitions)
 	if !page.Complete {
-		page.Next = prefix + strconv.Itoa(offset)
+		binding.Payload = strconv.Itoa(offset)
+		page.Next = (cursorcodec.Codec{Separator: ":", Scoped: true}).Encode(binding)
 	}
 	if err := r.call.Recheck(); err != nil {
 		return refuse(wire.PolicyPageOutcomeForbidden), nil
@@ -198,7 +201,7 @@ func (r *selectorReceiver) ListPermissionBundles(cursor string, limit int64) (wi
 	if err != nil {
 		return refuse(wire.PolicyPageOutcomeUnavailable), nil
 	}
-	offset, prefix, outcome := r.selectorOffset(subject, "bundles", revision, cursor, limit, len(bundles))
+	offset, binding, outcome := r.selectorOffset(subject, "bundles", revision, cursor, limit, len(bundles))
 	if outcome != wire.PolicyPageOutcomePage {
 		return refuse(outcome), nil
 	}
@@ -216,7 +219,8 @@ func (r *selectorReceiver) ListPermissionBundles(cursor string, limit int64) (wi
 	}
 	page.Complete = offset == len(bundles)
 	if !page.Complete {
-		page.Next = prefix + strconv.Itoa(offset)
+		binding.Payload = strconv.Itoa(offset)
+		page.Next = (cursorcodec.Codec{Separator: ":", Scoped: true}).Encode(binding)
 	}
 	if err := r.call.Recheck(); err != nil {
 		return refuse(wire.PolicyPageOutcomeForbidden), nil
@@ -238,7 +242,7 @@ func (r *selectorOperatorReceiver) ListSelectorRules(cursor string, limit int64)
 	if err != nil {
 		return refuse(wire.PolicyPageOutcomeUnavailable), nil
 	}
-	offset, prefix, outcome := r.selectorOffset(subject, "selectors", revision, cursor, limit, len(records))
+	offset, binding, outcome := r.selectorOffset(subject, "selectors", revision, cursor, limit, len(records))
 	if outcome != wire.PolicyPageOutcomePage {
 		return refuse(outcome), nil
 	}
@@ -256,7 +260,8 @@ func (r *selectorOperatorReceiver) ListSelectorRules(cursor string, limit int64)
 	}
 	page.Complete = offset == len(records)
 	if !page.Complete {
-		page.Next = prefix + strconv.Itoa(offset)
+		binding.Payload = strconv.Itoa(offset)
+		page.Next = (cursorcodec.Codec{Separator: ":", Scoped: true}).Encode(binding)
 	}
 	if _, err := r.authorize(); err != nil {
 		return refuse(operatorPageError(err)), nil

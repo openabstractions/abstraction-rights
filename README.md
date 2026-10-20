@@ -94,11 +94,11 @@ interface; an Allow requires the additive completion method and reports
 operator edits keep their existing meanings.
 
 The private decision file writes `rights-decisions@7` and reads canonical @2
-to @6. Already-canonical legacy loads, reads and unchanged edits preserve
+to @6. Already-canonical earlier-version loads, reads and unchanged edits preserve
 the bytes; existing load-time subject canonicalization may write @7 while
 preserving completed proofs. Real edits write @7. Earlier binaries refuse @7.
 Its at-most-4096 completion IDs are pruned only when absent from the pinned
-Book; retained proofs survive rule removal, expiry and catalogue retirement.
+[Book](https://openabstractions.github.io/reference.html#concept-asks.book); retained proofs survive rule removal, expiry and catalogue retirement.
 
 The table says which host enforces each action. **Installed** is
 `openabstractions serve runtime`: it decides in its own process against
@@ -108,6 +108,15 @@ runtime's `*FromRights` helper, which a host composing that service configures
 with any `Decider`: the IPC client or an in-process policy. The runtime
 registers each action into its policy at composition; the job, asks,
 credentials and inference definitions declare their own `resource_actions`.
+
+A native provider can configure one `DecisionPolicy.ConfigurePermitAdmission`
+boundary before serving. Outer preparation captures current target facts; a quiet
+guard rechecks them under each permit write's policy CAS. The private messaging
+provider reserves a changing receiver, retires its old permission questions and
+uses `InvalidateProviderPermitsContext` for that exact target before publication.
+Blocks, other actions and revocation keep their existing behavior. This additive
+Go provider configuration leaves the published Rights service and client shapes
+unchanged.
 
 | service call | action | resource | host |
 | --- | --- | --- | --- |
@@ -193,8 +202,24 @@ one switch, on after a fresh install:
 | `notify` | `abstraction.asks/notification.post` | `account` |
 | `download` | `abstraction.job/acceptance.submit` | `job:download` |
 
+A sixth default, `agent-messages`, is off after a fresh install and covers
+only the person's kept agent connections: with it on, each kept agent may
+message (`abstraction.facade/application.message`) every other kept agent on
+`app:<name>` without a question. The Panel shows it as "Agents can message
+each other" under Apps › Connections.
+
+A seventh default, `elevated-callers`, is on after a fresh install and covers
+a process the person runs as administrator on their own account: the
+installer, its impersonated custom actions or any tool started with "Run as
+administrator". Such a process can already do everything OA protects, so every
+registered action it requests is permitted without a question (RIGHTS-R27).
+The runtime reads the elevation from the caller's token at the named pipe
+(identity ID-H3); an admin's ordinary process, another account, SYSTEM and a
+remote peer are never covered. Activity shows "<App> ran as administrator;
+OpenAbstractions didn't ask" once per program per runtime session.
+
 A rule made for one program, a Block included, wins over the default. A
-script host never receives a default, and a remote peer, decided under its
+script host receives only `elevated-callers`, and a remote peer, decided under its
 mapped namespace, receives none. The Panel's Permissions page ("Defaults for
 all apps") and `openabstractions rights defaults [--on NAME | --off NAME]`
 turn each switch off and on through `operator@1` `ListDefaults` and
@@ -224,7 +249,7 @@ recorded as publisher. The feature app names whose feature is described;
 the exact subject and resource of a permission remain separate.
 
 Publication uses a policy revision and grants no rule. Metadata corrections
-preserve existing rules and completed answers. Same-account Program clients
+preserve existing rules and completed answers. Same-account [Program](https://openabstractions.github.io/reference.html#concept-identity.listener-program-need) clients
 read the catalogue through `ListActionDescriptions`; earlier providers may
 return `unknown_method`. Descriptive risk is display metadata, with unknown
 values displayed as unknown. The application still enforces its action with
@@ -284,7 +309,17 @@ outcome refuses. A resource service deciding on another program's behalf
 calls `Require(ctx, peer, action, resource)` instead, over the peer it bound
 at its own receiving boundary.
 
-## The problem
+## Deprecated token service (removed in Train B (expected 0.9.0), W2-01a)
+
+This section describes the deprecated native token service (`rights`,
+`keepawake`, `openabstractions serve rights`), which W2-01a removes in Train B (expected 0.9.0)
+(rights audit P0-1, TD57). The product surface is the decision service
+above. Every other section about the token service says "deprecated" in its
+heading: "Deprecated token service: words", "Deprecated standalone rights
+and keepawake example", "Deprecated token service: refusal codes",
+"Deprecated token service: contract", "Deprecated token service today",
+"Deprecated token service: conformance" and "Deprecated token service:
+where it sits".
 
 Every application that wants to hold the machine awake asks the operating
 system itself, and nothing on the machine can say who is holding it or take the
@@ -298,7 +333,7 @@ The resource layer holds the `awake` state today, as a lease of its `awake`
 resource. This layer keeps `awake` as a one-line alias for that lease's rule;
 grants a person already made, and every reader of them, keep working.
 
-## Words
+## Deprecated token service: words
 
 | word | meaning |
 |---|---|
@@ -318,8 +353,9 @@ named in it.
 
 ## Obtain
 
-- **Go.** `go get github.com/openabstractions/abstraction-rights/go`. No tag
-  yet; `go get` resolves a pseudo-version of `main`. Standard library plus
+- **Go.** `go get github.com/openabstractions/abstraction-rights/go`. The
+  module is published under `go/v*` tags (the newest is `go/v0.4.1`), and
+  `go get` resolves the newest. Standard library plus
   [abstraction-identity](https://github.com/openabstractions/abstraction-identity)
   (which brings `golang.org/x/sys`).
 - **Other languages.** See generated protocol and shared transport/client packages
@@ -339,13 +375,13 @@ For an explicit resource permission, use its action and resource pair as shown
 by the application or panel. The command resolves the runtime's operator
 profile over IPC; it does not read a service admin secret.
 
-### Legacy standalone rights and keepawake example
+### Deprecated standalone rights and keepawake example
 
 The repository retains `rights` and `keepawake` for standalone compatibility;
 the asks repository has `asksd` and `asks`. The rights service itself runs as
 `openabstractions serve rights`, with the flags the retired `rightsd` took:
 the asks layer depends on rights, so the program that joins the two is the
-runtime's host command. This flow uses the legacy rights and asks services,
+runtime's host command. This flow uses the deprecated rights and asks services,
 including their secret-based admin commands; it is separate from the installed
 runtime path above. Do not start those services beside the runtime on their
 default endpoints.
@@ -359,12 +395,12 @@ default endpoints.
     bin/rights holds
     bin/rights revoke keepawake awake
 
-The legacy standalone policy lives in `policy.json` under
+The deprecated standalone policy lives in `policy.json` under
 `os.UserConfigDir()/openabstractions/rights`, or `-state <dir>` on its
 programs. A registration answered *never* is refused without asking for as
 long as that answer stands.
 
-## Contract
+## Deprecated token service: refusal codes
 
 Your application can distinguish a missing grant from an invalid token without
 parsing an error message. The message is for the person; the code is for the program.
@@ -378,7 +414,9 @@ rule to a decoded reply. Known native sentinels remain accessible through
 `errors.Is`. The [code constants](go/errors.go) define the vocabulary; an
 unclassified service failure uses `internal`. Diagnostic wording is not an API.
 
-**Legacy standalone token authority is designation, not identity.** This is
+### Deprecated token service: contract
+
+**Deprecated standalone token authority is designation, not identity.** This is
 OAuth's shape, and the three pieces map onto it directly. The installed runtime
 uses its rights operator profile over IPC.
 
@@ -392,13 +430,13 @@ uses its rights operator profile over IPC.
   command line, an environment, or a file the service chose.
 - **Every operation binds its caller before it reads the request.** All nine
   go through `listen.Receive`, which hands over the frame only together with
-  the program the kernel says sent it, checked against `listen.Program`. A
+  the program the kernel says sent it, checked against [`listen.Program`](https://openabstractions.github.io/reference.html#concept-identity.listener-program-need). A
   caller the kernel cannot identify is refused with the reason
   (`rights: refused, identity: ...`) and its request is never parsed; the
   service refuses to start on a machine that cannot bind at all
   (`identity.CanEver`). A test sends every operation with a valid credential
   and no identity and expects nine refusals.
-- **In the legacy service, the grant's subject is the application, designated by its secret. The
+- **In the deprecated service, the grant's subject is the application, designated by its secret. The
   identity that registered it is evidence, not the subject.** It is admissible
   once, at registration, to help the person answer *is this the program I
   meant*, and it is re-checked on that connection after the person answers so
@@ -408,12 +446,15 @@ uses its rights operator profile over IPC.
   grant outlives the build that earned it, and a binding that cannot cross a
   wire does not take the grant with it.
 - **This holds among programs sharing one kernel and one user account.**
-  Nothing here defends one account from another on the same machine; the
-  Windows pipe name has no per-user component.
+  The endpoint admits that account alone: the Windows pipe's DACL names it,
+  and the Unix socket is mode 0600 (abstraction-identity CONTRACT.md, "Trust
+  domain"). The Windows pipe name has no per-user component; while one
+  account's service holds the name, another account's service cannot start
+  on it.
 - **A token is a bearer credential (RFC 6750)** scoped to one right and one
   hour, issued only when the right is on the application's list. `check` is
   token introspection (RFC 7662) for a resource holder in another process.
-- **In the legacy service, the service never says yes.** `ask` reports whether a grant exists;
+- **In the deprecated service, the service never says yes.** `ask` reports whether a grant exists;
   an answer in `asks` and `grant` are the person's acts, and the policy tool proves it is
   the person by possessing `admin.secret`, a file only that user can read.
 - **Everything not on the list is absent, and absent means no.** Rights are a
@@ -422,7 +463,7 @@ uses its rights operator profile over IPC.
   Its secret yields only the rights on its own line. Revoke takes effect on
   live holds immediately.
 
-## Today
+## Deprecated token service today
 
 **Native Go provider profile.** One right, `awake`, end to end on Windows 11 over a named pipe:
 `openabstractions serve rights`, `rights`, `keepawake`. **Not examined: Linux, macOS** — the unix
@@ -450,12 +491,12 @@ applications see `Lease.Done()` and must ask again. Registrations wait five
 minutes for an answer, and a hostile client can open such waits until memory
 runs out; the questions themselves live in `asks` and outlive the wait.
 
-## Conformance
+## Deprecated token service: conformance
 
 No scenario corpus; there is one implementation. The tests in `go/` send every
 operation with a valid credential and no identity and expect nine refusals.
 
-## Where it sits
+## Deprecated token service: where it sits
 
 Below: [abstraction-asks](https://github.com/openabstractions/abstraction-asks)
 (a registration is a question a person answers),
@@ -464,6 +505,8 @@ Below: [abstraction-asks](https://github.com/openabstractions/abstraction-asks)
 (the policy file) and [abstraction-watch](https://github.com/openabstractions/abstraction-watch).
 Above: an application that wants a right, such as `keepawake`.
 
+## Where it sits
+
 One layer of [openabstractions](https://github.com/openabstractions/abstractions).
 Every layer names one thing local tools rebuild on their own; the name means the
 same in each language that implements it, and the conformance scenarios are what
@@ -471,12 +514,16 @@ hold an implementation to it.
 
 ## Status
 
-**In development.** No tagged release; the rights service, `rights` and `keepawake` run
-end to end on Windows today.
+**In development.** The Go module is published as `go/v0.4.1`. The decision
+service `abstraction.rights/authorization@1` runs inside the installed
+runtime. The deprecated token service, `rights` and `keepawake` run end to end on
+Windows.
 
 ## Requirements
 
-Go 1.26 or newer. Windows 11 verified; Linux and macOS written and not run.
+Go 1.26 or newer. The decision service runs in the runtime on Windows and
+macOS. The deprecated token service is verified on Windows 11; its Linux and
+macOS paths have no run.
 
 ## Licence
 
@@ -487,7 +534,7 @@ Apache-2.0. See [LICENSE](https://github.com/openabstractions/abstraction-rights
 The generated `AuthorizationOperator` service reads bounded pages of
 registered actions and rules, and conditionally sets or revokes exact rules. Configure typed-peer operator
 authorization explicitly on the service; same-account applications receive no
-operator permission by default. Go callers use `client.NewOperator` with the
+operator permission by default. Go callers use the [client.Operator](https://openabstractions.github.io/reference.html#concept-rights.policy-operator-client) wrapper through `client.NewOperator` with the
 selected `abstraction.rights/operator@1` endpoint and its context methods.
 
 Edits carry the revision read from the policy. A conflict returns current state;

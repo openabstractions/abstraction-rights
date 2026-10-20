@@ -74,7 +74,9 @@ export interface AppMetadata {
 /** General exact-rule authorization decision point with a bounded, registrable catalogue and persistence. Unknown, absent, unspecified, expired, failed and refused decisions never permit. Explicitly authorized operator configuration registers actions and grants/revokes exact rules; no serialized awake lease is introduced. */
 export declare class AuthorizationClient {
   constructor(transport: FrameTransport);
-  /** Read published descriptive metadata for the current catalogue under same-account receiving Program admission. No rules are exposed. Pages carry one durable revision; continuations bind subject, host epoch and revision and return gap after change/restart. Requested limit is 1..64 and encoded replies are at most 256 KiB. Recheck admission before returning. An earlier authorization@1 service returns unknown_method. */
+  /** Evaluate through the existing explicitly admitted enforcer boundary. Empty minimum requests an observation. A nonempty minimum is mandatory: an older or incomparable state refuses unavailable. Unknown method never permits fallback dropping the minimum. Both observations and minima are bounded opaque values, not permission leases. */
+  decideForAtLeastRevision(subject: Subject, action: string, resource: string, atLeastRevision: string): Promise<RevisionDecision>;
+  /** Read published descriptive metadata for the current catalogue under same-account receiving [Program](https://openabstractions.github.io/reference.html#concept-identity.listener-program-need) admission. No rules are exposed. Pages carry one durable revision; continuations bind subject, host epoch and revision and return gap after change/restart. Requested limit is 1..64 and encoded replies are at most 256 KiB. Recheck admission before returning. An earlier authorization@1 service returns unknown_method. */
   listActionDescriptions(cursor: string, limit: bigint): Promise<DescriptionPage>;
   /** Evaluate the bound receiving account/program against an exact action/resource rule. This result is advisory to the caller; resource services query the decision point themselves. */
   decide(action: string, resource: string): Promise<Decision>;
@@ -85,9 +87,12 @@ export declare class AuthorizationClient {
 /** Explicitly authorized administration of the configured decision policy: catalogue registration and retirement, exact rules with expiry and provenance. Receiving same-account Program proof plus a trusted typed-peer operator callback is required; nil refuses. Policy denial is forbidden; callback/storage failure is unavailable. No caller credential, verified flag or provider path is accepted. Resource services remain the receiving enforcement points. Legacy bearer and awake lease behavior is separate. */
 export declare class AuthorizationOperatorClient {
   constructor(transport: FrameTransport);
+  /** Under existing operator authority, wait 0..30000ms for policy invalidation through watch.Gate (RIGHTS-O16). Every read, wake and response rechecks receiving Program proof and explicit operator authority. The configured policy owner's OnChange callbacks and service expiry deadlines provide native invalidation. Invalid bounds are refused before data; stale/foreign epoch or receiving scope is gap. Cancellation ends only this read. A prior operator@1 service returns unknown_method; no listing-cursor or polling fallback. */
+  observePolicy(after: string, waitMs: bigint): Promise<PolicyObservation>;
+  observePolicyPages(after: string, waitMs: bigint): AsyncIterableIterator<PolicyObservation>;
   /** Under existing explicit operator authority, atomically register an action and publish/correct its descriptive metadata at the expected durable revision. The service records the receiving publisher and service time. Recheck context and authority after lock waiting. A metadata edit changes no rule, expiry or completed-answer receipt, including first publication on an action with existing rules. A stable action identifies its existing feature; actual changed semantics require a new action/version at the app owner. Metadata is no proof of behavior. An earlier operator@1 service returns unknown_method; never fall back to name-only registration while claiming published description. */
   registerDescribedAction(expectedRevision: string, description: ActionDescription): Promise<DescriptionEdit>;
-  /** Apply the complete exact permit or paired permits derived by trusted runtime composition from this retained operator Allow and its runtime admission. No caller supplies targets or rules. Authorization, question occurrence and revision are checked while the Book is pinned and the rights edit is locked. Commit complete permits and private durable success proof in the same rights replacement; a first receipt-only commit changes revision when permits already match. A previously completed ID conflicts without rewriting rights, including after revocation or expiry. Failed writes retain the answer for explicit Retry. Missing composition is unavailable; missing, pending, foreign, responder or non-Allow records are invalid. Both IDs and revision are bounded to 128 UTF-8 bytes. An earlier operator@1 service returns unknown_method; callers must not fall back to an untracked permit write. */
+  /** Apply the complete exact permit or paired permits derived by trusted runtime composition from this retained operator Allow and its runtime admission. No caller supplies targets or rules. Authorization, question occurrence and revision are checked while the [Book](https://openabstractions.github.io/reference.html#concept-asks.book) is pinned and the rights edit is locked. Commit complete permits and private durable success proof in the same rights replacement; a first receipt-only commit changes revision when permits already match. A previously completed ID conflicts without rewriting rights, including after revocation or expiry. Failed writes retain the answer for explicit Retry. Missing composition is unavailable; missing, pending, foreign, responder or non-Allow records are invalid. Both IDs and revision are bounded to 128 UTF-8 bytes. An earlier operator@1 service returns unknown_method; callers must not fall back to an untracked permit write. */
   applyFirstUseAllow(expectedRevision: string, questionId: string): Promise<PolicyEdit>;
   /** Read bounded current rules and catalogue under explicit operator authorization. Every continuation rechecks authorization; no enumeration session is retained for disconnected/slow callers. */
   listPolicy(cursor: string, limit: bigint): Promise<PolicyPage>;
@@ -277,14 +282,63 @@ export declare class DispatchError extends Error {
 }
 
 // Own held-right fields; since uses existing RFC3339 time representation.
-// Native Hold also carries Seen. The live Lease is connection-owned and cannot
-// be recreated from these fields.
+// Native Hold also carries Seen. The live
+// [Lease](https://openabstractions.github.io/reference.html#concept-rights.lease)
+// is connection-owned and cannot be recreated from these fields.
 export interface HoldMetadata {
   app: string;
   name: string;
   right: string;
   why: string;
   since: string;
+}
+
+// JsonRecords maps each record name toJson and fromJson take to its type.
+export interface JsonRecords {
+  Request: Request;
+  AppMetadata: AppMetadata;
+  HoldMetadata: HoldMetadata;
+  ResponseMetadata: ResponseMetadata;
+  Subject: Subject;
+  Decision: Decision;
+  RevisionDecision: RevisionDecision;
+  RefusalDetail: RefusalDetail;
+  PolicyRule: PolicyRule;
+  PolicyPage: PolicyPage;
+  PolicyObservation: PolicyObservation;
+  PolicyEdit: PolicyEdit;
+  RuleRecord: RuleRecord;
+  RuleRead: RuleRead;
+  CatalogEntry: CatalogEntry;
+  ActionDescription: ActionDescription;
+  PermissionDefinition: PermissionDefinition;
+  DescribedAction: DescribedAction;
+  ActionEdit: ActionEdit;
+  DescriptionEdit: DescriptionEdit;
+  DescriptionPage: DescriptionPage;
+  AccountDefault: AccountDefault;
+  DefaultPage: DefaultPage;
+  DefaultEdit: DefaultEdit;
+  DecisionExplanation: DecisionExplanation;
+  PermissionKey: PermissionKey;
+  ResourceSelector: ResourceSelector;
+  PermissionSelection: PermissionSelection;
+  ConcreteResource: ConcreteResource;
+  CheckBatchRequest: CheckBatchRequest;
+  BatchDecision: BatchDecision;
+  SelectorPermissionDefinition: SelectorPermissionDefinition;
+  PermissionDefinitionPage: PermissionDefinitionPage;
+  PermissionBundleDefinition: PermissionBundleDefinition;
+  PermissionBundlePage: PermissionBundlePage;
+  BundleExpansion: BundleExpansion;
+  PermissionEffect: PermissionEffect;
+  SelectorRule: SelectorRule;
+  BundleOrigin: BundleOrigin;
+  SelectorRuleRecord: SelectorRuleRecord;
+  SelectorRulePage: SelectorRulePage;
+  SelectorRuleRead: SelectorRuleRead;
+  SelectorEdit: SelectorEdit;
+  LegacyOperationRequest: LegacyOperationRequest;
 }
 
 // Old exact authority plus an optional receiver-known concrete effect. Trusted
@@ -399,6 +453,29 @@ export interface PolicyEdit {
 export type PolicyEditOutcome = (typeof PolicyEditOutcome)[keyof typeof PolicyEditOutcome];
 export declare const PolicyEditOutcome: Readonly<{ Applied: "applied"; Conflict: "conflict"; Invalid: "invalid"; Forbidden: "forbidden"; Unavailable: "unavailable" }>;
 
+// Read-only policy invalidation. changed carries a new nonempty opaque cursor
+// and current durable revision; an empty after requests this snapshot.
+// unchanged carries the confirmed after cursor and current revision. Expiry
+// changes the observation cursor while durable revision stays unchanged;
+// ReadRule confirms expiry. gap carries after and empty revision: restart from
+// empty after. invalid/forbidden/unavailable carry empty next/revision. Cursors
+// bind receiving Program, host epoch and expiry-sensitive state, never
+// enumerate rules or grant a permission lease. native declares policy-owner
+// commit callbacks plus expiry deadlines. At most 256 cursor bytes and 128
+// revision bytes; no rule contents, replay or second policy store.
+export interface PolicyObservation {
+  outcome: PolicyObservationOutcome;
+  next: string;
+  revision: string;
+  mechanism: PolicyObservationMechanism;
+}
+
+export type PolicyObservationMechanism = (typeof PolicyObservationMechanism)[keyof typeof PolicyObservationMechanism];
+export declare const PolicyObservationMechanism: Readonly<{ Native: "native" }>;
+
+export type PolicyObservationOutcome = (typeof PolicyObservationOutcome)[keyof typeof PolicyObservationOutcome];
+export declare const PolicyObservationOutcome: Readonly<{ Changed: "changed"; Unchanged: "unchanged"; Gap: "gap"; Invalid: "invalid"; Forbidden: "forbidden"; Unavailable: "unavailable" }>;
+
 // Latest-policy enumeration: 1..64 requested rules and at most 256 KiB encoded
 // reply, including catalogue, cursor and indentation. Catalogue is the
 // configured seed plus registered actions, sorted, bounded to 64 actions of 128
@@ -437,14 +514,47 @@ export interface PolicyRule {
 
 export declare class Refusal extends Error {
   constructor(word: string, offset: number);
-  word: "malformed" | "bad_string" | "number_spelling" | "wrong_type" | "depth_exceeded" | "duplicate_key" | "duplicate_field" | "unknown_field" | "missing_field" | "bad_enum" | "bad_binary" | "trailing_bytes";
+  word: "malformed" | "bad_string" | "number_spelling" | "wrong_type" | "depth_exceeded" | "duplicate_key" | "duplicate_field" | "unknown_field" | "missing_field" | "bad_enum" | "bad_binary" | "bad_value" | "trailing_bytes";
   offset: number;
 }
 
-// Existing rights request concepts. Secret/token/admin remain credential inputs
-// checked by the service; request text never substitutes for native peer
-// identity. This descriptor does not replace the existing handwritten line
-// transport.
+export type RefusalAsk = (typeof RefusalAsk)[keyof typeof RefusalAsk];
+export declare const RefusalAsk: Readonly<{ Available: "available"; None: "none" }>;
+
+export type RefusalDecision = (typeof RefusalDecision)[keyof typeof RefusalDecision];
+export declare const RefusalDecision: Readonly<{ Denied: "denied"; NotGranted: "not_granted"; PersonOnly: "person_only" }>;
+
+// The one refusal record every OA service carries beside a refusing outcome
+// (RIGHTS-E3; conventions CONV-E4). source names the authority that refused:
+// rights, credentials, license, terms, identity or os. decision is denied for
+// an explicit refusal, not_granted where no rule permits, and person_only where
+// only the person may answer the question. ask says whether asking can change
+// the answer: available, or none. action is the exact registered
+// <owner>/<name>; question the pending question's id; credential the
+// credential's name; retry_after_ms the earliest useful retry in milliseconds,
+// omitted when zero. Stop asking is denied with ask none. Current carriers
+// include config@2, messages@1, registry@3, endpoint@2 and chat@3, declared in
+// config.thrift, messages.thrift, registration.thrift and inference.thrift.
+// Other services adopt it in their scheduled versions.
+export interface RefusalDetail {
+  source: RefusalSource | (string & {});
+  decision: RefusalDecision;
+  ask: RefusalAsk;
+  action: string;
+  question: string;
+  credential: string;
+  retryAfterMs: bigint;
+}
+
+export type RefusalSource = (typeof RefusalSource)[keyof typeof RefusalSource];
+export declare const RefusalSource: Readonly<{ Rights: "rights"; Credentials: "credentials"; License: "license"; Terms: "terms"; Identity: "identity"; Os: "os" }>;
+
+// Deprecated native token-service request descriptor. Removal is scheduled for
+// Train B (expected 0.9.0), W2-01a.1, under TD13/TD57's stored-state and
+// declared outside-adopter retirement conditions. Secret/token/admin remain
+// credential inputs checked by the service; request text never substitutes for
+// native peer identity. This descriptor does not replace the existing
+// handwritten line transport.
 export interface Request {
   op: string;
   name: string;
@@ -469,9 +579,12 @@ export interface ResourceSelector {
 export type ResourceSelectorKind = (typeof ResourceSelectorKind)[keyof typeof ResourceSelectorKind];
 export declare const ResourceSelectorKind: Readonly<{ One: "one"; All: "all" }>;
 
-// Own response fields projected without native Seen evidence. Any nonempty
-// code/error is refusal, including unknown codes. This is a common descriptor,
-// not a replacement legacy Response codec or generated service client.
+// Deprecated native token-service response descriptor. Removal is scheduled for
+// Train B (expected 0.9.0), W2-01a.1, under TD13/TD57's stored-state and
+// declared outside-adopter retirement conditions. Own response fields are
+// projected without native Seen evidence. Any nonempty code/error is refusal,
+// including unknown codes. This is a common descriptor, not a replacement
+// legacy Response codec or generated service client.
 export interface ResponseMetadata {
   code: string;
   error: string;
@@ -482,6 +595,14 @@ export interface ResponseMetadata {
   right: string;
   apps: AppMetadata[];
   holds: HoldMetadata[];
+}
+
+// A decision and bounded opaque freshness observation from the same state read.
+// Evaluated decisions carry observed_revision. Refusals carry none. This
+// observation conveys no permission lifetime.
+export interface RevisionDecision {
+  decision: Decision;
+  observedRevision: string;
 }
 
 // found and expired carry the revision and the exact record. expired names a
@@ -602,10 +723,17 @@ export declare class ServiceError extends Error {
 export type ServiceErrorCode = (typeof ServiceErrorCode)[keyof typeof ServiceErrorCode];
 export declare const ServiceErrorCode: Readonly<{ HandlerError: "handler_error"; InvalidResult: "invalid_result"; UnknownVersion: "unknown_version"; UnknownService: "unknown_service"; UnknownMethod: "unknown_method"; WrongMode: "wrong_mode" }>;
 
-// Account identifier and normalized absolute executable path. This serialized
-// subject is an assertion by an explicitly authorized enforcement point. It
-// contains no proof or verified flag and cannot authorize its own use. Direct
-// decisions derive their subject from native receiving Program evidence.
+// [Subject](https://openabstractions.github.io/reference.html#concept-rights.subject):
+// Receiving policy account and program target. Native programs use the shared
+// absolute-path/MSIX grammar; the distinct remote kind is remote:<64 lowercase
+// hex leaf-SPKI-SHA256> from the shared live-pin mapping. Remote targets match
+// exact account/token/action/resource only, with no defaults, wildcard
+// selectors or native operator authority. This serialized subject is an
+// assertion by an explicitly authorized native enforcement point, contains no
+// proof and cannot authorize its own use. Direct decisions derive native
+// receiving
+// [Program](https://openabstractions.github.io/reference.html#concept-identity.listener-program-need)
+// evidence. Authority setters and actors remain native.
 export interface Subject {
   account: string;
   program: string;
@@ -667,15 +795,21 @@ export declare function decodePermissionSelection(data: Uint8Array): PermissionS
 
 export declare function decodePolicyEdit(data: Uint8Array): PolicyEdit;
 
+export declare function decodePolicyObservation(data: Uint8Array): PolicyObservation;
+
 export declare function decodePolicyPage(data: Uint8Array): PolicyPage;
 
 export declare function decodePolicyRule(data: Uint8Array): PolicyRule;
+
+export declare function decodeRefusalDetail(data: Uint8Array): RefusalDetail;
 
 export declare function decodeRequest(data: Uint8Array): Request;
 
 export declare function decodeResourceSelector(data: Uint8Array): ResourceSelector;
 
 export declare function decodeResponseMetadata(data: Uint8Array): ResponseMetadata;
+
+export declare function decodeRevisionDecision(data: Uint8Array): RevisionDecision;
 
 export declare function decodeRuleRead(data: Uint8Array): RuleRead;
 
@@ -751,15 +885,21 @@ export declare function encodePermissionSelection(v: PermissionSelection): Uint8
 
 export declare function encodePolicyEdit(v: PolicyEdit): Uint8Array;
 
+export declare function encodePolicyObservation(v: PolicyObservation): Uint8Array;
+
 export declare function encodePolicyPage(v: PolicyPage): Uint8Array;
 
 export declare function encodePolicyRule(v: PolicyRule): Uint8Array;
+
+export declare function encodeRefusalDetail(v: RefusalDetail): Uint8Array;
 
 export declare function encodeRequest(v: Request): Uint8Array;
 
 export declare function encodeResourceSelector(v: ResourceSelector): Uint8Array;
 
 export declare function encodeResponseMetadata(v: ResponseMetadata): Uint8Array;
+
+export declare function encodeRevisionDecision(v: RevisionDecision): Uint8Array;
 
 export declare function encodeRuleRead(v: RuleRead): Uint8Array;
 
@@ -778,6 +918,8 @@ export declare function encodeSelectorRuleRead(v: SelectorRuleRead): Uint8Array;
 export declare function encodeSelectorRuleRecord(v: SelectorRuleRecord): Uint8Array;
 
 export declare function encodeSubject(v: Subject): Uint8Array;
+
+export declare const fromJson: <K extends keyof JsonRecords>(kind: K, data: Uint8Array) => JsonRecords[K];
 
 export declare const knownRights: readonly ["awake"];
 
@@ -835,15 +977,21 @@ export declare function newPermissionSelection(): PermissionSelection;
 
 export declare function newPolicyEdit(): PolicyEdit;
 
+export declare function newPolicyObservation(): PolicyObservation;
+
 export declare function newPolicyPage(): PolicyPage;
 
 export declare function newPolicyRule(): PolicyRule;
+
+export declare function newRefusalDetail(): RefusalDetail;
 
 export declare function newRequest(): Request;
 
 export declare function newResourceSelector(): ResourceSelector;
 
 export declare function newResponseMetadata(): ResponseMetadata;
+
+export declare function newRevisionDecision(): RevisionDecision;
 
 export declare function newRuleRead(): RuleRead;
 
@@ -868,5 +1016,7 @@ export declare const operations: readonly ["register", "ask", "hold", "check", "
 export declare const refusalCodes: readonly ["internal", "invalid_request", "caller_refused", "unknown_operation", "not_administrator", "pending", "denied", "denied_permanently", "unsupported_hold", "platform_refused", "unknown_app", "unknown_right", "not_granted", "bad_secret", "bad_token"];
 
 export declare const resourceActions: readonly ["abstraction.storage/content.read", "abstraction.storage/content.write", "abstraction.job/acceptance.submit", "abstraction.job/acceptance.cancel", "abstraction.config/user.replace", "abstraction.logging/history.read", "abstraction.model/lookup", "abstraction.router/inventory.read", "abstraction.router/route", "abstraction.storage/content.observe", "abstraction.storage/content.remove"];
+
+export declare const toJson: <K extends keyof JsonRecords>(kind: K, value: JsonRecords[K]) => Uint8Array;
 
 export {};

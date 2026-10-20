@@ -11,8 +11,8 @@ inline void validate(const api::Decision& result){
 class TrustedEnforcerClient;
 class Client {
 public:
- explicit Client(std::string endpoint):transport_(std::move(endpoint),5000,1u<<20){}
- Client(std::string endpoint,ipc::Deadline deadline):transport_(std::move(endpoint),deadline,1u<<20){}
+ explicit Client(std::string endpoint):transport_(std::move(endpoint),ipc::kDefaultCallBudgetMs,ipc::kDefaultMaxFrame){}
+ Client(std::string endpoint,ipc::Deadline deadline):transport_(std::move(endpoint),deadline,ipc::kDefaultMaxFrame){}
  Client with_server_expectation(std::optional<ipc::ServerExpectation> server) const {auto copy=*this;copy.transport_=transport_.with_server_expectation(std::move(server));return copy;}
  Client with_cancellation(ipc::CancellationToken token)const{auto copy=*this;copy.transport_=transport_.with_cancellation(std::move(token));return copy;}
  api::Decision decide(const std::string& action,const std::string& resource)const{

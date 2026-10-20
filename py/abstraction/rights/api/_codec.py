@@ -46,53 +46,9 @@ def _strs(out, v, depth):
 
 
 def _raw(out, s, depth):
-    b = s.encode("utf-8") if isinstance(s, str) else s
-    i, n = 0, len(b)
-    while i < n:
-        c = b[i]
-        if c in _WS:
-            i += 1
-        elif c == 0x22:
-            j = i + 1
-            while j < n:
-                if b[j] == 0x5C:
-                    j += 2
-                    continue
-                if b[j] == 0x22:
-                    j += 1
-                    break
-                j += 1
-            out += b[i:j]
-            i = j
-        elif c in (0x7B, 0x5B):
-            out.append(c)
-            i += 1
-            j = i
-            while j < n and b[j] in _WS:
-                j += 1
-            if j < n and b[j] in (0x7D, 0x5D):
-                out.append(b[j])
-                i = j + 1
-            else:
-                depth += 1
-                out += b"\n"
-                _pad(out, depth)
-        elif c in (0x7D, 0x5D):
-            depth -= 1
-            out += b"\n"
-            _pad(out, depth)
-            out.append(c)
-            i += 1
-        elif c == 0x2C:
-            out += b",\n"
-            _pad(out, depth)
-            i += 1
-        elif c == 0x3A:
-            out += b": "
-            i += 1
-        else:
-            out.append(c)
-            i += 1
+    # An opaque value's bytes as they are ([DEF-A3]).
+    # Whitespace around the value is not part of it.
+    out += (s.encode("utf-8") if isinstance(s, str) else bytes(s)).strip(bytes(_WS))
 
 
 def _rawmap(out, m, depth):
@@ -168,12 +124,45 @@ class DecisionOutcome(_StrEnum):
     UNAVAILABLE = "unavailable"
 
 
+class RefusalSource(_StrEnum):
+    RIGHTS = "rights"
+    CREDENTIALS = "credentials"
+    LICENSE = "license"
+    TERMS = "terms"
+    IDENTITY = "identity"
+    OS = "os"
+
+
+class RefusalDecision(_StrEnum):
+    DENIED = "denied"
+    NOT_GRANTED = "not_granted"
+    PERSON_ONLY = "person_only"
+
+
+class RefusalAsk(_StrEnum):
+    AVAILABLE = "available"
+    NONE = "none"
+
+
 class PolicyPageOutcome(_StrEnum):
     PAGE = "page"
     GAP = "gap"
     INVALID = "invalid"
     FORBIDDEN = "forbidden"
     UNAVAILABLE = "unavailable"
+
+
+class PolicyObservationOutcome(_StrEnum):
+    CHANGED = "changed"
+    UNCHANGED = "unchanged"
+    GAP = "gap"
+    INVALID = "invalid"
+    FORBIDDEN = "forbidden"
+    UNAVAILABLE = "unavailable"
+
+
+class PolicyObservationMechanism(_StrEnum):
+    NATIVE = "native"
 
 
 class PolicyEditOutcome(_StrEnum):
@@ -253,10 +242,12 @@ RESOURCE_ACTIONS = ["abstraction.storage/content.read", "abstraction.storage/con
 
 @dataclasses.dataclass(kw_only=True)
 class Request:
-    """Existing rights request concepts. Secret/token/admin remain credential
-    inputs checked by the service; request text never substitutes for native
-    peer identity. This descriptor does not replace the existing handwritten
-    line transport."""
+    """Deprecated native token-service request descriptor. Removal is scheduled for
+    Train B (expected 0.9.0), W2-01a.1, under TD13/TD57's stored-state and
+    declared outside-adopter retirement conditions. Secret/token/admin remain
+    credential inputs checked by the service; request text never substitutes for
+    native peer identity. This descriptor does not replace the existing
+    handwritten line transport."""
 
     op: str = ""
     name: str = ""
@@ -284,8 +275,9 @@ class AppMetadata:
 @dataclasses.dataclass(kw_only=True)
 class HoldMetadata:
     """Own held-right fields; since uses existing RFC3339 time representation.
-    Native Hold also carries Seen. The live Lease is connection-owned and cannot
-    be recreated from these fields."""
+    Native Hold also carries Seen. The live
+    [Lease](https://openabstractions.github.io/reference.html#concept-rights.lease)
+    is connection-owned and cannot be recreated from these fields."""
 
     app: str = ""
     name: str = ""
@@ -296,9 +288,12 @@ class HoldMetadata:
 
 @dataclasses.dataclass(kw_only=True)
 class ResponseMetadata:
-    """Own response fields projected without native Seen evidence. Any nonempty
-    code/error is refusal, including unknown codes. This is a common descriptor,
-    not a replacement legacy Response codec or generated service client."""
+    """Deprecated native token-service response descriptor. Removal is scheduled
+    for Train B (expected 0.9.0), W2-01a.1, under TD13/TD57's stored-state and
+    declared outside-adopter retirement conditions. Own response fields are
+    projected without native Seen evidence. Any nonempty code/error is refusal,
+    including unknown codes. This is a common descriptor, not a replacement
+    legacy Response codec or generated service client."""
 
     code: str = ""
     error: str = ""
@@ -313,10 +308,17 @@ class ResponseMetadata:
 
 @dataclasses.dataclass(kw_only=True)
 class Subject:
-    """Account identifier and normalized absolute executable path. This serialized
-    subject is an assertion by an explicitly authorized enforcement point. It
-    contains no proof or verified flag and cannot authorize its own use. Direct
-    decisions derive their subject from native receiving Program evidence."""
+    """[Subject](https://openabstractions.github.io/reference.html#concept-rights.subject):
+    Receiving policy account and program target. Native programs use the shared
+    absolute-path/MSIX grammar; the distinct remote kind is remote:<64 lowercase
+    hex leaf-SPKI-SHA256> from the shared live-pin mapping. Remote targets match
+    exact account/token/action/resource only, with no defaults, wildcard
+    selectors or native operator authority. This serialized subject is an
+    assertion by an explicitly authorized native enforcement point, contains no
+    proof and cannot authorize its own use. Direct decisions derive native
+    receiving
+    [Program](https://openabstractions.github.io/reference.html#concept-identity.listener-program-need)
+    evidence. Authority setters and actors remain native."""
 
     account: str = ""
     program: str = ""
@@ -333,6 +335,40 @@ class Decision:
 
     outcome: DecisionOutcome | None = None
     policy_revision: str = ""
+
+
+@dataclasses.dataclass(kw_only=True)
+class RevisionDecision:
+    """A decision and bounded opaque freshness observation from the same state
+    read. Evaluated decisions carry observed_revision. Refusals carry none. This
+    observation conveys no permission lifetime."""
+
+    decision: Decision = dataclasses.field(default_factory=Decision)
+    observed_revision: str = ""
+
+
+@dataclasses.dataclass(kw_only=True)
+class RefusalDetail:
+    """The one refusal record every OA service carries beside a refusing outcome
+    (RIGHTS-E3; conventions CONV-E4). source names the authority that refused:
+    rights, credentials, license, terms, identity or os. decision is denied for
+    an explicit refusal, not_granted where no rule permits, and person_only
+    where only the person may answer the question. ask says whether asking can
+    change the answer: available, or none. action is the exact registered
+    <owner>/<name>; question the pending question's id; credential the
+    credential's name; retry_after_ms the earliest useful retry in milliseconds,
+    omitted when zero. Stop asking is denied with ask none. Current carriers
+    include config@2, messages@1, registry@3, endpoint@2 and chat@3, declared in
+    config.thrift, messages.thrift, registration.thrift and inference.thrift.
+    Other services adopt it in their scheduled versions."""
+
+    source: RefusalSource | str = ""
+    decision: RefusalDecision | None = None
+    ask: RefusalAsk | None = None
+    action: str = ""
+    question: str = ""
+    credential: str = ""
+    retry_after_ms: int = 0
 
 
 @dataclasses.dataclass(kw_only=True)
@@ -370,6 +406,25 @@ class PolicyPage:
     rules: list[PolicyRule] = dataclasses.field(default_factory=list)
     next: str = ""
     complete: bool = False
+
+
+@dataclasses.dataclass(kw_only=True)
+class PolicyObservation:
+    """Read-only policy invalidation. changed carries a new nonempty opaque cursor
+    and current durable revision; an empty after requests this snapshot.
+    unchanged carries the confirmed after cursor and current revision. Expiry
+    changes the observation cursor while durable revision stays unchanged;
+    ReadRule confirms expiry. gap carries after and empty revision: restart from
+    empty after. invalid/forbidden/unavailable carry empty next/revision.
+    Cursors bind receiving Program, host epoch and expiry-sensitive state, never
+    enumerate rules or grant a permission lease. native declares policy-owner
+    commit callbacks plus expiry deadlines. At most 256 cursor bytes and 128
+    revision bytes; no rule contents, replay or second policy store."""
+
+    outcome: PolicyObservationOutcome | None = None
+    next: str = ""
+    revision: str = ""
+    mechanism: PolicyObservationMechanism | None = None
 
 
 @dataclasses.dataclass(kw_only=True)
@@ -809,6 +864,14 @@ class LegacyOperationRequest:
 
 
 @dataclasses.dataclass(kw_only=True)
+class _AuthorizationDecideForAtLeastRevisionArguments:
+    subject: Subject = dataclasses.field(default_factory=Subject)
+    action: str = ""
+    resource: str = ""
+    at_least_revision: str = ""
+
+
+@dataclasses.dataclass(kw_only=True)
 class _AuthorizationListActionDescriptionsArguments:
     cursor: str = ""
     limit: int = 0
@@ -825,6 +888,12 @@ class _AuthorizationDecideForArguments:
     subject: Subject = dataclasses.field(default_factory=Subject)
     action: str = ""
     resource: str = ""
+
+
+@dataclasses.dataclass(kw_only=True)
+class _AuthorizationOperatorObservePolicyArguments:
+    after: str = ""
+    wait_ms: int = 0
 
 
 @dataclasses.dataclass(kw_only=True)
@@ -1039,6 +1108,11 @@ class _ServiceError:
 
 
 @dataclasses.dataclass(kw_only=True)
+class _AuthorizationDecideForAtLeastRevisionResult:
+    value: RevisionDecision = dataclasses.field(default_factory=RevisionDecision)
+
+
+@dataclasses.dataclass(kw_only=True)
 class _AuthorizationListActionDescriptionsResult:
     value: DescriptionPage = dataclasses.field(default_factory=DescriptionPage)
 
@@ -1051,6 +1125,11 @@ class _AuthorizationDecideResult:
 @dataclasses.dataclass(kw_only=True)
 class _AuthorizationDecideForResult:
     value: Decision = dataclasses.field(default_factory=Decision)
+
+
+@dataclasses.dataclass(kw_only=True)
+class _AuthorizationOperatorObservePolicyResult:
+    value: PolicyObservation = dataclasses.field(default_factory=PolicyObservation)
 
 
 @dataclasses.dataclass(kw_only=True)
@@ -1453,6 +1532,96 @@ def _write_decision(out, v, depth):
     out += b"}"
 
 
+def _write_revision_decision(out, v, depth):
+    if isinstance(v.observed_revision, str):
+        _size = len(v.observed_revision.encode("utf-8", "surrogatepass"))
+        if _size > 128: raise Refusal("bad_value", 0)
+    if isinstance(v.observed_revision, str) and any(c < "\x20" or "\x7f" <= c <= "\x9f" for c in v.observed_revision): raise Refusal("bad_value", 0)
+    out += b"{"
+    out += b"\n"
+    _pad(out, depth + 1)
+    _esc(out, "decision")
+    out += b": "
+    _write_decision(out, v.decision, depth + 1)
+    if v.observed_revision:
+        out += b","
+        out += b"\n"
+        _pad(out, depth + 1)
+        _esc(out, "observed_revision")
+        out += b": "
+        _esc(out, v.observed_revision)
+    out += b"\n"
+    _pad(out, depth)
+    out += b"}"
+
+
+def _write_refusal_detail(out, v, depth):
+    if isinstance(v.action, str):
+        _size = len(v.action.encode("utf-8", "surrogatepass"))
+        if _size != 0 and (_size < 1 or _size > 128): raise Refusal("bad_value", 0)
+    if isinstance(v.question, str):
+        _size = len(v.question.encode("utf-8", "surrogatepass"))
+        if _size != 0 and (_size < 1 or _size > 128): raise Refusal("bad_value", 0)
+    if isinstance(v.credential, str):
+        _size = len(v.credential.encode("utf-8", "surrogatepass"))
+        if _size != 0 and (_size < 1 or _size > 64): raise Refusal("bad_value", 0)
+    if type(v.retry_after_ms) is not int: raise Refusal("wrong_type", 0)
+    if v.retry_after_ms < 0 or v.retry_after_ms > 86400000: raise Refusal("bad_value", 0)
+    if not isinstance(v.source, str):
+        raise Refusal("wrong_type", 0)
+    _closed_enum(RefusalDecision, v.decision)
+    _closed_enum(RefusalAsk, v.ask)
+    out += b"{"
+    out += b"\n"
+    _pad(out, depth + 1)
+    _esc(out, "source")
+    out += b": "
+    _esc(out, v.source)
+    out += b","
+    out += b"\n"
+    _pad(out, depth + 1)
+    _esc(out, "decision")
+    out += b": "
+    _esc(out, v.decision)
+    out += b","
+    out += b"\n"
+    _pad(out, depth + 1)
+    _esc(out, "ask")
+    out += b": "
+    _esc(out, v.ask)
+    if v.action:
+        out += b","
+        out += b"\n"
+        _pad(out, depth + 1)
+        _esc(out, "action")
+        out += b": "
+        _esc(out, v.action)
+    if v.question:
+        out += b","
+        out += b"\n"
+        _pad(out, depth + 1)
+        _esc(out, "question")
+        out += b": "
+        _esc(out, v.question)
+    if v.credential:
+        out += b","
+        out += b"\n"
+        _pad(out, depth + 1)
+        _esc(out, "credential")
+        out += b": "
+        _esc(out, v.credential)
+    if v.retry_after_ms != 0:
+        out += b","
+        out += b"\n"
+        _pad(out, depth + 1)
+        _esc(out, "retry_after_ms")
+        out += b": "
+        _num(out, v.retry_after_ms)
+    out += b"\n"
+    _pad(out, depth)
+    out += b"}"
+
+
 def _write_policy_rule(out, v, depth):
     out += b"{"
     out += b"\n"
@@ -1521,6 +1690,46 @@ def _write_policy_page(out, v, depth):
     _esc(out, "complete")
     out += b": "
     out += b"true" if v.complete else b"false"
+    out += b"\n"
+    _pad(out, depth)
+    out += b"}"
+
+
+def _write_policy_observation(out, v, depth):
+    if isinstance(v.next, str):
+        _size = len(v.next.encode("utf-8", "surrogatepass"))
+        if _size > 256: raise Refusal("bad_value", 0)
+    if isinstance(v.next, str) and any(c < "\x20" or "\x7f" <= c <= "\x9f" for c in v.next): raise Refusal("bad_value", 0)
+    if isinstance(v.revision, str):
+        _size = len(v.revision.encode("utf-8", "surrogatepass"))
+        if _size > 128: raise Refusal("bad_value", 0)
+    if isinstance(v.revision, str) and any(c < "\x20" or "\x7f" <= c <= "\x9f" for c in v.revision): raise Refusal("bad_value", 0)
+    _closed_enum(PolicyObservationOutcome, v.outcome)
+    _closed_enum(PolicyObservationMechanism, v.mechanism)
+    out += b"{"
+    out += b"\n"
+    _pad(out, depth + 1)
+    _esc(out, "outcome")
+    out += b": "
+    _esc(out, v.outcome)
+    out += b","
+    out += b"\n"
+    _pad(out, depth + 1)
+    _esc(out, "next")
+    out += b": "
+    _esc(out, v.next)
+    out += b","
+    out += b"\n"
+    _pad(out, depth + 1)
+    _esc(out, "revision")
+    out += b": "
+    _esc(out, v.revision)
+    out += b","
+    out += b"\n"
+    _pad(out, depth + 1)
+    _esc(out, "mechanism")
+    out += b": "
+    _esc(out, v.mechanism)
     out += b"\n"
     _pad(out, depth)
     out += b"}"
@@ -2589,6 +2798,48 @@ def _write_legacy_operation_request(out, v, depth):
     out += b"}"
 
 
+def _write_oa_authorization_decide_for_at_least_revision_arguments(out, v, depth):
+    if isinstance(v.action, str):
+        _size = len(v.action.encode("utf-8", "surrogatepass"))
+        if _size < 1 or _size > 128: raise Refusal("bad_value", 0)
+    if isinstance(v.action, str) and any(c < "\x20" or "\x7f" <= c <= "\x9f" for c in v.action): raise Refusal("bad_value", 0)
+    if isinstance(v.resource, str):
+        _size = len(v.resource.encode("utf-8", "surrogatepass"))
+        if _size < 1 or _size > 1024: raise Refusal("bad_value", 0)
+    if isinstance(v.resource, str) and any(c < "\x20" or "\x7f" <= c <= "\x9f" for c in v.resource): raise Refusal("bad_value", 0)
+    if isinstance(v.at_least_revision, str):
+        _size = len(v.at_least_revision.encode("utf-8", "surrogatepass"))
+        if _size > 128: raise Refusal("bad_value", 0)
+    if isinstance(v.at_least_revision, str) and any(c < "\x20" or "\x7f" <= c <= "\x9f" for c in v.at_least_revision): raise Refusal("bad_value", 0)
+    out += b"{"
+    out += b"\n"
+    _pad(out, depth + 1)
+    _esc(out, "subject")
+    out += b": "
+    _write_subject(out, v.subject, depth + 1)
+    out += b","
+    out += b"\n"
+    _pad(out, depth + 1)
+    _esc(out, "action")
+    out += b": "
+    _esc(out, v.action)
+    out += b","
+    out += b"\n"
+    _pad(out, depth + 1)
+    _esc(out, "resource")
+    out += b": "
+    _esc(out, v.resource)
+    out += b","
+    out += b"\n"
+    _pad(out, depth + 1)
+    _esc(out, "at_least_revision")
+    out += b": "
+    _esc(out, v.at_least_revision)
+    out += b"\n"
+    _pad(out, depth)
+    out += b"}"
+
+
 def _write_oa_authorization_list_action_descriptions_arguments(out, v, depth):
     out += b"{"
     out += b"\n"
@@ -2644,6 +2895,30 @@ def _write_oa_authorization_decide_for_arguments(out, v, depth):
     _esc(out, "resource")
     out += b": "
     _esc(out, v.resource)
+    out += b"\n"
+    _pad(out, depth)
+    out += b"}"
+
+
+def _write_oa_authorization_operator_observe_policy_arguments(out, v, depth):
+    if isinstance(v.after, str):
+        _size = len(v.after.encode("utf-8", "surrogatepass"))
+        if _size > 256: raise Refusal("bad_value", 0)
+    if isinstance(v.after, str) and any(c < "\x20" or "\x7f" <= c <= "\x9f" for c in v.after): raise Refusal("bad_value", 0)
+    if type(v.wait_ms) is not int: raise Refusal("wrong_type", 0)
+    if v.wait_ms < 0 or v.wait_ms > 30000: raise Refusal("bad_value", 0)
+    out += b"{"
+    out += b"\n"
+    _pad(out, depth + 1)
+    _esc(out, "after")
+    out += b": "
+    _esc(out, v.after)
+    out += b","
+    out += b"\n"
+    _pad(out, depth + 1)
+    _esc(out, "wait_ms")
+    out += b": "
+    _num(out, v.wait_ms)
     out += b"\n"
     _pad(out, depth)
     out += b"}"
@@ -3350,6 +3625,18 @@ def _write_oa_service_error(out, v, depth):
     out += b"}"
 
 
+def _write_oa_authorization_decide_for_at_least_revision_result(out, v, depth):
+    out += b"{"
+    out += b"\n"
+    _pad(out, depth + 1)
+    _esc(out, "value")
+    out += b": "
+    _write_revision_decision(out, v.value, depth + 1)
+    out += b"\n"
+    _pad(out, depth)
+    out += b"}"
+
+
 def _write_oa_authorization_list_action_descriptions_result(out, v, depth):
     out += b"{"
     out += b"\n"
@@ -3381,6 +3668,18 @@ def _write_oa_authorization_decide_for_result(out, v, depth):
     _esc(out, "value")
     out += b": "
     _write_decision(out, v.value, depth + 1)
+    out += b"\n"
+    _pad(out, depth)
+    out += b"}"
+
+
+def _write_oa_authorization_operator_observe_policy_result(out, v, depth):
+    out += b"{"
+    out += b"\n"
+    _pad(out, depth + 1)
+    _esc(out, "value")
+    out += b": "
+    _write_policy_observation(out, v.value, depth + 1)
     out += b"\n"
     _pad(out, depth)
     out += b"}"
@@ -4420,6 +4719,142 @@ def _read_decision(r):
     return v
 
 
+def _read_revision_decision(r):
+    if r.at() != _LBRACE:
+        raise r.refuse("wrong_type")
+    r.enter()
+    r.pos += 1
+    v = RevisionDecision()
+    seen = 0
+    r.ws()
+    if r.at() != _RBRACE:
+        while True:
+            r.ws()
+            if r.at() != _QUOTE:
+                raise r.refuse("malformed")
+            key = r.string()
+            r.ws()
+            if r.at() != _COLON:
+                raise r.refuse("malformed")
+            r.pos += 1
+            r.ws()
+            if key == "decision":
+                if seen & 1:
+                    raise r.refuse("duplicate_field")
+                seen |= 1
+                v.decision = _read_decision(r)
+            elif key == "observed_revision":
+                if seen & 2:
+                    raise r.refuse("duplicate_field")
+                seen |= 2
+                v.observed_revision = r.string()
+            else:
+                raise r.refuse("unknown_field")
+            r.ws()
+            if r.at() != _COMMA:
+                break
+            r.pos += 1
+    if r.at() != _RBRACE:
+        raise r.refuse("malformed")
+    r.pos += 1
+    r.depth -= 1
+    if seen & 1 != 1:
+        raise r.refuse("missing_field")
+    _size = len(v.observed_revision.encode("utf-8", "surrogatepass"))
+    if _size > 128: raise r.refuse("bad_value")
+    if any(c < "\x20" or "\x7f" <= c <= "\x9f" for c in v.observed_revision): raise r.refuse("bad_value")
+    return v
+
+
+def _read_refusal_detail(r):
+    if r.at() != _LBRACE:
+        raise r.refuse("wrong_type")
+    r.enter()
+    r.pos += 1
+    v = RefusalDetail()
+    seen = 0
+    r.ws()
+    unknown_keys = set()
+    if r.at() != _RBRACE:
+        while True:
+            r.ws()
+            if r.at() != _QUOTE:
+                raise r.refuse("malformed")
+            key = r.string()
+            r.ws()
+            if r.at() != _COLON:
+                raise r.refuse("malformed")
+            r.pos += 1
+            r.ws()
+            if key == "source":
+                if seen & 1:
+                    raise r.refuse("duplicate_field")
+                seen |= 1
+                v.source = r.string()
+            elif key == "decision":
+                if seen & 2:
+                    raise r.refuse("duplicate_field")
+                seen |= 2
+                v.decision = r.string()
+            elif key == "ask":
+                if seen & 4:
+                    raise r.refuse("duplicate_field")
+                seen |= 4
+                v.ask = r.string()
+            elif key == "action":
+                if seen & 8:
+                    raise r.refuse("duplicate_field")
+                seen |= 8
+                v.action = r.string()
+            elif key == "question":
+                if seen & 16:
+                    raise r.refuse("duplicate_field")
+                seen |= 16
+                v.question = r.string()
+            elif key == "credential":
+                if seen & 32:
+                    raise r.refuse("duplicate_field")
+                seen |= 32
+                v.credential = r.string()
+            elif key == "retry_after_ms":
+                if seen & 64:
+                    raise r.refuse("duplicate_field")
+                seen |= 64
+                v.retry_after_ms = r.integer(-9223372036854775808, 9223372036854775807)
+            else:
+                if key in unknown_keys:
+                    raise r.refuse("duplicate_key")
+                unknown_keys.add(key)
+                r.skip_value()
+            r.ws()
+            if r.at() != _COMMA:
+                break
+            r.pos += 1
+    if r.at() != _RBRACE:
+        raise r.refuse("malformed")
+    r.pos += 1
+    r.depth -= 1
+    if seen & 7 != 7:
+        raise r.refuse("missing_field")
+    _size = len(v.action.encode("utf-8", "surrogatepass"))
+    if _size != 0 and (_size < 1 or _size > 128): raise r.refuse("bad_value")
+    _size = len(v.question.encode("utf-8", "surrogatepass"))
+    if _size != 0 and (_size < 1 or _size > 128): raise r.refuse("bad_value")
+    _size = len(v.credential.encode("utf-8", "surrogatepass"))
+    if _size != 0 and (_size < 1 or _size > 64): raise r.refuse("bad_value")
+    if v.retry_after_ms < 0 or v.retry_after_ms > 86400000: raise r.refuse("bad_value")
+    v.source = _open_enum(RefusalSource, v.source)
+    try:
+        v.decision = RefusalDecision(v.decision)
+    except ValueError:
+        raise r.refuse("bad_enum") from None
+    try:
+        v.ask = RefusalAsk(v.ask)
+    except ValueError:
+        raise r.refuse("bad_enum") from None
+    return v
+
+
 def _read_policy_rule(r):
     if r.at() != _LBRACE:
         raise r.refuse("wrong_type")
@@ -4537,6 +4972,74 @@ def _read_policy_page(r):
         raise r.refuse("missing_field")
     try:
         v.outcome = PolicyPageOutcome(v.outcome)
+    except ValueError:
+        raise r.refuse("bad_enum") from None
+    return v
+
+
+def _read_policy_observation(r):
+    if r.at() != _LBRACE:
+        raise r.refuse("wrong_type")
+    r.enter()
+    r.pos += 1
+    v = PolicyObservation()
+    seen = 0
+    r.ws()
+    if r.at() != _RBRACE:
+        while True:
+            r.ws()
+            if r.at() != _QUOTE:
+                raise r.refuse("malformed")
+            key = r.string()
+            r.ws()
+            if r.at() != _COLON:
+                raise r.refuse("malformed")
+            r.pos += 1
+            r.ws()
+            if key == "outcome":
+                if seen & 1:
+                    raise r.refuse("duplicate_field")
+                seen |= 1
+                v.outcome = r.string()
+            elif key == "next":
+                if seen & 2:
+                    raise r.refuse("duplicate_field")
+                seen |= 2
+                v.next = r.string()
+            elif key == "revision":
+                if seen & 4:
+                    raise r.refuse("duplicate_field")
+                seen |= 4
+                v.revision = r.string()
+            elif key == "mechanism":
+                if seen & 8:
+                    raise r.refuse("duplicate_field")
+                seen |= 8
+                v.mechanism = r.string()
+            else:
+                raise r.refuse("unknown_field")
+            r.ws()
+            if r.at() != _COMMA:
+                break
+            r.pos += 1
+    if r.at() != _RBRACE:
+        raise r.refuse("malformed")
+    r.pos += 1
+    r.depth -= 1
+    if seen & 15 != 15:
+        raise r.refuse("missing_field")
+    _size = len(v.next.encode("utf-8", "surrogatepass"))
+    if _size > 256: raise r.refuse("bad_value")
+    if any(c < "\x20" or "\x7f" <= c <= "\x9f" for c in v.next): raise r.refuse("bad_value")
+    _size = len(v.revision.encode("utf-8", "surrogatepass"))
+    if _size > 128: raise r.refuse("bad_value")
+    if any(c < "\x20" or "\x7f" <= c <= "\x9f" for c in v.revision): raise r.refuse("bad_value")
+    try:
+        v.outcome = PolicyObservationOutcome(v.outcome)
+    except ValueError:
+        raise r.refuse("bad_enum") from None
+    try:
+        v.mechanism = PolicyObservationMechanism(v.mechanism)
     except ValueError:
         raise r.refuse("bad_enum") from None
     return v
@@ -6429,6 +6932,69 @@ def _read_legacy_operation_request(r):
     return v
 
 
+def _read_oa_authorization_decide_for_at_least_revision_arguments(r):
+    if r.at() != _LBRACE:
+        raise r.refuse("wrong_type")
+    r.enter()
+    r.pos += 1
+    v = _AuthorizationDecideForAtLeastRevisionArguments()
+    seen = 0
+    r.ws()
+    if r.at() != _RBRACE:
+        while True:
+            r.ws()
+            if r.at() != _QUOTE:
+                raise r.refuse("malformed")
+            key = r.string()
+            r.ws()
+            if r.at() != _COLON:
+                raise r.refuse("malformed")
+            r.pos += 1
+            r.ws()
+            if key == "subject":
+                if seen & 1:
+                    raise r.refuse("duplicate_field")
+                seen |= 1
+                v.subject = _read_subject(r)
+            elif key == "action":
+                if seen & 2:
+                    raise r.refuse("duplicate_field")
+                seen |= 2
+                v.action = r.string()
+            elif key == "resource":
+                if seen & 4:
+                    raise r.refuse("duplicate_field")
+                seen |= 4
+                v.resource = r.string()
+            elif key == "at_least_revision":
+                if seen & 8:
+                    raise r.refuse("duplicate_field")
+                seen |= 8
+                v.at_least_revision = r.string()
+            else:
+                raise r.refuse("unknown_field")
+            r.ws()
+            if r.at() != _COMMA:
+                break
+            r.pos += 1
+    if r.at() != _RBRACE:
+        raise r.refuse("malformed")
+    r.pos += 1
+    r.depth -= 1
+    if seen & 15 != 15:
+        raise r.refuse("missing_field")
+    _size = len(v.action.encode("utf-8", "surrogatepass"))
+    if _size < 1 or _size > 128: raise r.refuse("bad_value")
+    if any(c < "\x20" or "\x7f" <= c <= "\x9f" for c in v.action): raise r.refuse("bad_value")
+    _size = len(v.resource.encode("utf-8", "surrogatepass"))
+    if _size < 1 or _size > 1024: raise r.refuse("bad_value")
+    if any(c < "\x20" or "\x7f" <= c <= "\x9f" for c in v.resource): raise r.refuse("bad_value")
+    _size = len(v.at_least_revision.encode("utf-8", "surrogatepass"))
+    if _size > 128: raise r.refuse("bad_value")
+    if any(c < "\x20" or "\x7f" <= c <= "\x9f" for c in v.at_least_revision): raise r.refuse("bad_value")
+    return v
+
+
 def _read_oa_authorization_list_action_descriptions_arguments(r):
     if r.at() != _LBRACE:
         raise r.refuse("wrong_type")
@@ -6563,6 +7129,54 @@ def _read_oa_authorization_decide_for_arguments(r):
     r.depth -= 1
     if seen & 7 != 7:
         raise r.refuse("missing_field")
+    return v
+
+
+def _read_oa_authorization_operator_observe_policy_arguments(r):
+    if r.at() != _LBRACE:
+        raise r.refuse("wrong_type")
+    r.enter()
+    r.pos += 1
+    v = _AuthorizationOperatorObservePolicyArguments()
+    seen = 0
+    r.ws()
+    if r.at() != _RBRACE:
+        while True:
+            r.ws()
+            if r.at() != _QUOTE:
+                raise r.refuse("malformed")
+            key = r.string()
+            r.ws()
+            if r.at() != _COLON:
+                raise r.refuse("malformed")
+            r.pos += 1
+            r.ws()
+            if key == "after":
+                if seen & 1:
+                    raise r.refuse("duplicate_field")
+                seen |= 1
+                v.after = r.string()
+            elif key == "wait_ms":
+                if seen & 2:
+                    raise r.refuse("duplicate_field")
+                seen |= 2
+                v.wait_ms = r.integer(-9223372036854775808, 9223372036854775807)
+            else:
+                raise r.refuse("unknown_field")
+            r.ws()
+            if r.at() != _COMMA:
+                break
+            r.pos += 1
+    if r.at() != _RBRACE:
+        raise r.refuse("malformed")
+    r.pos += 1
+    r.depth -= 1
+    if seen & 3 != 3:
+        raise r.refuse("missing_field")
+    _size = len(v.after.encode("utf-8", "surrogatepass"))
+    if _size > 256: raise r.refuse("bad_value")
+    if any(c < "\x20" or "\x7f" <= c <= "\x9f" for c in v.after): raise r.refuse("bad_value")
+    if v.wait_ms < 0 or v.wait_ms > 30000: raise r.refuse("bad_value")
     return v
 
 
@@ -8050,6 +8664,45 @@ def _read_oa_service_error(r):
     return v
 
 
+def _read_oa_authorization_decide_for_at_least_revision_result(r):
+    if r.at() != _LBRACE:
+        raise r.refuse("wrong_type")
+    r.enter()
+    r.pos += 1
+    v = _AuthorizationDecideForAtLeastRevisionResult()
+    seen = 0
+    r.ws()
+    if r.at() != _RBRACE:
+        while True:
+            r.ws()
+            if r.at() != _QUOTE:
+                raise r.refuse("malformed")
+            key = r.string()
+            r.ws()
+            if r.at() != _COLON:
+                raise r.refuse("malformed")
+            r.pos += 1
+            r.ws()
+            if key == "value":
+                if seen & 1:
+                    raise r.refuse("duplicate_field")
+                seen |= 1
+                v.value = _read_revision_decision(r)
+            else:
+                raise r.refuse("unknown_field")
+            r.ws()
+            if r.at() != _COMMA:
+                break
+            r.pos += 1
+    if r.at() != _RBRACE:
+        raise r.refuse("malformed")
+    r.pos += 1
+    r.depth -= 1
+    if seen & 1 != 1:
+        raise r.refuse("missing_field")
+    return v
+
+
 def _read_oa_authorization_list_action_descriptions_result(r):
     if r.at() != _LBRACE:
         raise r.refuse("wrong_type")
@@ -8152,6 +8805,45 @@ def _read_oa_authorization_decide_for_result(r):
                     raise r.refuse("duplicate_field")
                 seen |= 1
                 v.value = _read_decision(r)
+            else:
+                raise r.refuse("unknown_field")
+            r.ws()
+            if r.at() != _COMMA:
+                break
+            r.pos += 1
+    if r.at() != _RBRACE:
+        raise r.refuse("malformed")
+    r.pos += 1
+    r.depth -= 1
+    if seen & 1 != 1:
+        raise r.refuse("missing_field")
+    return v
+
+
+def _read_oa_authorization_operator_observe_policy_result(r):
+    if r.at() != _LBRACE:
+        raise r.refuse("wrong_type")
+    r.enter()
+    r.pos += 1
+    v = _AuthorizationOperatorObservePolicyResult()
+    seen = 0
+    r.ws()
+    if r.at() != _RBRACE:
+        while True:
+            r.ws()
+            if r.at() != _QUOTE:
+                raise r.refuse("malformed")
+            key = r.string()
+            r.ws()
+            if r.at() != _COLON:
+                raise r.refuse("malformed")
+            r.pos += 1
+            r.ws()
+            if key == "value":
+                if seen & 1:
+                    raise r.refuse("duplicate_field")
+                seen |= 1
+                v.value = _read_policy_observation(r)
             else:
                 raise r.refuse("unknown_field")
             r.ws()
@@ -9269,9 +9961,82 @@ def decode(data):
     return v
 
 
+_JSON_RECORDS = {
+    Request: (_write_request, _read_request),
+    AppMetadata: (_write_app_metadata, _read_app_metadata),
+    HoldMetadata: (_write_hold_metadata, _read_hold_metadata),
+    ResponseMetadata: (_write_response_metadata, _read_response_metadata),
+    Subject: (_write_subject, _read_subject),
+    Decision: (_write_decision, _read_decision),
+    RevisionDecision: (_write_revision_decision, _read_revision_decision),
+    RefusalDetail: (_write_refusal_detail, _read_refusal_detail),
+    PolicyRule: (_write_policy_rule, _read_policy_rule),
+    PolicyPage: (_write_policy_page, _read_policy_page),
+    PolicyObservation: (_write_policy_observation, _read_policy_observation),
+    PolicyEdit: (_write_policy_edit, _read_policy_edit),
+    RuleRecord: (_write_rule_record, _read_rule_record),
+    RuleRead: (_write_rule_read, _read_rule_read),
+    CatalogEntry: (_write_catalog_entry, _read_catalog_entry),
+    ActionDescription: (_write_action_description, _read_action_description),
+    PermissionDefinition: (_write_permission_definition, _read_permission_definition),
+    DescribedAction: (_write_described_action, _read_described_action),
+    ActionEdit: (_write_action_edit, _read_action_edit),
+    DescriptionEdit: (_write_description_edit, _read_description_edit),
+    DescriptionPage: (_write_description_page, _read_description_page),
+    AccountDefault: (_write_account_default, _read_account_default),
+    DefaultPage: (_write_default_page, _read_default_page),
+    DefaultEdit: (_write_default_edit, _read_default_edit),
+    DecisionExplanation: (_write_decision_explanation, _read_decision_explanation),
+    PermissionKey: (_write_permission_key, _read_permission_key),
+    ResourceSelector: (_write_resource_selector, _read_resource_selector),
+    PermissionSelection: (_write_permission_selection, _read_permission_selection),
+    ConcreteResource: (_write_concrete_resource, _read_concrete_resource),
+    CheckBatchRequest: (_write_check_batch_request, _read_check_batch_request),
+    BatchDecision: (_write_batch_decision, _read_batch_decision),
+    SelectorPermissionDefinition: (_write_selector_permission_definition, _read_selector_permission_definition),
+    PermissionDefinitionPage: (_write_permission_definition_page, _read_permission_definition_page),
+    PermissionBundleDefinition: (_write_permission_bundle_definition, _read_permission_bundle_definition),
+    PermissionBundlePage: (_write_permission_bundle_page, _read_permission_bundle_page),
+    BundleExpansion: (_write_bundle_expansion, _read_bundle_expansion),
+    PermissionEffect: (_write_permission_effect, _read_permission_effect),
+    SelectorRule: (_write_selector_rule, _read_selector_rule),
+    BundleOrigin: (_write_bundle_origin, _read_bundle_origin),
+    SelectorRuleRecord: (_write_selector_rule_record, _read_selector_rule_record),
+    SelectorRulePage: (_write_selector_rule_page, _read_selector_rule_page),
+    SelectorRuleRead: (_write_selector_rule_read, _read_selector_rule_read),
+    SelectorEdit: (_write_selector_edit, _read_selector_edit),
+    LegacyOperationRequest: (_write_legacy_operation_request, _read_legacy_operation_request),
+}
+
+
+def to_json(value):
+    """One record as JSON bytes, laid out as this module's documents are and
+    without the document terminator."""
+    codec = _JSON_RECORDS.get(type(value))
+    if codec is None:
+        raise TypeError("to_json takes a record of this module, not %s" % type(value).__name__)
+    out = bytearray()
+    codec[0](out, value, 0)
+    return bytes(out)
+
+
+def from_json(kind, data):
+    """Read one record of class kind from data; a refused input raises Refusal."""
+    codec = _JSON_RECORDS.get(kind)
+    if codec is None:
+        raise TypeError("from_json takes a record class of this module, not %r" % (kind,))
+    r = _Reader(bytes(data))
+    r.ws()
+    v = codec[1](r)
+    r.ws()
+    if r.pos < len(r.buf):
+        raise r.refuse("trailing_bytes")
+    return v
+
+
 # _REFUSALS is in the order two of them are chosen between.
 
-_REFUSALS = ["malformed", "bad_string", "number_spelling", "wrong_type", "depth_exceeded", "duplicate_key", "duplicate_field", "unknown_field", "missing_field", "bad_enum", "bad_binary", "trailing_bytes"]
+_REFUSALS = ["malformed", "bad_string", "number_spelling", "wrong_type", "depth_exceeded", "duplicate_key", "duplicate_field", "unknown_field", "missing_field", "bad_enum", "bad_binary", "bad_value", "trailing_bytes"]
 
 
 def _refusal_rank(word):
@@ -9416,8 +10181,11 @@ _SERVICE_RECORDS = {
     "ResponseMetadata": (ResponseMetadata, [("code", "string", "absent"), ("error", "string", "absent"), ("secret", "string", "absent"), ("token", "string", "absent"), ("expires", "string", "absent"), ("app", "AppMetadata", "absent"), ("right", "string", "absent"), ("apps", "list<AppMetadata>", "zero"), ("holds", "list<HoldMetadata>", "zero"), ]),
     "Subject": (Subject, [("account", "string", "never"), ("program", "string", "never"), ]),
     "Decision": (Decision, [("outcome", "enum", "never"), ("policy_revision", "string", "absent"), ]),
+    "RevisionDecision": (RevisionDecision, [("decision", "Decision", "never"), ("observed_revision", "string", "absent"), ]),
+    "RefusalDetail": (RefusalDetail, [("source", "enum", "never"), ("decision", "enum", "never"), ("ask", "enum", "never"), ("action", "string", "absent"), ("question", "string", "absent"), ("credential", "string", "absent"), ("retry_after_ms", "i64", "zero"), ]),
     "PolicyRule": (PolicyRule, [("subject", "Subject", "never"), ("action", "string", "never"), ("resource", "string", "never"), ("permit", "bool", "never"), ]),
     "PolicyPage": (PolicyPage, [("outcome", "enum", "never"), ("revision", "string", "never"), ("catalog", "list<string>", "never"), ("rules", "list<PolicyRule>", "never"), ("next", "string", "never"), ("complete", "bool", "never"), ]),
+    "PolicyObservation": (PolicyObservation, [("outcome", "enum", "never"), ("next", "string", "never"), ("revision", "string", "never"), ("mechanism", "enum", "never"), ]),
     "PolicyEdit": (PolicyEdit, [("outcome", "enum", "never"), ("revision", "string", "never"), ("current", "PolicyRule", "absent"), ]),
     "RuleRecord": (RuleRecord, [("rule", "PolicyRule", "never"), ("set_by", "Subject", "never"), ("set_at", "string", "never"), ("why", "string", "never"), ("expires", "string", "never"), ]),
     "RuleRead": (RuleRead, [("outcome", "enum", "never"), ("revision", "string", "never"), ("record", "RuleRecord", "absent"), ]),
@@ -9451,9 +10219,11 @@ _SERVICE_RECORDS = {
     "SelectorRuleRead": (SelectorRuleRead, [("outcome", "enum", "never"), ("revision", "string", "never"), ("record", "SelectorRuleRecord", "absent"), ]),
     "SelectorEdit": (SelectorEdit, [("outcome", "enum", "never"), ("revision", "string", "never"), ("current", "list<SelectorRuleRecord>", "never"), ("bundle_origin", "BundleOrigin", "absent"), ]),
     "LegacyOperationRequest": (LegacyOperationRequest, [("legacy_action", "string", "never"), ("legacy_resource", "string", "never"), ("concrete_operation", "ConcreteResource", "absent"), ]),
+    "OAAuthorizationDecideForAtLeastRevisionArguments": (_AuthorizationDecideForAtLeastRevisionArguments, [("subject", "Subject", "never"), ("action", "string", "never"), ("resource", "string", "never"), ("at_least_revision", "string", "never"), ]),
     "OAAuthorizationListActionDescriptionsArguments": (_AuthorizationListActionDescriptionsArguments, [("cursor", "string", "never"), ("limit", "i64", "never"), ]),
     "OAAuthorizationDecideArguments": (_AuthorizationDecideArguments, [("action", "string", "never"), ("resource", "string", "never"), ]),
     "OAAuthorizationDecideForArguments": (_AuthorizationDecideForArguments, [("subject", "Subject", "never"), ("action", "string", "never"), ("resource", "string", "never"), ]),
+    "OAAuthorizationOperatorObservePolicyArguments": (_AuthorizationOperatorObservePolicyArguments, [("after", "string", "never"), ("wait_ms", "i64", "never"), ]),
     "OAAuthorizationOperatorRegisterDescribedActionArguments": (_AuthorizationOperatorRegisterDescribedActionArguments, [("expected_revision", "string", "never"), ("description", "ActionDescription", "never"), ]),
     "OAAuthorizationOperatorApplyFirstUseAllowArguments": (_AuthorizationOperatorApplyFirstUseAllowArguments, [("expected_revision", "string", "never"), ("question_id", "string", "never"), ]),
     "OAAuthorizationOperatorListPolicyArguments": (_AuthorizationOperatorListPolicyArguments, [("cursor", "string", "never"), ("limit", "i64", "never"), ]),
@@ -9485,9 +10255,11 @@ _SERVICE_RECORDS = {
     "OAServiceFrame": (_ServiceFrame, [("version", "i32", "never"), ("service", "string", "never"), ("method", "string", "never"), ("arguments", "json", "never"), ]),
     "OAServiceReply": (_ServiceReply, [("version", "i32", "never"), ("service", "string", "never"), ("method", "string", "never"), ("ok", "bool", "never"), ("payload", "json", "never"), ]),
     "OAServiceError": (_ServiceError, [("code", "string", "never"), ("message", "string", "never"), ]),
+    "OAAuthorizationDecideForAtLeastRevisionResult": (_AuthorizationDecideForAtLeastRevisionResult, [("value", "RevisionDecision", "never"), ]),
     "OAAuthorizationListActionDescriptionsResult": (_AuthorizationListActionDescriptionsResult, [("value", "DescriptionPage", "never"), ]),
     "OAAuthorizationDecideResult": (_AuthorizationDecideResult, [("value", "Decision", "never"), ]),
     "OAAuthorizationDecideForResult": (_AuthorizationDecideForResult, [("value", "Decision", "never"), ]),
+    "OAAuthorizationOperatorObservePolicyResult": (_AuthorizationOperatorObservePolicyResult, [("value", "PolicyObservation", "never"), ]),
     "OAAuthorizationOperatorRegisterDescribedActionResult": (_AuthorizationOperatorRegisterDescribedActionResult, [("value", "DescriptionEdit", "never"), ]),
     "OAAuthorizationOperatorApplyFirstUseAllowResult": (_AuthorizationOperatorApplyFirstUseAllowResult, [("value", "PolicyEdit", "never"), ]),
     "OAAuthorizationOperatorListPolicyResult": (_AuthorizationOperatorListPolicyResult, [("value", "PolicyPage", "never"), ]),
@@ -9526,13 +10298,23 @@ class Authorization:
     registers actions and grants/revokes exact rules; no serialized awake lease
     is introduced."""
 
+    def decide_for_at_least_revision(self, subject: Subject, action: str, resource: str, at_least_revision: str) -> RevisionDecision:
+        """Evaluate through the existing explicitly admitted enforcer boundary.
+        Empty minimum requests an observation. A nonempty minimum is mandatory:
+        an older or incomparable state refuses unavailable. Unknown method never
+        permits fallback dropping the minimum. Both observations and minima are
+        bounded opaque values, not permission leases."""
+        raise NotImplementedError
+
     def list_action_descriptions(self, cursor: str, limit: int) -> DescriptionPage:
         """Read published descriptive metadata for the current catalogue under
-        same-account receiving Program admission. No rules are exposed. Pages
-        carry one durable revision; continuations bind subject, host epoch and
-        revision and return gap after change/restart. Requested limit is 1..64
-        and encoded replies are at most 256 KiB. Recheck admission before
-        returning. An earlier authorization@1 service returns unknown_method."""
+        same-account receiving
+        [Program](https://openabstractions.github.io/reference.html#concept-identity.listener-program-need)
+        admission. No rules are exposed. Pages carry one durable revision;
+        continuations bind subject, host epoch and revision and return gap after
+        change/restart. Requested limit is 1..64 and encoded replies are at most
+        256 KiB. Recheck admission before returning. An earlier authorization@1
+        service returns unknown_method."""
         raise NotImplementedError
 
     def decide(self, action: str, resource: str) -> Decision:
@@ -9555,6 +10337,23 @@ class AuthorizationClient(Authorization):
 
     def __init__(self, transport):
         self._transport = transport
+
+    def decide_for_at_least_revision(self, subject: Subject, action: str, resource: str, at_least_revision: str) -> RevisionDecision:
+        _service_check("Subject", subject)
+        _service_check("string", action)
+        _service_check("string", resource)
+        _service_check("string", at_least_revision)
+        _args = _AuthorizationDecideForAtLeastRevisionArguments()
+        _args.subject = subject
+        _args.action = action
+        _args.resource = resource
+        _args.at_least_revision = at_least_revision
+        _arguments = _service_encode(_write_oa_authorization_decide_for_at_least_revision_arguments, _args, 1)
+        _service_decode(_read_oa_authorization_decide_for_at_least_revision_arguments, _arguments, 1)
+        _request = _service_request("abstraction.rights/authorization@1", "DecideForAtLeastRevision", _arguments)
+        _payload = _service_response(self._transport.exchange_frame(_request), "abstraction.rights/authorization@1", "DecideForAtLeastRevision")
+        _result = _service_decode(_read_oa_authorization_decide_for_at_least_revision_result, _payload, 1)
+        return _result.value
 
     def list_action_descriptions(self, cursor: str, limit: int) -> DescriptionPage:
         _service_check("string", cursor)
@@ -9607,6 +10406,17 @@ class AuthorizationOperator:
     or provider path is accepted. Resource services remain the receiving
     enforcement points. Legacy bearer and awake lease behavior is separate."""
 
+    def observe_policy(self, after: str, wait_ms: int) -> PolicyObservation:
+        """Under existing operator authority, wait 0..30000ms for policy
+        invalidation through watch.Gate (RIGHTS-O16). Every read, wake and
+        response rechecks receiving Program proof and explicit operator
+        authority. The configured policy owner's OnChange callbacks and service
+        expiry deadlines provide native invalidation. Invalid bounds are refused
+        before data; stale/foreign epoch or receiving scope is gap. Cancellation
+        ends only this read. A prior operator@1 service returns unknown_method;
+        no listing-cursor or polling fallback."""
+        raise NotImplementedError
+
     def register_described_action(self, expected_revision: str, description: ActionDescription) -> DescriptionEdit:
         """Under existing explicit operator authority, atomically register an
         action and publish/correct its descriptive metadata at the expected
@@ -9624,12 +10434,13 @@ class AuthorizationOperator:
         """Apply the complete exact permit or paired permits derived by trusted
         runtime composition from this retained operator Allow and its runtime
         admission. No caller supplies targets or rules. Authorization, question
-        occurrence and revision are checked while the Book is pinned and the
-        rights edit is locked. Commit complete permits and private durable
-        success proof in the same rights replacement; a first receipt-only
-        commit changes revision when permits already match. A previously
-        completed ID conflicts without rewriting rights, including after
-        revocation or expiry. Failed writes retain the answer for explicit
+        occurrence and revision are checked while the
+        [Book](https://openabstractions.github.io/reference.html#concept-asks.book)
+        is pinned and the rights edit is locked. Commit complete permits and
+        private durable success proof in the same rights replacement; a first
+        receipt-only commit changes revision when permits already match. A
+        previously completed ID conflicts without rewriting rights, including
+        after revocation or expiry. Failed writes retain the answer for explicit
         Retry. Missing composition is unavailable; missing, pending, foreign,
         responder or non-Allow records are invalid. Both IDs and revision are
         bounded to 128 UTF-8 bytes. An earlier operator@1 service returns
@@ -9746,6 +10557,32 @@ class AuthorizationOperatorClient(AuthorizationOperator):
 
     def __init__(self, transport):
         self._transport = transport
+
+    def observe_policy(self, after: str, wait_ms: int) -> PolicyObservation:
+        _service_check("string", after)
+        _service_check("i64", wait_ms)
+        _args = _AuthorizationOperatorObservePolicyArguments()
+        _args.after = after
+        _args.wait_ms = wait_ms
+        _arguments = _service_encode(_write_oa_authorization_operator_observe_policy_arguments, _args, 1)
+        _service_decode(_read_oa_authorization_operator_observe_policy_arguments, _arguments, 1)
+        _request = _service_request("abstraction.rights/operator@1", "ObservePolicy", _arguments)
+        _payload = _service_response(self._transport.exchange_frame(_request), "abstraction.rights/operator@1", "ObservePolicy")
+        _result = _service_decode(_read_oa_authorization_operator_observe_policy_result, _payload, 1)
+        return _result.value
+
+    def observe_policy_pages(self, after: str, wait_ms: int):
+        if type(wait_ms) is not int or not 0 <= wait_ms <= 30000:
+            raise ValueError("observe wait_ms is 0..30000")
+        _observe_client = self
+        class _ObservePages:
+            def __iter__(self): return self
+            def __next__(self):
+                nonlocal after
+                _observe_page = _observe_client.observe_policy(after, wait_ms)
+                after = _observe_page.next
+                return _observe_page
+        return _ObservePages()
 
     def register_described_action(self, expected_revision: str, description: ActionDescription) -> DescriptionEdit:
         _service_check("string", expected_revision)
@@ -10223,8 +11060,11 @@ _NAMED_RECORDS = {
     "ResponseMetadata": (ResponseMetadata, [("code", "string", "absent"), ("error", "string", "absent"), ("secret", "string", "absent"), ("token", "string", "absent"), ("expires", "string", "absent"), ("app", "AppMetadata", "absent"), ("right", "string", "absent"), ("apps", "list<AppMetadata>", "zero"), ("holds", "list<HoldMetadata>", "zero"), ]),
     "Subject": (Subject, [("account", "string", "never"), ("program", "string", "never"), ]),
     "Decision": (Decision, [("outcome", "enum", "never"), ("policy_revision", "string", "absent"), ]),
+    "RevisionDecision": (RevisionDecision, [("decision", "Decision", "never"), ("observed_revision", "string", "absent"), ]),
+    "RefusalDetail": (RefusalDetail, [("source", "enum", "never"), ("decision", "enum", "never"), ("ask", "enum", "never"), ("action", "string", "absent"), ("question", "string", "absent"), ("credential", "string", "absent"), ("retry_after_ms", "i64", "zero"), ]),
     "PolicyRule": (PolicyRule, [("subject", "Subject", "never"), ("action", "string", "never"), ("resource", "string", "never"), ("permit", "bool", "never"), ]),
     "PolicyPage": (PolicyPage, [("outcome", "enum", "never"), ("revision", "string", "never"), ("catalog", "list<string>", "never"), ("rules", "list<PolicyRule>", "never"), ("next", "string", "never"), ("complete", "bool", "never"), ]),
+    "PolicyObservation": (PolicyObservation, [("outcome", "enum", "never"), ("next", "string", "never"), ("revision", "string", "never"), ("mechanism", "enum", "never"), ]),
     "PolicyEdit": (PolicyEdit, [("outcome", "enum", "never"), ("revision", "string", "never"), ("current", "PolicyRule", "absent"), ]),
     "RuleRecord": (RuleRecord, [("rule", "PolicyRule", "never"), ("set_by", "Subject", "never"), ("set_at", "string", "never"), ("why", "string", "never"), ("expires", "string", "never"), ]),
     "RuleRead": (RuleRead, [("outcome", "enum", "never"), ("revision", "string", "never"), ("record", "RuleRecord", "absent"), ]),
@@ -10336,12 +11176,24 @@ def _check_decision(v, depth=0, limit=_DEPTH_LIMIT):
     _named_check("Decision", v, depth, min(limit, _DEPTH_LIMIT))
 
 
+def _check_revision_decision(v, depth=0, limit=_DEPTH_LIMIT):
+    _named_check("RevisionDecision", v, depth, min(limit, _DEPTH_LIMIT))
+
+
+def _check_refusal_detail(v, depth=0, limit=_DEPTH_LIMIT):
+    _named_check("RefusalDetail", v, depth, min(limit, _DEPTH_LIMIT))
+
+
 def _check_policy_rule(v, depth=0, limit=_DEPTH_LIMIT):
     _named_check("PolicyRule", v, depth, min(limit, _DEPTH_LIMIT))
 
 
 def _check_policy_page(v, depth=0, limit=_DEPTH_LIMIT):
     _named_check("PolicyPage", v, depth, min(limit, _DEPTH_LIMIT))
+
+
+def _check_policy_observation(v, depth=0, limit=_DEPTH_LIMIT):
+    _named_check("PolicyObservation", v, depth, min(limit, _DEPTH_LIMIT))
 
 
 def _check_policy_edit(v, depth=0, limit=_DEPTH_LIMIT):
@@ -10686,6 +11538,76 @@ def decode_decision(data):
     return v
 
 
+def _decode_revision_decision_at(data, depth, limit):
+    r = _Reader(bytes(data))
+    if depth < 0 or limit < 1:
+        raise r.refuse("depth_exceeded")
+    r.depth = depth
+    r.limit = min(limit, _DEPTH_LIMIT)
+    r.ws()
+    v = _read_revision_decision(r)
+    return v, r.pos
+
+
+def _encode_revision_decision_at(v, depth):
+    if depth < 0 or depth >= _DEPTH_LIMIT:
+        raise _Reader(b"").refuse("depth_exceeded")
+    _check_revision_decision(v, depth, _DEPTH_LIMIT)
+    out = bytearray()
+    _write_revision_decision(out, v, depth)
+    _decode_revision_decision_at(out, depth, _DEPTH_LIMIT)
+    return bytes(out)
+
+
+def encode_revision_decision(v):
+    return _encode_revision_decision_at(v, 0) + "\n".encode()
+
+
+def decode_revision_decision(data):
+    v, n = _decode_revision_decision_at(data, 0, _DEPTH_LIMIT)
+    r = _Reader(bytes(data))
+    r.pos = n
+    r.ws()
+    if r.pos != len(r.buf):
+        raise r.refuse("trailing_bytes")
+    return v
+
+
+def _decode_refusal_detail_at(data, depth, limit):
+    r = _Reader(bytes(data))
+    if depth < 0 or limit < 1:
+        raise r.refuse("depth_exceeded")
+    r.depth = depth
+    r.limit = min(limit, _DEPTH_LIMIT)
+    r.ws()
+    v = _read_refusal_detail(r)
+    return v, r.pos
+
+
+def _encode_refusal_detail_at(v, depth):
+    if depth < 0 or depth >= _DEPTH_LIMIT:
+        raise _Reader(b"").refuse("depth_exceeded")
+    _check_refusal_detail(v, depth, _DEPTH_LIMIT)
+    out = bytearray()
+    _write_refusal_detail(out, v, depth)
+    _decode_refusal_detail_at(out, depth, _DEPTH_LIMIT)
+    return bytes(out)
+
+
+def encode_refusal_detail(v):
+    return _encode_refusal_detail_at(v, 0) + "\n".encode()
+
+
+def decode_refusal_detail(data):
+    v, n = _decode_refusal_detail_at(data, 0, _DEPTH_LIMIT)
+    r = _Reader(bytes(data))
+    r.pos = n
+    r.ws()
+    if r.pos != len(r.buf):
+        raise r.refuse("trailing_bytes")
+    return v
+
+
 def _decode_policy_rule_at(data, depth, limit):
     r = _Reader(bytes(data))
     if depth < 0 or limit < 1:
@@ -10748,6 +11670,41 @@ def encode_policy_page(v):
 
 def decode_policy_page(data):
     v, n = _decode_policy_page_at(data, 0, _DEPTH_LIMIT)
+    r = _Reader(bytes(data))
+    r.pos = n
+    r.ws()
+    if r.pos != len(r.buf):
+        raise r.refuse("trailing_bytes")
+    return v
+
+
+def _decode_policy_observation_at(data, depth, limit):
+    r = _Reader(bytes(data))
+    if depth < 0 or limit < 1:
+        raise r.refuse("depth_exceeded")
+    r.depth = depth
+    r.limit = min(limit, _DEPTH_LIMIT)
+    r.ws()
+    v = _read_policy_observation(r)
+    return v, r.pos
+
+
+def _encode_policy_observation_at(v, depth):
+    if depth < 0 or depth >= _DEPTH_LIMIT:
+        raise _Reader(b"").refuse("depth_exceeded")
+    _check_policy_observation(v, depth, _DEPTH_LIMIT)
+    out = bytearray()
+    _write_policy_observation(out, v, depth)
+    _decode_policy_observation_at(out, depth, _DEPTH_LIMIT)
+    return bytes(out)
+
+
+def encode_policy_observation(v):
+    return _encode_policy_observation_at(v, 0) + "\n".encode()
+
+
+def decode_policy_observation(data):
+    v, n = _decode_policy_observation_at(data, 0, _DEPTH_LIMIT)
     r = _Reader(bytes(data))
     r.pos = n
     r.ws()

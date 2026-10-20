@@ -126,7 +126,7 @@ func checkedBatch(v BatchDecision, e error, req CheckBatchRequest) (BatchDecisio
 			outcomes = append(outcomes, *v.CollectionOutcome)
 		}
 		for _, o := range outcomes {
-			if o != DecisionOutcomePermitted && o != DecisionOutcomeDenied && o != DecisionOutcomeNotGranted && o != DecisionOutcomeUnknownAction {
+			if !Evaluated(o) {
 				bad = true
 			}
 		}
@@ -172,7 +172,7 @@ func checkedSelectorEdit(v SelectorEdit, e error) (SelectorEdit, error) {
 		return SelectorEdit{}, errors.New("rights: inconsistent selector edit")
 	}
 	for _, r := range v.Current {
-		if !validSubject(r.Rule.Subject) || !validSubject(r.SetBy) || !selectionShape(r.Rule.Selection) {
+		if !validTargetSubject(r.Rule.Subject) || !validSubject(r.SetBy) || !selectionShape(r.Rule.Selection) {
 			return SelectorEdit{}, errors.New("rights: invalid selector record")
 		}
 	}
@@ -193,7 +193,7 @@ func (c *SelectorOperator) ListSelectorRulesContext(ctx context.Context, cursor 
 		return SelectorRulePage{}, errors.New("rights: invalid selector page")
 	}
 	for _, r := range v.Records {
-		if !validSubject(r.Rule.Subject) || !selectionShape(r.Rule.Selection) {
+		if !validTargetSubject(r.Rule.Subject) || !selectionShape(r.Rule.Selection) {
 			return SelectorRulePage{}, errors.New("rights: invalid selector record")
 		}
 	}
@@ -203,7 +203,7 @@ func (c *SelectorOperator) ReadSelectorRuleContext(ctx context.Context, subject 
 	if e := ctx.Err(); e != nil {
 		return SelectorRuleRead{}, e
 	}
-	if !validSubject(subject) || !selectionShape(selection) {
+	if !validTargetSubject(subject) || !selectionShape(selection) {
 		return SelectorRuleRead{}, errors.New("rights: invalid selector read")
 	}
 	v, e := wire.NewSelectorAuthorizationOperatorClient(c.transport.WithContext(ctx)).ReadSelectorRule(subject, selection)
@@ -223,7 +223,7 @@ func (c *SelectorOperator) SetSelectorRuleContext(ctx context.Context, expected 
 	if e := ctx.Err(); e != nil {
 		return SelectorEdit{}, e
 	}
-	if !boundedOperatorString(expected, 128) || !validSubject(rule.Subject) || !selectionShape(rule.Selection) || !validSelectorDuration(ttl) {
+	if !boundedOperatorString(expected, 128) || !validTargetSubject(rule.Subject) || !selectionShape(rule.Selection) || !validSelectorDuration(ttl) {
 		return SelectorEdit{}, errors.New("rights: invalid selector edit")
 	}
 	v, e := wire.NewSelectorAuthorizationOperatorClient(c.transport.WithContext(ctx)).SetSelectorRule(expected, rule, ttl.Milliseconds(), why)
@@ -233,7 +233,7 @@ func (c *SelectorOperator) RemoveSelectorRuleContext(ctx context.Context, expect
 	if e := ctx.Err(); e != nil {
 		return SelectorEdit{}, e
 	}
-	if !boundedOperatorString(expected, 128) || !validSubject(subject) || !selectionShape(selection) {
+	if !boundedOperatorString(expected, 128) || !validTargetSubject(subject) || !selectionShape(selection) {
 		return SelectorEdit{}, errors.New("rights: invalid selector removal")
 	}
 	v, e := wire.NewSelectorAuthorizationOperatorClient(c.transport.WithContext(ctx)).RemoveSelectorRule(expected, subject, selection)
@@ -243,7 +243,7 @@ func (c *SelectorOperator) ApplyBundleContext(ctx context.Context, expected stri
 	if e := ctx.Err(); e != nil {
 		return SelectorEdit{}, e
 	}
-	if !boundedOperatorString(expected, 128) || !validSubject(subject) || !boundedOperatorString(ref, 128) || !validSelectorDuration(ttl) {
+	if !boundedOperatorString(expected, 128) || !validTargetSubject(subject) || !boundedOperatorString(ref, 128) || !validSelectorDuration(ttl) {
 		return SelectorEdit{}, errors.New("rights: invalid bundle edit")
 	}
 	v, e := wire.NewSelectorAuthorizationOperatorClient(c.transport.WithContext(ctx)).ApplyBundle(expected, subject, ref, selector, ttl.Milliseconds(), why)
@@ -253,7 +253,7 @@ func (c *SelectorOperator) RemoveBundleContext(ctx context.Context, expected str
 	if e := ctx.Err(); e != nil {
 		return SelectorEdit{}, e
 	}
-	if !boundedOperatorString(expected, 128) || !validSubject(subject) || !boundedOperatorString(id, 128) {
+	if !boundedOperatorString(expected, 128) || !validTargetSubject(subject) || !boundedOperatorString(id, 128) {
 		return SelectorEdit{}, errors.New("rights: invalid bundle removal")
 	}
 	v, e := wire.NewSelectorAuthorizationOperatorClient(c.transport.WithContext(ctx)).RemoveBundle(expected, subject, id)

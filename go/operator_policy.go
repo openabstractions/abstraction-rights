@@ -22,6 +22,7 @@ type PolicySnapshot struct {
 // revision identifies the configured seed together with the file content, so a
 // changed seed changes the revision as a changed file does.
 func (p *DecisionPolicy) revision(f decisionFile) string {
+	f = revisionContent(f)
 	//unchecked: data only feeds the revision hash below, never a returned payload; its fields are plain marshalable data
 	data, _ := json.Marshal(struct {
 		Seed        []string     `json:"seed"`
@@ -45,6 +46,56 @@ func (p *DecisionPolicy) OperatorSnapshot() (PolicySnapshot, error) {
 		result.Rules = append(result.Rules, publicRule(r))
 	}
 	return result, nil
+}
+
+// PolicyObservationState is an invalidation snapshot, with no permission lease.
+// Stamp changes at commits and once per expiry boundary; Deadline is the next
+// future boundary. The durable Revision stays unchanged when time alone passes.
+type PolicyObservationState struct {
+	Revision string
+	Stamp    string
+	Deadline time.Time
+}
+
+// ObservePolicyStateContext reads revision and all expiry boundaries from one
+// immutable policy read. The service owns notifications and confirms authority.
+func (p *DecisionPolicy) ObservePolicyStateContext(ctx context.Context) (PolicyObservationState, error) {
+	f, revision, err := p.readDecisionContext(ctx)
+	if err != nil {
+		return PolicyObservationState{}, err
+	}
+	state := PolicyObservationState{Revision: revision}
+	now := p.now()
+	timerNow := time.Now()
+	stamp := sha256.New()
+	stamp.Write([]byte(revision))
+	add := func(expires string) {
+		if expires == "" {
+			return
+		}
+		at, _ := time.Parse(StampFormat, expires) // Validated by the policy reader.
+		if at.After(now) {
+			stamp.Write([]byte{0})
+			if state.Deadline.IsZero() || at.Before(state.Deadline) {
+				state.Deadline = at
+			}
+		} else {
+			stamp.Write([]byte{1})
+		}
+	}
+	for _, rule := range f.Rules {
+		add(rule.Expires)
+	}
+	for _, rule := range f.SelectorRules {
+		add(rule.Expires)
+	}
+	// Gate owns real/monotonic timers; configured service clocks can have a
+	// different epoch. Preserve the one policy-clock sample's remaining delay.
+	if !state.Deadline.IsZero() {
+		state.Deadline = timerNow.Add(state.Deadline.Sub(now))
+	}
+	state.Stamp = hex.EncodeToString(stamp.Sum(nil))
+	return state, nil
 }
 
 // RuleEdit is one conditional edit of an exact rule. A nil Permit revokes. By is
@@ -75,13 +126,82 @@ func (p *DecisionPolicy) EditRule(expected string, subject wire.Subject, action,
 	return p.ChangeRule(expected, subject, action, resource, RuleEdit{Permit: permit, By: p.native}, authorize)
 }
 
+// RemoveRemoteSubjectContext removes every legacy and typed rule for one exact
+// remote subject in this receiving account. The runtime supplies live native
+// operator admission; possession of a subject or policy is not authorization.
+// Completion proofs survive removal so an old answered Allow cannot replay.
+// A lost reply requires reconciliation before selecting another revision.
+func (p *DecisionPolicy) RemoveRemoteSubjectContext(ctx context.Context, expected string, subject wire.Subject, authorize func() error) (wire.PolicyEdit, error) {
+	s, err := NormalizeDecisionSubject(subject)
+	if err != nil || !remoteSubject(s) || s.Account != p.native.Account || !boundedDecisionString(expected, 128) {
+		return wire.PolicyEdit{Outcome: wire.PolicyEditOutcomeInvalid}, err
+	}
+	if authorize == nil {
+		return wire.PolicyEdit{Outcome: wire.PolicyEditOutcomeUnavailable}, errors.New("rights: operator admission required")
+	}
+	if err = p.regular(); err != nil {
+		return wire.PolicyEdit{Outcome: wire.PolicyEditOutcomeUnavailable}, err
+	}
+	result := wire.PolicyEdit{}
+	noWrite := errors.New("rights: remote removal without write")
+	err = p.changeContext(ctx, func(data []byte) ([]byte, error) {
+		result = wire.PolicyEdit{}
+		if err := authorize(); err != nil {
+			return nil, err
+		}
+		f, err := p.decodeDecision(data)
+		if err != nil {
+			return nil, err
+		}
+		revision := p.revision(f)
+		if revision != expected {
+			result = wire.PolicyEdit{Outcome: wire.PolicyEditOutcomeConflict, Revision: revision}
+			return nil, noWrite
+		}
+		removedOrigins := map[string]bool{}
+		legacy, typed := len(f.Rules), len(f.SelectorRules)
+		f.Rules = slices.DeleteFunc(f.Rules, func(r decisionRule) bool { return r.Subject == s })
+		f.SelectorRules = slices.DeleteFunc(f.SelectorRules, func(r selectorRule) bool {
+			if r.Subject != s {
+				return false
+			}
+			if r.OriginID != "" {
+				removedOrigins[r.OriginID] = true
+			}
+			return true
+		})
+		result = wire.PolicyEdit{Outcome: wire.PolicyEditOutcomeApplied, Revision: revision}
+		if legacy == len(f.Rules) && typed == len(f.SelectorRules) {
+			return nil, noWrite
+		}
+		for _, r := range f.SelectorRules {
+			delete(removedOrigins, r.OriginID)
+		}
+		f.BundleOrigins = slices.DeleteFunc(f.BundleOrigins, func(o storedBundleOrigin) bool { return removedOrigins[o.ID] })
+		result.Revision = p.revision(f)
+		return json.Marshal(f)
+	})
+	if errors.Is(err, noWrite) {
+		return result, nil
+	}
+	if err != nil {
+		return wire.PolicyEdit{Outcome: wire.PolicyEditOutcomeUnavailable}, err
+	}
+	return result, nil
+}
+
 // ChangeRule is EditRule with provenance, reason and expiry. A stale revision
 // always conflicts. An uncatalogued action or an out-of-bounds edit is invalid.
 // A rule written for a program path that keeps an unresolved short alias is
 // invalid and returns ErrUnresolvedShortName, which names the path.
 func (p *DecisionPolicy) ChangeRule(expected string, subject wire.Subject, action, resource string, edit RuleEdit, authorize func() error) (wire.PolicyEdit, error) {
+	return p.ChangeRuleContext(context.Background(), expected, subject, action, resource, edit, authorize)
+}
+
+// ChangeRuleContext is ChangeRule with the outer admission's cancellation.
+func (p *DecisionPolicy) ChangeRuleContext(ctx context.Context, expected string, subject wire.Subject, action, resource string, edit RuleEdit, authorize func() error) (wire.PolicyEdit, error) {
 	if edit.Permit != nil {
-		return p.ChangeRules(expected, []wire.PolicyRule{{Subject: subject, Action: action, Resource: resource, Permit: *edit.Permit}}, edit, authorize)
+		return p.changeRules(ctx, expected, []wire.PolicyRule{{Subject: subject, Action: action, Resource: resource, Permit: *edit.Permit}}, edit, authorize, nil)
 	}
 	// A revoke names the stored rule as it is; a written rule's subject must
 	// have a spelling that can still match once its file appears. The setter
@@ -94,12 +214,18 @@ func (p *DecisionPolicy) ChangeRule(expected string, subject wire.Subject, actio
 	if errors.Is(err, ErrUnresolvedShortName) {
 		return wire.PolicyEdit{Outcome: wire.PolicyEditOutcomeInvalid}, err
 	}
-	by, byErr := NormalizeDecisionSubject(edit.By)
+	by, byErr := normalizeActor(edit.By)
 	if err != nil || byErr != nil || !ValidDecisionQuery(action, resource) || !boundedDecisionString(expected, 128) ||
 		edit.TTL < 0 || edit.TTL > MaxRuleTTL || edit.TTL%time.Millisecond != 0 || !validWhy(edit.Why) || (edit.Permit == nil && (edit.TTL != 0 || edit.Why != "")) {
 		return wire.PolicyEdit{Outcome: wire.PolicyEditOutcomeInvalid}, nil
 	}
-	if validMetaEdit(action, resource, edit.Permit, edit.TTL) != nil || p.refuseHolder(subject, action, resource, edit.Permit) != nil {
+	if validMetaEdit(action, resource, edit.Permit, edit.TTL) != nil {
+		return wire.PolicyEdit{Outcome: wire.PolicyEditOutcomeInvalid}, nil
+	}
+	if err := p.refuseHolder(subject, action, resource, edit.Permit); err != nil {
+		if errors.Is(err, ErrMetaHolderUnavailable) {
+			return wire.PolicyEdit{Outcome: wire.PolicyEditOutcomeUnavailable}, err
+		}
 		return wire.PolicyEdit{Outcome: wire.PolicyEditOutcomeInvalid}, nil
 	}
 	if authorize == nil {
@@ -118,7 +244,7 @@ func (p *DecisionPolicy) ChangeRule(expected string, subject wire.Subject, actio
 			result.Current = &current
 		}
 	}
-	err = p.change(func(data []byte) ([]byte, error) {
+	err = p.changeContext(ctx, func(data []byte) ([]byte, error) {
 		result = wire.PolicyEdit{}
 		if err := authorize(); err != nil {
 			return nil, err
@@ -192,18 +318,22 @@ func (p *DecisionPolicy) ExplainForContext(ctx context.Context, subject wire.Sub
 	if err != nil || !ValidDecisionQuery(action, resource) {
 		return wire.DecisionExplanation{Outcome: wire.DecisionOutcomeInvalid}
 	}
+	ctx, preparationErr := p.prepareMetaOperation(ctx, action, resource)
+	if p.preparationStopsRead(ctx, preparationErr) {
+		return wire.DecisionExplanation{Outcome: wire.DecisionOutcomeUnavailable}
+	}
 	f, revision, err := p.readDecisionContext(ctx)
 	if err != nil {
 		return wire.DecisionExplanation{Outcome: wire.DecisionOutcomeUnavailable}
 	}
-	return p.legacyOperationExplained(f, revision, s, wire.LegacyOperationRequest{LegacyAction: action, LegacyResource: resource}, p.now()).DecisionExplanation
+	return afterMetaPreparation(p.legacyOperationExplained(ctx, f, revision, s, wire.LegacyOperationRequest{LegacyAction: action, LegacyResource: resource}, p.now()), preparationErr).DecisionExplanation
 }
 
 // EditAction conditionally registers or retires one catalogue action, recording
 // by as registrant. Retirement removes every rule naming the action. Seeded
 // actions cannot be retired.
 func (p *DecisionPolicy) EditAction(expected, action string, register bool, by wire.Subject, authorize func() error) (wire.ActionEdit, error) {
-	by, err := NormalizeDecisionSubject(by)
+	by, err := normalizeActor(by)
 	valid := boundedDecisionString(action, 128)
 	if register {
 		valid = ValidActionName(action)

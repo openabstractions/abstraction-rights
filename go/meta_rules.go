@@ -1,6 +1,7 @@
 package rights
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -41,11 +42,89 @@ var (
 // one the host's MetaHolder refuses.
 var ErrMetaHolder = errors.New("rights: this program cannot hold a class-scoped meta-rule")
 
+// ErrMetaHolderUnavailable means the host cannot currently establish holder
+// eligibility. It is an unavailable result, carrying no policy disclosure.
+var ErrMetaHolderUnavailable = errors.New("rights: meta-rule holder eligibility unavailable")
+
+type metaPreparationKey struct{}
+type metaPreparation struct {
+	policy *DecisionPolicy
+	ready  bool
+}
+
+// The multi-owner refresh has its own cap; each policy read retains RIGHTS-R2.
+const metaHolderRefreshBudget = 5 * time.Second
+
+// PrepareMetaHolderContext refreshes facts for one outer admission. Call it
+// freshly at each authenticated request entry. The returned context belongs to
+// that operation only; nested policy and Book checks reuse its atomic facts.
+// It must be called before taking policy or Book locks. Nil configuration keeps
+// existing hosts unchanged. Re-entry during refresh refuses as unavailable.
+func (p *DecisionPolicy) PrepareMetaHolderContext(ctx context.Context) (context.Context, error) {
+	if ctx.Err() != nil {
+		return ctx, fmt.Errorf("%w: %v", ErrMetaHolderUnavailable, ctx.Err())
+	}
+	if prior, ok := ctx.Value(metaPreparationKey{}).(metaPreparation); ok && prior.policy == p && !prior.ready {
+		return ctx, ErrMetaHolderUnavailable
+	}
+	preparing := context.WithValue(ctx, metaPreparationKey{}, metaPreparation{policy: p})
+	if p.RefreshMetaHolder != nil {
+		bounded, cancel := context.WithTimeout(preparing, metaHolderRefreshBudget)
+		defer cancel()
+		if err := p.RefreshMetaHolder(bounded); err != nil {
+			return ctx, fmt.Errorf("%w: %v", ErrMetaHolderUnavailable, err)
+		}
+		if bounded.Err() != nil {
+			return ctx, fmt.Errorf("%w: %v", ErrMetaHolderUnavailable, bounded.Err())
+		}
+	}
+	if ctx.Err() != nil {
+		return ctx, fmt.Errorf("%w: %v", ErrMetaHolderUnavailable, ctx.Err())
+	}
+	return context.WithValue(ctx, metaPreparationKey{}, metaPreparation{policy: p, ready: true}), nil
+}
+
+func (p *DecisionPolicy) prepareMetaOperation(ctx context.Context, action, resource string) (context.Context, error) {
+	if !IsMetaRule(action, resource) {
+		return ctx, nil
+	}
+	if prepared, ok := ctx.Value(metaPreparationKey{}).(metaPreparation); ok && prepared.policy == p {
+		if !prepared.ready {
+			return ctx, ErrMetaHolderUnavailable
+		}
+		return ctx, ctx.Err()
+	}
+	return p.PrepareMetaHolderContext(ctx)
+}
+
+// Cancellation and preparation re-entry disclose no policy state. An ordinary
+// metadata outage may still read an established deny or unknown-action result.
+func (p *DecisionPolicy) preparationStopsRead(ctx context.Context, err error) bool {
+	if err == nil {
+		return false
+	}
+	if ctx.Err() != nil {
+		return true
+	}
+	state, ok := ctx.Value(metaPreparationKey{}).(metaPreparation)
+	return ok && state.policy == p && !state.ready
+}
+
+func afterMetaPreparation(result legacyExplanation, err error) legacyExplanation {
+	if err == nil || result.Outcome == wire.DecisionOutcomeDenied || result.Outcome == wire.DecisionOutcomeUnknownAction {
+		return result
+	}
+	return legacyExplanation{wire.DecisionExplanation{Outcome: wire.DecisionOutcomeUnavailable}}
+}
+
 // refuseHolder refuses writing a class-scoped meta permit for the service's
 // own program, or for one the host's MetaHolder refuses: optional Stop
 // cleanup takes permits the holder set, and those programs set the person's
 // own rules.
 func (p *DecisionPolicy) refuseHolder(subject wire.Subject, action, resource string, permit *bool) error {
+	if remoteSubject(subject) && IsMetaRule(action, resource) {
+		return ErrMetaHolder
+	}
 	if permit == nil || !*permit || !IsMetaRule(action, resource) {
 		return nil
 	}
@@ -54,10 +133,35 @@ func (p *DecisionPolicy) refuseHolder(subject wire.Subject, action, resource str
 	}
 	if p.MetaHolder != nil {
 		if err := p.MetaHolder(subject); err != nil {
+			if errors.Is(err, ErrMetaHolderUnavailable) {
+				return err
+			}
 			return fmt.Errorf("%w: %v", ErrMetaHolder, err)
 		}
 	}
 	return nil
+}
+
+// metaHolderDecision applies the current holder ceiling to quiet evaluations.
+// Legacy plain callback errors remain write refusals; only the explicit Go
+// sentinels opt into definitive quiet veto or unavailable metadata.
+func (p *DecisionPolicy) metaHolderDecision(s wire.Subject, action, resource string) (wire.DecisionOutcome, bool) {
+	if !IsMetaRule(action, resource) {
+		return 0, false
+	}
+	if remoteSubject(s) || s.Account == p.native.Account && identity.SameSubjectProgram(s.Program, p.native.Program) {
+		return wire.DecisionOutcomeForbidden, true
+	}
+	if p.MetaHolder != nil {
+		err := p.MetaHolder(s)
+		if errors.Is(err, ErrMetaHolderUnavailable) {
+			return wire.DecisionOutcomeUnavailable, true
+		}
+		if errors.Is(err, ErrMetaHolder) {
+			return wire.DecisionOutcomeForbidden, true
+		}
+	}
+	return 0, false
 }
 
 // IsMetaRule reports whether action and resource name a class-scoped
@@ -140,10 +244,19 @@ func (p *DecisionPolicy) ChangeRuleUnderAnswer(holder, target wire.Subject, acti
 // permits in one policy edit. A conflict on either target writes neither.
 // An empty actions list only renews the enrollment for a refusal.
 func (p *DecisionPolicy) ChangeRulesUnderAnswer(holder, target wire.Subject, actions []string, resource, why, questionID string, authorize func() error) (wire.PolicyEdit, error) {
-	if len(actions) > 2 || (questionID != "" && !boundedDecisionString(questionID, 128)) || (len(actions) == 0 && questionID != "") {
+	return p.ChangeRulesUnderAnswerContext(context.Background(), holder, target, actions, resource, why, questionID, authorize)
+}
+
+// ChangeRulesUnderAnswerContext preserves the actual answer admission context.
+func (p *DecisionPolicy) ChangeRulesUnderAnswerContext(ctx context.Context, holder, target wire.Subject, actions []string, resource, why, questionID string, authorize func() error) (wire.PolicyEdit, error) {
+	return p.changeRulesUnderAnswer(ctx, holder, target, actions, resource, why, questionID, authorize, 2, nil)
+}
+
+func (p *DecisionPolicy) changeRulesUnderAnswer(ctx context.Context, holder, target wire.Subject, actions []string, resource, why, questionID string, authorize func() error, limit int, observe func(decisionFile, string)) (wire.PolicyEdit, error) {
+	if len(actions) > limit || (questionID != "" && !boundedDecisionString(questionID, 128)) || (len(actions) == 0 && questionID != "") {
 		return wire.PolicyEdit{Outcome: wire.PolicyEditOutcomeInvalid}, nil
 	}
-	holder, err := NormalizeDecisionSubject(holder)
+	holder, err := normalizeActor(holder)
 	if err != nil {
 		return wire.PolicyEdit{Outcome: wire.PolicyEditOutcomeInvalid}, nil
 	}
@@ -166,20 +279,49 @@ func (p *DecisionPolicy) ChangeRulesUnderAnswer(holder, target wire.Subject, act
 	if !validWhy(why) || authorize == nil {
 		return wire.PolicyEdit{Outcome: wire.PolicyEditOutcomeInvalid}, nil
 	}
+	ctx, err = p.prepareMetaOperation(ctx, MetaAnswerAction, MetaScopeApps)
+	if err != nil {
+		return wire.PolicyEdit{Outcome: wire.PolicyEditOutcomeUnavailable}, err
+	}
 	if err = p.regular(); err != nil {
 		return wire.PolicyEdit{Outcome: wire.PolicyEditOutcomeUnavailable}, err
 	}
+	guards := make([]func() error, 0, len(actions))
+	permit := true
+	for _, action := range actions {
+		guard, err := p.prepareLegacyPermit(ctx, target, action, resource, &permit)
+		if err != nil {
+			return wire.PolicyEdit{Outcome: wire.PolicyEditOutcomeUnavailable}, err
+		}
+		guards = append(guards, guard)
+	}
 	result := wire.PolicyEdit{}
 	noWrite := errors.New("rights: holder edit without write")
-	err = p.change(func(data []byte) ([]byte, error) {
+	err = p.changeContext(ctx, func(data []byte) ([]byte, error) {
 		result = wire.PolicyEdit{}
+		for _, guard := range guards {
+			if err := guard(); err != nil {
+				return nil, err
+			}
+		}
 		if err := authorize(); err != nil {
 			return nil, err
+		}
+		if outcome, refused := p.metaHolderDecision(holder, MetaAnswerAction, MetaScopeApps); refused {
+			if outcome == wire.DecisionOutcomeUnavailable {
+				return nil, ErrMetaHolderUnavailable
+			}
+			return nil, ErrMetaHolder
 		}
 		f, err := p.decodeDecision(data)
 		if err != nil {
 			return nil, err
 		}
+		defer func() {
+			if observe != nil && (result.Outcome == wire.PolicyEditOutcomeApplied || result.Outcome == wire.PolicyEditOutcomeConflict) {
+				observe(f, result.Revision)
+			}
+		}()
 		catalogue := p.catalogue(f)
 		if !slices.Contains(catalogue, MetaAnswerAction) {
 			result.Outcome = wire.PolicyEditOutcomeInvalid
@@ -245,7 +387,7 @@ func (p *DecisionPolicy) ChangeRulesUnderAnswer(holder, target wire.Subject, act
 	if errors.Is(err, noWrite) {
 		return result, nil
 	}
-	if errors.Is(err, ErrNoMetaRule) {
+	if errors.Is(err, ErrNoMetaRule) || errors.Is(err, ErrMetaHolder) {
 		return wire.PolicyEdit{Outcome: wire.PolicyEditOutcomeForbidden}, err
 	}
 	if err != nil {

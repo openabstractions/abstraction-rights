@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/openabstractions/abstraction-identity/go/privatedir/privatetest"
 	"testing"
 	"time"
 
@@ -101,7 +102,7 @@ func TestAJobAsksBeforeItHolds(t *testing.T) {
 }
 
 func TestNoServiceMeansThePlatformHolds(t *testing.T) {
-	reg := &Registration{Client: &Client{Endpoint: endpoint(t, t.TempDir(), "rights")}, Secret: "whatever"}
+	reg := &Registration{Client: &Client{Endpoint: endpoint(t, privatetest.Dir(t), "rights")}, Secret: "whatever"}
 	_, err := reg.Hold("worker-a", "encode x")
 	if !errors.Is(err, job.ErrAbsent) {
 		t.Fatalf("nobody listening: %v", err)

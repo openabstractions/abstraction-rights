@@ -313,8 +313,33 @@ func (c *DefinitionCatalog) PrepareSelection(s wire.PermissionSelection) (wire.P
 func (c *DefinitionCatalog) ValidConcrete(r wire.ConcreteResource) bool {
 	return c.ValidSelection(wire.PermissionSelection{Permission: r.Permission, Selector: wire.ResourceSelector{Kind: wire.ResourceSelectorKindOne, Target: r.Target}})
 }
-func (c *DefinitionCatalog) sameTarget(k wire.PermissionKey, a, b []byte) bool {
-	return c != nil && c.selectors != nil && c.selectors.profiles[k.ResourceProfile].Equal != nil && c.selectors.profiles[k.ResourceProfile].Equal(a, b)
+
+// sameTarget is the one target comparator. ok is false when the comparison
+// cannot be evaluated: no comparison, or a comparison that panics. A Block
+// evaluator refuses on !ok (RIGHTS-R26); a permit treats it as no match. The
+// policy read already validated every stored target (validateSelectorState),
+// and WithSelectors refuses a profile without Equal.
+func (c *DefinitionCatalog) sameTarget(k wire.PermissionKey, a, b []byte) (equal, ok bool) {
+	if c == nil || c.selectors == nil {
+		return false, false
+	}
+	equalFunc := c.selectors.profiles[k.ResourceProfile].Equal
+	if equalFunc == nil {
+		return false, false
+	}
+	defer func() {
+		if recover() != nil {
+			equal, ok = false, false
+		}
+	}()
+	return equalFunc(a, b), true
+}
+
+// matchTarget is sameTarget for a permit or a lookup: an unevaluable
+// comparison is no match.
+func (c *DefinitionCatalog) matchTarget(k wire.PermissionKey, a, b []byte) bool {
+	equal, ok := c.sameTarget(k, a, b)
+	return ok && equal
 }
 func (c *DefinitionCatalog) PrepareBundle(ref string, s wire.ResourceSelector) (wire.BundleExpansion, error) {
 	if c == nil || c.selectors == nil {
@@ -379,15 +404,27 @@ func (c *DefinitionCatalog) PreparePermissionEffect(subject wire.Subject, select
 			}
 			out.Selections = append(out.Selections, v)
 		}
-		slices.SortFunc(out.Selections, func(a, b wire.PermissionSelection) int {
-			return strings.Compare(permissionKeyString(a.Permission), permissionKeyString(b.Permission))
-		})
+		slices.SortFunc(out.Selections, compareEffectSelections)
 	}
 	if !c.ValidPermissionEffect(out) {
 		return wire.PermissionEffect{}, errors.New("rights: invalid effect")
 	}
 	return out, nil
 }
+
+// compareEffectSelections is an effect's canonical order: by permission, then
+// by One target bytes. One permission may select several distinct One
+// targets; an All selection never repeats its permission.
+func compareEffectSelections(a, b wire.PermissionSelection) int {
+	if c := strings.Compare(permissionKeyString(a.Permission), permissionKeyString(b.Permission)); c != 0 {
+		return c
+	}
+	if a.Selector.Kind != wire.ResourceSelectorKindOne || b.Selector.Kind != wire.ResourceSelectorKindOne {
+		return 0
+	}
+	return bytes.Compare(a.Selector.Target, b.Selector.Target)
+}
+
 func (c *DefinitionCatalog) ValidPermissionEffect(effect wire.PermissionEffect) bool {
 	if !c.ValidStoredPermissionEffect(effect) {
 		return false
@@ -404,7 +441,7 @@ func (c *DefinitionCatalog) ValidStoredPermissionEffect(effect wire.PermissionEf
 		return false
 	}
 	for i, s := range effect.Selections {
-		if !c.ValidStoredSelection(s) || i > 0 && permissionKeyString(effect.Selections[i-1].Permission) >= permissionKeyString(s.Permission) {
+		if !c.ValidStoredSelection(s) || i > 0 && compareEffectSelections(effect.Selections[i-1], s) >= 0 {
 			return false
 		}
 	}

@@ -2,11 +2,11 @@
 <html lang="en">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Open Abstractions — schema</title>
+<title>OpenAbstractions — schema</title>
 <link rel="stylesheet" href="style.css">
 
 <main>
-<nav class="site" aria-label="Primary navigation"><a class="name" href="index.html">Open Abstractions</a>
+<nav class="site" aria-label="Primary navigation"><a class="name" href="index.html">OpenAbstractions</a>
 <a href="adopt.html">Adopt</a><a href="cases.html">Cases</a><span class="nav-devs-label">for developers</span><a href="reference.html">Reference</a><a href="coverage.html">Coverage</a><a href="catalogue.html">Catalogue</a><a href="https://github.com/openabstractions">GitHub</a></nav>
 
 
@@ -17,21 +17,28 @@
 <h2 id="service-Authorization">Service <code>Authorization</code> <span class="tag">[DEF-S1]</span></h2>
 <p>General exact-rule authorization decision point with a bounded, registrable catalogue and persistence. Unknown, absent, unspecified, expired, failed and refused decisions never permit. Explicitly authorized operator configuration registers actions and grants/revokes exact rules; no serialized awake lease is introduced.</p>
 <p>Wire identity: <code>abstraction.rights/authorization@1</code></p>
-<p>Multiple services share this namespace. Generated ServiceName (Go) and service_name (C++/Python) validate the request envelope and version before returning its service identity for routing. The selected generated dispatcher validates the method and typed arguments; the selector does not authorize callers or interpret method payloads.</p>
+<p>Multiple services share this namespace. Generated ServiceName (Go) and service_name (C++/Python) validate the request envelope and version before returning its service identity for routing. Go ServiceMethod returns the service and method routing pair through the same strict decoder, exposing no arguments. The selected generated dispatcher validates the method and typed arguments; these selectors do not authorize callers or establish a handler outcome.</p>
 <p>Frames carry version, service, method and typed arguments. Transport owns framing, associated exchanges, deadlines and connections. Unknown version/service/method and malformed arguments are rejected before invoking a handler. One-way WriteFrame success means local submission, not remote acceptance or persistence.</p>
 <p>Request-response methods use ExchangeFrame. Replies carry version, service, method, ok and payload; success payload contains typed value (or an empty object for void). Error payload contains nonempty code and message, which may be empty. ServiceError preserves unknown codes. Unexpected handler failures become handler_error without private details; invalid results become invalid_result. Clients validate reply identity and result before exposing it. A malformed frame or transport failure remains a local error; the transport must associate each response with its exchange. C++ dispatchers are pure protocol bindings, not listening servers.</p>
-<p>Read published descriptive metadata for the current catalogue under same-account receiving Program admission. No rules are exposed. Pages carry one durable revision; continuations bind subject, host epoch and revision and return gap after change/restart. Requested limit is 1..64 and encoded replies are at most 256 KiB. Recheck admission before returning. An earlier authorization@1 service returns unknown_method.</p>
-<h3><code>ListActionDescriptions</code></h3><p><code>request-response</code> <code>DescriptionPage</code></p><ul>
+<p>Evaluate through the existing explicitly admitted enforcer boundary. Empty minimum requests an observation. A nonempty minimum is mandatory: an older or incomparable state refuses unavailable. Unknown method never permits fallback dropping the minimum. Both observations and minima are bounded opaque values, not permission leases.</p>
+<h3><code>DecideForAtLeastRevision</code></h3><p><code>request-response</code> <code>RevisionDecision</code> · readonly <span class="tag">[DEF-S3]</span></p><ul>
+<li>Argument 1: <code>Subject</code> <code>subject</code> (required, including zero/false/empty)</li>
+<li>Argument 2: <code>string</code> <code>action</code> (required; length 1..128 UTF-8 bytes; pattern no_control; refusal <code>bad_value</code>, including zero/false/empty)</li>
+<li>Argument 3: <code>string</code> <code>resource</code> (required; length 1..1024 UTF-8 bytes; pattern no_control; refusal <code>bad_value</code>, including zero/false/empty)</li>
+<li>Argument 4: <code>string</code> <code>at_least_revision</code> (required; length ..128 UTF-8 bytes; pattern no_control; refusal <code>bad_value</code>, including zero/false/empty)</li>
+</ul>
+<p>Read published descriptive metadata for the current catalogue under same-account receiving <a href="https://openabstractions.github.io/reference.html#concept-identity.listener-program-need">Program</a> admission. No rules are exposed. Pages carry one durable revision; continuations bind subject, host epoch and revision and return gap after change/restart. Requested limit is 1..64 and encoded replies are at most 256 KiB. Recheck admission before returning. An earlier authorization@1 service returns unknown_method.</p>
+<h3><code>ListActionDescriptions</code></h3><p><code>request-response</code> <code>DescriptionPage</code> · readonly</p><ul>
 <li>Argument 1: <code>string</code> <code>cursor</code> (required, including zero/false/empty)</li>
 <li>Argument 2: <code>i64</code> <code>limit</code> (required, including zero/false/empty)</li>
 </ul>
 <p>Evaluate the bound receiving account/program against an exact action/resource rule. This result is advisory to the caller; resource services query the decision point themselves.</p>
-<h3><code>Decide</code></h3><p><code>request-response</code> <code>Decision</code></p><ul>
+<h3><code>Decide</code></h3><p><code>request-response</code> <code>Decision</code> · readonly</p><ul>
 <li>Argument 1: <code>string</code> <code>action</code> (required, including zero/false/empty)</li>
 <li>Argument 2: <code>string</code> <code>resource</code> (required, including zero/false/empty)</li>
 </ul>
 <p>Evaluate a subject assertion only when the receiving peer is explicitly authorized as an enforcement point for this action/resource. Same account alone grants no relay authority. The designated enforcer is trusted to supply its actual bound subject. Nil or refusing enforcer policy yields forbidden before policy lookup.</p>
-<h3><code>DecideFor</code></h3><p><code>request-response</code> <code>Decision</code></p><ul>
+<h3><code>DecideFor</code></h3><p><code>request-response</code> <code>Decision</code> · readonly</p><ul>
 <li>Argument 1: <code>Subject</code> <code>subject</code> (required, including zero/false/empty)</li>
 <li>Argument 2: <code>string</code> <code>action</code> (required, including zero/false/empty)</li>
 <li>Argument 3: <code>string</code> <code>resource</code> (required, including zero/false/empty)</li>
@@ -39,44 +46,49 @@
 <h2 id="service-AuthorizationOperator">Service <code>AuthorizationOperator</code> <span class="tag">[DEF-S1]</span></h2>
 <p>Explicitly authorized administration of the configured decision policy: catalogue registration and retirement, exact rules with expiry and provenance. Receiving same-account Program proof plus a trusted typed-peer operator callback is required; nil refuses. Policy denial is forbidden; callback/storage failure is unavailable. No caller credential, verified flag or provider path is accepted. Resource services remain the receiving enforcement points. Legacy bearer and awake lease behavior is separate.</p>
 <p>Wire identity: <code>abstraction.rights/operator@1</code></p>
-<p>Multiple services share this namespace. Generated ServiceName (Go) and service_name (C++/Python) validate the request envelope and version before returning its service identity for routing. The selected generated dispatcher validates the method and typed arguments; the selector does not authorize callers or interpret method payloads.</p>
+<p>Multiple services share this namespace. Generated ServiceName (Go) and service_name (C++/Python) validate the request envelope and version before returning its service identity for routing. Go ServiceMethod returns the service and method routing pair through the same strict decoder, exposing no arguments. The selected generated dispatcher validates the method and typed arguments; these selectors do not authorize callers or establish a handler outcome.</p>
 <p>Frames carry version, service, method and typed arguments. Transport owns framing, associated exchanges, deadlines and connections. Unknown version/service/method and malformed arguments are rejected before invoking a handler. One-way WriteFrame success means local submission, not remote acceptance or persistence.</p>
 <p>Request-response methods use ExchangeFrame. Replies carry version, service, method, ok and payload; success payload contains typed value (or an empty object for void). Error payload contains nonempty code and message, which may be empty. ServiceError preserves unknown codes. Unexpected handler failures become handler_error without private details; invalid results become invalid_result. Clients validate reply identity and result before exposing it. A malformed frame or transport failure remains a local error; the transport must associate each response with its exchange. C++ dispatchers are pure protocol bindings, not listening servers.</p>
+<p>Under existing operator authority, wait 0..30000ms for policy invalidation through watch.Gate (RIGHTS-O16). Every read, wake and response rechecks receiving Program proof and explicit operator authority. The configured policy owner&#39;s OnChange callbacks and service expiry deadlines provide native invalidation. Invalid bounds are refused before data; stale/foreign epoch or receiving scope is gap. Cancellation ends only this read. A prior operator@1 service returns unknown_method; no listing-cursor or polling fallback.</p>
+<h3><code>ObservePolicy</code></h3><p><code>request-response</code> <code>PolicyObservation</code> · readonly <span class="tag">[DEF-S3]</span></p><ul>
+<li>Argument 1: <code>string</code> <code>after</code> (required; length ..256 UTF-8 bytes; pattern no_control; refusal <code>bad_value</code>, including zero/false/empty)</li>
+<li>Argument 2: <code>i64</code> <code>wait_ms</code> (required; range 0..30000; refusal <code>bad_value</code>, including zero/false/empty)</li>
+</ul>
 <p>Under existing explicit operator authority, atomically register an action and publish/correct its descriptive metadata at the expected durable revision. The service records the receiving publisher and service time. Recheck context and authority after lock waiting. A metadata edit changes no rule, expiry or completed-answer receipt, including first publication on an action with existing rules. A stable action identifies its existing feature; actual changed semantics require a new action/version at the app owner. Metadata is no proof of behavior. An earlier operator@1 service returns unknown_method; never fall back to name-only registration while claiming published description.</p>
-<h3><code>RegisterDescribedAction</code></h3><p><code>request-response</code> <code>DescriptionEdit</code></p><ul>
+<h3><code>RegisterDescribedAction</code></h3><p><code>request-response</code> <code>DescriptionEdit</code> · idempotent</p><ul>
 <li>Argument 1: <code>string</code> <code>expected_revision</code> (required, including zero/false/empty)</li>
 <li>Argument 2: <code>ActionDescription</code> <code>description</code> (required, including zero/false/empty)</li>
 </ul>
-<p>Apply the complete exact permit or paired permits derived by trusted runtime composition from this retained operator Allow and its runtime admission. No caller supplies targets or rules. Authorization, question occurrence and revision are checked while the Book is pinned and the rights edit is locked. Commit complete permits and private durable success proof in the same rights replacement; a first receipt-only commit changes revision when permits already match. A previously completed ID conflicts without rewriting rights, including after revocation or expiry. Failed writes retain the answer for explicit Retry. Missing composition is unavailable; missing, pending, foreign, responder or non-Allow records are invalid. Both IDs and revision are bounded to 128 UTF-8 bytes. An earlier operator@1 service returns unknown_method; callers must not fall back to an untracked permit write.</p>
-<h3><code>ApplyFirstUseAllow</code></h3><p><code>request-response</code> <code>PolicyEdit</code></p><ul>
+<p>Apply the complete exact permit or paired permits derived by trusted runtime composition from this retained operator Allow and its runtime admission. No caller supplies targets or rules. Authorization, question occurrence and revision are checked while the <a href="https://openabstractions.github.io/reference.html#concept-asks.book">Book</a> is pinned and the rights edit is locked. Commit complete permits and private durable success proof in the same rights replacement; a first receipt-only commit changes revision when permits already match. A previously completed ID conflicts without rewriting rights, including after revocation or expiry. Failed writes retain the answer for explicit Retry. Missing composition is unavailable; missing, pending, foreign, responder or non-Allow records are invalid. Both IDs and revision are bounded to 128 UTF-8 bytes. An earlier operator@1 service returns unknown_method; callers must not fall back to an untracked permit write.</p>
+<h3><code>ApplyFirstUseAllow</code></h3><p><code>request-response</code> <code>PolicyEdit</code> · idempotent</p><ul>
 <li>Argument 1: <code>string</code> <code>expected_revision</code> (required, including zero/false/empty)</li>
 <li>Argument 2: <code>string</code> <code>question_id</code> (required, including zero/false/empty)</li>
 </ul>
 <p>Read bounded current rules and catalogue under explicit operator authorization. Every continuation rechecks authorization; no enumeration session is retained for disconnected/slow callers.</p>
-<h3><code>ListPolicy</code></h3><p><code>request-response</code> <code>PolicyPage</code></p><ul>
+<h3><code>ListPolicy</code></h3><p><code>request-response</code> <code>PolicyPage</code> · readonly</p><ul>
 <li>Argument 1: <code>string</code> <code>cursor</code> (required, including zero/false/empty)</li>
 <li>Argument 2: <code>i64</code> <code>limit</code> (required, including zero/false/empty)</li>
 </ul>
 <p>Atomically compare the expected durable revision and set one exact permit/deny rule with no expiry and an empty reason. Revision is bounded to 128 UTF-8 bytes. Operator context and authority are checked again inside the atomic edit after lock waiting. The rule records the operator&#39;s established subject and the edit time. An unexpired rule with the same permit is a no-op that keeps its record. Uncatalogued actions and malformed targets are invalid; no resource permission is inferred from the operator request itself.</p>
-<h3><code>SetRule</code></h3><p><code>request-response</code> <code>PolicyEdit</code></p><ul>
+<h3><code>SetRule</code></h3><p><code>request-response</code> <code>PolicyEdit</code> · idempotent</p><ul>
 <li>Argument 1: <code>string</code> <code>expected_revision</code> (required, including zero/false/empty)</li>
 <li>Argument 2: <code>PolicyRule</code> <code>rule</code> (required, including zero/false/empty)</li>
 </ul>
 <p>Atomically remove one exact rule if the revision matches. The next fresh decision observes successful revocation. A failed/uncertain reply claims no successful revocation; inspect current state before another intent. It does not cancel an existing connection-owned awake lease.</p>
-<h3><code>RevokeRule</code></h3><p><code>request-response</code> <code>PolicyEdit</code></p><ul>
+<h3><code>RevokeRule</code></h3><p><code>request-response</code> <code>PolicyEdit</code> · idempotent</p><ul>
 <li>Argument 1: <code>string</code> <code>expected_revision</code> (required, including zero/false/empty)</li>
 <li>Argument 2: <code>Subject</code> <code>subject</code> (required, including zero/false/empty)</li>
 <li>Argument 3: <code>string</code> <code>action</code> (required, including zero/false/empty)</li>
 <li>Argument 4: <code>string</code> <code>resource</code> (required, including zero/false/empty)</li>
 </ul>
 <p>Atomically remove an answerer&#39;s question.answer/apps enrollment if the revision matches. When also_revoke_grants is true, remove current permits set by that answerer in the same edit; denies and rules set by another program stay. With false, prior permits retain their stored expiry. Stop ends future answers and never exits the answerer&#39;s process. Authorization and revision are rechecked after lock waiting.</p>
-<h3><code>StopAnswerer</code></h3><p><code>request-response</code> <code>PolicyEdit</code></p><ul>
+<h3><code>StopAnswerer</code></h3><p><code>request-response</code> <code>PolicyEdit</code> · idempotent</p><ul>
 <li>Argument 1: <code>string</code> <code>expected_revision</code> (required, including zero/false/empty)</li>
 <li>Argument 2: <code>Subject</code> <code>answerer</code> (required, including zero/false/empty)</li>
 <li>Argument 3: <code>bool</code> <code>also_revoke_grants</code> (required, including zero/false/empty)</li>
 </ul>
 <p>Atomically remove any still-current permit among one or two exact targets whose private question ID and setter match this retained first-use answer. Earlier or later grants, person edits, blocks and expired effects stay; zero matches or a revision change conflicts. The asks answer record stays; this method is the permission effect of the Panel&#39;s Undo. Authorization is rechecked after lock waiting.</p>
-<h3><code>RevokeAnswerPermits</code></h3><p><code>request-response</code> <code>PolicyEdit</code></p><ul>
+<h3><code>RevokeAnswerPermits</code></h3><p><code>request-response</code> <code>PolicyEdit</code> · idempotent</p><ul>
 <li>Argument 1: <code>string</code> <code>expected_revision</code> (required, including zero/false/empty)</li>
 <li>Argument 2: <code>Subject</code> <code>answerer</code> (required, including zero/false/empty)</li>
 <li>Argument 3: <code>Subject</code> <code>target</code> (required, including zero/false/empty)</li>
@@ -85,46 +97,46 @@
 <li>Argument 6: <code>string</code> <code>question_id</code> (required, including zero/false/empty)</li>
 </ul>
 <p>As SetRule, recording why and an expiry ttl_ms after the service&#39;s edit time. ttl_ms 0 sets no expiry; otherwise it is 1..31536000000. why is 0..256 UTF-8 bytes without control characters. A retained rule with the same permit, reason and expiry is a no-op; any other difference writes, including a new expiry.</p>
-<h3><code>SetRuleFor</code></h3><p><code>request-response</code> <code>PolicyEdit</code></p><ul>
+<h3><code>SetRuleFor</code></h3><p><code>request-response</code> <code>PolicyEdit</code> · idempotent</p><ul>
 <li>Argument 1: <code>string</code> <code>expected_revision</code> (required, including zero/false/empty)</li>
 <li>Argument 2: <code>PolicyRule</code> <code>rule</code> (required, including zero/false/empty)</li>
 <li>Argument 3: <code>i64</code> <code>ttl_ms</code> (required, including zero/false/empty)</li>
 <li>Argument 4: <code>string</code> <code>why</code> (required, including zero/false/empty)</li>
 </ul>
 <p>Atomically set one or two exact rules with the same target subject, resource and permit, and distinct catalogued actions. The operator&#39;s authorized intent may replace a previous opposite rule. All members are validated before one revision and authority check under the rights edit lock; the batch writes all or none with one setter, time, reason and expiry. ttl_ms and why have SetRuleFor&#39;s bounds. A prior operator@1 service returns unknown_method.</p>
-<h3><code>SetRulesFor</code></h3><p><code>request-response</code> <code>PolicyEdit</code></p><ul>
+<h3><code>SetRulesFor</code></h3><p><code>request-response</code> <code>PolicyEdit</code> · idempotent</p><ul>
 <li>Argument 1: <code>string</code> <code>expected_revision</code> (required, including zero/false/empty)</li>
 <li>Argument 2: <code>list&lt;PolicyRule&gt;</code> <code>rules</code> (required, including zero/false/empty)</li>
 <li>Argument 3: <code>i64</code> <code>ttl_ms</code> (required, including zero/false/empty)</li>
 <li>Argument 4: <code>string</code> <code>why</code> (required, including zero/false/empty)</li>
 </ul>
 <p>Read one exact rule with its provenance and expiry under operator authorization, rechecked after the read.</p>
-<h3><code>ReadRule</code></h3><p><code>request-response</code> <code>RuleRead</code></p><ul>
+<h3><code>ReadRule</code></h3><p><code>request-response</code> <code>RuleRead</code> · readonly</p><ul>
 <li>Argument 1: <code>Subject</code> <code>subject</code> (required, including zero/false/empty)</li>
 <li>Argument 2: <code>string</code> <code>action</code> (required, including zero/false/empty)</li>
 <li>Argument 3: <code>string</code> <code>resource</code> (required, including zero/false/empty)</li>
 </ul>
 <p>Add an action named &lt;owner&gt;/&lt;name&gt; to the catalogue. owner is 1..64 bytes and name 1..63 bytes of lowercase ASCII letters, digits, &#39;.&#39;, &#39;_&#39; and &#39;-&#39;, each beginning with a letter or digit. Registering an action already in the catalogue applies without writing. A registration records the operator&#39;s established subject and the service time. Registration grants nothing: decisions on the action read not_granted until a rule exists.</p>
-<h3><code>RegisterAction</code></h3><p><code>request-response</code> <code>ActionEdit</code></p><ul>
+<h3><code>RegisterAction</code></h3><p><code>request-response</code> <code>ActionEdit</code> · idempotent</p><ul>
 <li>Argument 1: <code>string</code> <code>expected_revision</code> (required, including zero/false/empty)</li>
 <li>Argument 2: <code>string</code> <code>action</code> (required, including zero/false/empty)</li>
 </ul>
 <p>Remove a registered action and every rule naming it. Retiring a seeded action is invalid. Retiring an action outside the catalogue is unknown. Decisions on a retired action read unknown_action.</p>
-<h3><code>RetireAction</code></h3><p><code>request-response</code> <code>ActionEdit</code></p><ul>
+<h3><code>RetireAction</code></h3><p><code>request-response</code> <code>ActionEdit</code> · idempotent</p><ul>
 <li>Argument 1: <code>string</code> <code>expected_revision</code> (required, including zero/false/empty)</li>
 <li>Argument 2: <code>string</code> <code>action</code> (required, including zero/false/empty)</li>
 </ul>
 <p>Under operator authorization, rechecked before returning, evaluate subject on one exact action/resource exactly as a decision does and report the step that decided it (RIGHTS-O14). It asks nobody, records nothing and changes no rule or cache. An earlier operator@1 service returns unknown_method.</p>
-<h3><code>ExplainFor</code></h3><p><code>request-response</code> <code>DecisionExplanation</code></p><ul>
+<h3><code>ExplainFor</code></h3><p><code>request-response</code> <code>DecisionExplanation</code> · readonly</p><ul>
 <li>Argument 1: <code>Subject</code> <code>subject</code> (required, including zero/false/empty)</li>
 <li>Argument 2: <code>string</code> <code>action</code> (required, including zero/false/empty)</li>
 <li>Argument 3: <code>string</code> <code>resource</code> (required, including zero/false/empty)</li>
 </ul>
 <p>Read every configured account-wide default and its switch under operator authorization, rechecked before returning. An earlier operator@1 service returns unknown_method.</p>
-<h3><code>ListDefaults</code></h3><p><code>request-response</code> <code>DefaultPage</code></p><ul>
+<h3><code>ListDefaults</code></h3><p><code>request-response</code> <code>DefaultPage</code> · readonly</p><ul>
 </ul>
 <p>Atomically compare the expected durable revision and turn one configured account-wide default on or off, recording the operator subject and service time. An unconfigured name is invalid. Authorization and revision are rechecked after lock waiting. The next fresh decision observes the switch. No rule is written or removed. An earlier operator@1 service returns unknown_method.</p>
-<h3><code>SetDefault</code></h3><p><code>request-response</code> <code>DefaultEdit</code></p><ul>
+<h3><code>SetDefault</code></h3><p><code>request-response</code> <code>DefaultEdit</code> · idempotent</p><ul>
 <li>Argument 1: <code>string</code> <code>expected_revision</code> (required, including zero/false/empty)</li>
 <li>Argument 2: <code>string</code> <code>name</code> (required, including zero/false/empty)</li>
 <li>Argument 3: <code>bool</code> <code>on</code> (required, including zero/false/empty)</li>
@@ -132,64 +144,64 @@
 <h2 id="service-SelectorAuthorization">Service <code>SelectorAuthorization</code> <span class="tag">[DEF-S1]</span></h2>
 <p></p>
 <p>Wire identity: <code>abstraction.rights/authorization@2</code></p>
-<p>Multiple services share this namespace. Generated ServiceName (Go) and service_name (C++/Python) validate the request envelope and version before returning its service identity for routing. The selected generated dispatcher validates the method and typed arguments; the selector does not authorize callers or interpret method payloads.</p>
+<p>Multiple services share this namespace. Generated ServiceName (Go) and service_name (C++/Python) validate the request envelope and version before returning its service identity for routing. Go ServiceMethod returns the service and method routing pair through the same strict decoder, exposing no arguments. The selected generated dispatcher validates the method and typed arguments; these selectors do not authorize callers or establish a handler outcome.</p>
 <p>Frames carry version, service, method and typed arguments. Transport owns framing, associated exchanges, deadlines and connections. Unknown version/service/method and malformed arguments are rejected before invoking a handler. One-way WriteFrame success means local submission, not remote acceptance or persistence.</p>
 <p>Request-response methods use ExchangeFrame. Replies carry version, service, method, ok and payload; success payload contains typed value (or an empty object for void). Error payload contains nonempty code and message, which may be empty. ServiceError preserves unknown codes. Unexpected handler failures become handler_error without private details; invalid results become invalid_result. Clients validate reply identity and result before exposing it. A malformed frame or transport failure remains a local error; the transport must associate each response with its exchange. C++ dispatchers are pure protocol bindings, not listening servers.</p>
 <p></p>
-<h3><code>ListPermissionDefinitions</code></h3><p><code>request-response</code> <code>PermissionDefinitionPage</code></p><ul>
+<h3><code>ListPermissionDefinitions</code></h3><p><code>request-response</code> <code>PermissionDefinitionPage</code> · readonly <span class="tag">[DEF-S3]</span></p><ul>
 <li>Argument 1: <code>string</code> <code>cursor</code> (required, including zero/false/empty)</li>
 <li>Argument 2: <code>i64</code> <code>limit</code> (required, including zero/false/empty)</li>
 </ul>
 <p></p>
-<h3><code>ListPermissionBundles</code></h3><p><code>request-response</code> <code>PermissionBundlePage</code></p><ul>
+<h3><code>ListPermissionBundles</code></h3><p><code>request-response</code> <code>PermissionBundlePage</code> · readonly</p><ul>
 <li>Argument 1: <code>string</code> <code>cursor</code> (required, including zero/false/empty)</li>
 <li>Argument 2: <code>i64</code> <code>limit</code> (required, including zero/false/empty)</li>
 </ul>
 <p></p>
-<h3><code>CheckBatch</code></h3><p><code>request-response</code> <code>BatchDecision</code></p><ul>
+<h3><code>CheckBatch</code></h3><p><code>request-response</code> <code>BatchDecision</code> · readonly</p><ul>
 <li>Argument 1: <code>CheckBatchRequest</code> <code>request</code> (required, including zero/false/empty)</li>
 </ul>
 <p></p>
-<h3><code>CheckBatchFor</code></h3><p><code>request-response</code> <code>BatchDecision</code></p><ul>
+<h3><code>CheckBatchFor</code></h3><p><code>request-response</code> <code>BatchDecision</code> · readonly</p><ul>
 <li>Argument 1: <code>Subject</code> <code>subject</code> (required, including zero/false/empty)</li>
 <li>Argument 2: <code>CheckBatchRequest</code> <code>request</code> (required, including zero/false/empty)</li>
 </ul>
 <p></p>
-<h3><code>CheckLegacyOperationFor</code></h3><p><code>request-response</code> <code>Decision</code></p><ul>
+<h3><code>CheckLegacyOperationFor</code></h3><p><code>request-response</code> <code>Decision</code> · readonly</p><ul>
 <li>Argument 1: <code>Subject</code> <code>subject</code> (required, including zero/false/empty)</li>
 <li>Argument 2: <code>LegacyOperationRequest</code> <code>request</code> (required, including zero/false/empty)</li>
 </ul>
 <h2 id="service-SelectorAuthorizationOperator">Service <code>SelectorAuthorizationOperator</code> <span class="tag">[DEF-S1]</span></h2>
 <p>Existing explicit operator admission, receiving provenance and in-lock authority recheck apply. First-use methods accept no caller-supplied targets: trusted composition resolves and pins the new typed Book occurrence. Existing operator@1 completion records are preserved with their original semantics.</p>
 <p>Wire identity: <code>abstraction.rights/operator@2</code></p>
-<p>Multiple services share this namespace. Generated ServiceName (Go) and service_name (C++/Python) validate the request envelope and version before returning its service identity for routing. The selected generated dispatcher validates the method and typed arguments; the selector does not authorize callers or interpret method payloads.</p>
+<p>Multiple services share this namespace. Generated ServiceName (Go) and service_name (C++/Python) validate the request envelope and version before returning its service identity for routing. Go ServiceMethod returns the service and method routing pair through the same strict decoder, exposing no arguments. The selected generated dispatcher validates the method and typed arguments; these selectors do not authorize callers or establish a handler outcome.</p>
 <p>Frames carry version, service, method and typed arguments. Transport owns framing, associated exchanges, deadlines and connections. Unknown version/service/method and malformed arguments are rejected before invoking a handler. One-way WriteFrame success means local submission, not remote acceptance or persistence.</p>
 <p>Request-response methods use ExchangeFrame. Replies carry version, service, method, ok and payload; success payload contains typed value (or an empty object for void). Error payload contains nonempty code and message, which may be empty. ServiceError preserves unknown codes. Unexpected handler failures become handler_error without private details; invalid results become invalid_result. Clients validate reply identity and result before exposing it. A malformed frame or transport failure remains a local error; the transport must associate each response with its exchange. C++ dispatchers are pure protocol bindings, not listening servers.</p>
 <p></p>
-<h3><code>ListSelectorRules</code></h3><p><code>request-response</code> <code>SelectorRulePage</code></p><ul>
+<h3><code>ListSelectorRules</code></h3><p><code>request-response</code> <code>SelectorRulePage</code> · readonly <span class="tag">[DEF-S3]</span></p><ul>
 <li>Argument 1: <code>string</code> <code>cursor</code> (required, including zero/false/empty)</li>
 <li>Argument 2: <code>i64</code> <code>limit</code> (required, including zero/false/empty)</li>
 </ul>
 <p></p>
-<h3><code>ReadSelectorRule</code></h3><p><code>request-response</code> <code>SelectorRuleRead</code></p><ul>
+<h3><code>ReadSelectorRule</code></h3><p><code>request-response</code> <code>SelectorRuleRead</code> · readonly</p><ul>
 <li>Argument 1: <code>Subject</code> <code>subject</code> (required, including zero/false/empty)</li>
 <li>Argument 2: <code>PermissionSelection</code> <code>selection</code> (required, including zero/false/empty)</li>
 </ul>
 <p></p>
-<h3><code>SetSelectorRule</code></h3><p><code>request-response</code> <code>SelectorEdit</code></p><ul>
+<h3><code>SetSelectorRule</code></h3><p><code>request-response</code> <code>SelectorEdit</code> · idempotent</p><ul>
 <li>Argument 1: <code>string</code> <code>expected_revision</code> (required, including zero/false/empty)</li>
 <li>Argument 2: <code>SelectorRule</code> <code>rule</code> (required, including zero/false/empty)</li>
 <li>Argument 3: <code>i64</code> <code>ttl_ms</code> (required, including zero/false/empty)</li>
 <li>Argument 4: <code>string</code> <code>why</code> (required, including zero/false/empty)</li>
 </ul>
 <p></p>
-<h3><code>RemoveSelectorRule</code></h3><p><code>request-response</code> <code>SelectorEdit</code></p><ul>
+<h3><code>RemoveSelectorRule</code></h3><p><code>request-response</code> <code>SelectorEdit</code> · idempotent</p><ul>
 <li>Argument 1: <code>string</code> <code>expected_revision</code> (required, including zero/false/empty)</li>
 <li>Argument 2: <code>Subject</code> <code>subject</code> (required, including zero/false/empty)</li>
 <li>Argument 3: <code>PermissionSelection</code> <code>selection</code> (required, including zero/false/empty)</li>
 </ul>
 <p></p>
-<h3><code>ApplyBundle</code></h3><p><code>request-response</code> <code>SelectorEdit</code></p><ul>
+<h3><code>ApplyBundle</code></h3><p><code>request-response</code> <code>SelectorEdit</code> · idempotent</p><ul>
 <li>Argument 1: <code>string</code> <code>expected_revision</code> (required, including zero/false/empty)</li>
 <li>Argument 2: <code>Subject</code> <code>subject</code> (required, including zero/false/empty)</li>
 <li>Argument 3: <code>string</code> <code>bundle_ref</code> (required, including zero/false/empty)</li>
@@ -198,18 +210,18 @@
 <li>Argument 6: <code>string</code> <code>why</code> (required, including zero/false/empty)</li>
 </ul>
 <p></p>
-<h3><code>RemoveBundle</code></h3><p><code>request-response</code> <code>SelectorEdit</code></p><ul>
+<h3><code>RemoveBundle</code></h3><p><code>request-response</code> <code>SelectorEdit</code> · idempotent</p><ul>
 <li>Argument 1: <code>string</code> <code>expected_revision</code> (required, including zero/false/empty)</li>
 <li>Argument 2: <code>Subject</code> <code>subject</code> (required, including zero/false/empty)</li>
 <li>Argument 3: <code>string</code> <code>origin_id</code> (required, including zero/false/empty)</li>
 </ul>
 <p></p>
-<h3><code>ApplyPermissionAllow</code></h3><p><code>request-response</code> <code>SelectorEdit</code></p><ul>
+<h3><code>ApplyPermissionAllow</code></h3><p><code>request-response</code> <code>SelectorEdit</code> · idempotent</p><ul>
 <li>Argument 1: <code>string</code> <code>expected_revision</code> (required, including zero/false/empty)</li>
 <li>Argument 2: <code>string</code> <code>question_id</code> (required, including zero/false/empty)</li>
 </ul>
 <p></p>
-<h3><code>UndoPermissionEffect</code></h3><p><code>request-response</code> <code>SelectorEdit</code></p><ul>
+<h3><code>UndoPermissionEffect</code></h3><p><code>request-response</code> <code>SelectorEdit</code> · idempotent</p><ul>
 <li>Argument 1: <code>string</code> <code>expected_revision</code> (required, including zero/false/empty)</li>
 <li>Argument 2: <code>string</code> <code>question_id</code> (required, including zero/false/empty)</li>
 </ul>
@@ -230,8 +242,8 @@
 <div class="wrap"><table>
 <thead><tr><th>kind</th><th>types</th></tr></thead>
 <tbody>
-<tr><td>built in</td><td><code>ActionEditOutcome</code> <code>BatchCheckOutcome</code> <code>DecisionOutcome</code> <code>DecisionSource</code> <code>PermissionFirstUse</code> <code>PolicyEditOutcome</code> <code>PolicyPageOutcome</code> <code>ResourceSelectorKind</code> <code>RuleReadOutcome</code> <code>binary</code> <code>bool</code> <code>string</code></td></tr>
-<tr><td>declared below</td><td><code>AccountDefault</code> <code>ActionDescription</code> <code>AppMetadata</code> <code>BundleExpansion</code> <code>BundleOrigin</code> <code>CatalogEntry</code> <code>ConcreteResource</code> <code>DescribedAction</code> <code>PermissionDefinition</code> <code>PermissionKey</code> <code>PermissionSelection</code> <code>PolicyRule</code> <code>ResourceSelector</code> <code>RuleRecord</code> <code>SelectorRule</code> <code>SelectorRuleRecord</code> <code>Subject</code></td></tr>
+<tr><td>built in</td><td><code>ActionEditOutcome</code> <code>BatchCheckOutcome</code> <code>DecisionOutcome</code> <code>DecisionSource</code> <code>PermissionFirstUse</code> <code>PolicyEditOutcome</code> <code>PolicyObservationMechanism</code> <code>PolicyObservationOutcome</code> <code>PolicyPageOutcome</code> <code>RefusalAsk</code> <code>RefusalDecision</code> <code>RefusalSource</code> <code>ResourceSelectorKind</code> <code>RuleReadOutcome</code> <code>binary</code> <code>bool</code> <code>i64</code> <code>string</code></td></tr>
+<tr><td>declared below</td><td><code>AccountDefault</code> <code>ActionDescription</code> <code>AppMetadata</code> <code>BundleExpansion</code> <code>BundleOrigin</code> <code>CatalogEntry</code> <code>ConcreteResource</code> <code>Decision</code> <code>DescribedAction</code> <code>PermissionDefinition</code> <code>PermissionKey</code> <code>PermissionSelection</code> <code>PolicyRule</code> <code>ResourceSelector</code> <code>RuleRecord</code> <code>SelectorRule</code> <code>SelectorRuleRecord</code> <code>Subject</code></td></tr>
 <tr><td>container <span class="tag">[DEF-T3]</span></td><td><code>list&lt;DecisionOutcome&gt;</code> <code>list&lt;ResourceSelectorKind&gt;</code> <code>list&lt;string&gt;</code></td></tr>
 <tr><td>repeated record <span class="tag">[DEF-A9]</span></td><td><code>list&lt;AccountDefault&gt;</code> <code>list&lt;AppMetadata&gt;</code> <code>list&lt;ConcreteResource&gt;</code> <code>list&lt;DescribedAction&gt;</code> <code>list&lt;HoldMetadata&gt;</code> <code>list&lt;PermissionBundleDefinition&gt;</code> <code>list&lt;PermissionKey&gt;</code> <code>list&lt;PermissionSelection&gt;</code> <code>list&lt;PolicyRule&gt;</code> <code>list&lt;SelectorPermissionDefinition&gt;</code> <code>list&lt;SelectorRuleRecord&gt;</code></td></tr>
 </tbody></table></div>
@@ -288,7 +300,7 @@
 <tr><td>8</td><td><code>apps</code></td><td><code>list&lt;AppMetadata&gt;</code></td><td>optional · omitted when zero</td><td>—</td></tr>
 <tr><td>9</td><td><code>holds</code></td><td><code>list&lt;HoldMetadata&gt;</code></td><td>optional · omitted when zero</td><td>—</td></tr>
 </tbody></table></div>
-<h3 id="struct-Subject"><code>Subject</code></h3>
+<h3 id="struct-Subject"><a href="https://openabstractions.github.io/reference.html#concept-rights.subject"><code>Subject</code></a></h3>
 <p class="meta">unknown fields <code>refuse</code></p>
 <div class="wrap"><table>
 <thead><tr><th>id</th><th>field</th><th>type</th><th>presence</th><th>named elsewhere</th></tr></thead>
@@ -303,6 +315,27 @@
 <tbody>
 <tr><td>1</td><td><code>outcome</code></td><td><code>DecisionOutcome</code></td><td>required</td><td>—</td></tr>
 <tr><td>2</td><td><code>policy_revision</code></td><td><code>string</code></td><td>optional · omitted when absent</td><td>—</td></tr>
+</tbody></table></div>
+<h3 id="struct-RevisionDecision"><code>RevisionDecision</code></h3>
+<p class="meta">unknown fields <code>refuse</code></p>
+<div class="wrap"><table>
+<thead><tr><th>id</th><th>field</th><th>type</th><th>presence</th><th>named elsewhere</th></tr></thead>
+<tbody>
+<tr><td>1</td><td><code>decision</code></td><td><code>Decision</code></td><td>required</td><td>—</td></tr>
+<tr><td>2</td><td><code>observed_revision</code></td><td><code>string</code></td><td>optional · omitted when absent; length ..128 UTF-8 bytes; pattern no_control; refusal <code>bad_value</code></td><td>—</td></tr>
+</tbody></table></div>
+<h3 id="struct-RefusalDetail"><code>RefusalDetail</code></h3>
+<p class="meta">unknown fields <code>grant</code></p>
+<div class="wrap"><table>
+<thead><tr><th>id</th><th>field</th><th>type</th><th>presence</th><th>named elsewhere</th></tr></thead>
+<tbody>
+<tr><td>1</td><td><code>source</code></td><td><code>RefusalSource</code></td><td>required</td><td>—</td></tr>
+<tr><td>2</td><td><code>decision</code></td><td><code>RefusalDecision</code></td><td>required</td><td>—</td></tr>
+<tr><td>3</td><td><code>ask</code></td><td><code>RefusalAsk</code></td><td>required</td><td>—</td></tr>
+<tr><td>4</td><td><code>action</code></td><td><code>string</code></td><td>optional · omitted when absent; length 1..128 UTF-8 bytes; refusal <code>bad_value</code></td><td>—</td></tr>
+<tr><td>5</td><td><code>question</code></td><td><code>string</code></td><td>optional · omitted when absent; length 1..128 UTF-8 bytes; refusal <code>bad_value</code></td><td>—</td></tr>
+<tr><td>6</td><td><code>credential</code></td><td><code>string</code></td><td>optional · omitted when absent; length 1..64 UTF-8 bytes; refusal <code>bad_value</code></td><td>—</td></tr>
+<tr><td>7</td><td><code>retry_after_ms</code></td><td><code>i64</code></td><td>optional · omitted when zero; range 0..86400000; refusal <code>bad_value</code></td><td>—</td></tr>
 </tbody></table></div>
 <h3 id="struct-PolicyRule"><code>PolicyRule</code></h3>
 <p class="meta">unknown fields <code>refuse</code></p>
@@ -325,6 +358,16 @@
 <tr><td>4</td><td><code>rules</code></td><td><code>list&lt;PolicyRule&gt;</code></td><td>required</td><td>—</td></tr>
 <tr><td>5</td><td><code>next</code></td><td><code>string</code></td><td>required</td><td>—</td></tr>
 <tr><td>6</td><td><code>complete</code></td><td><code>bool</code></td><td>required</td><td>—</td></tr>
+</tbody></table></div>
+<h3 id="struct-PolicyObservation"><code>PolicyObservation</code></h3>
+<p class="meta">unknown fields <code>refuse</code></p>
+<div class="wrap"><table>
+<thead><tr><th>id</th><th>field</th><th>type</th><th>presence</th><th>named elsewhere</th></tr></thead>
+<tbody>
+<tr><td>1</td><td><code>outcome</code></td><td><code>PolicyObservationOutcome</code></td><td>required</td><td>—</td></tr>
+<tr><td>2</td><td><code>next</code></td><td><code>string</code></td><td>required; length ..256 UTF-8 bytes; pattern no_control; refusal <code>bad_value</code></td><td>—</td></tr>
+<tr><td>3</td><td><code>revision</code></td><td><code>string</code></td><td>required; length ..128 UTF-8 bytes; pattern no_control; refusal <code>bad_value</code></td><td>—</td></tr>
+<tr><td>4</td><td><code>mechanism</code></td><td><code>PolicyObservationMechanism</code></td><td>required</td><td>—</td></tr>
 </tbody></table></div>
 <h3 id="struct-PolicyEdit"><code>PolicyEdit</code></h3>
 <p class="meta">unknown fields <code>refuse</code></p>
@@ -675,6 +718,35 @@
 <tr><td>6</td><td><code>forbidden</code></td><td><code>forbidden</code></td></tr>
 <tr><td>7</td><td><code>unavailable</code></td><td><code>unavailable</code></td></tr>
 </tbody></table></div>
+<h3 id="enum-RefusalSource"><code>RefusalSource</code></h3>
+<p class="meta">a member this reader does not know is <code>grant</code></p>
+<div class="wrap"><table>
+<thead><tr><th>id</th><th>member</th><th>wire</th></tr></thead>
+<tbody>
+<tr><td>1</td><td><code>rights</code></td><td><code>rights</code></td></tr>
+<tr><td>2</td><td><code>credentials</code></td><td><code>credentials</code></td></tr>
+<tr><td>3</td><td><code>license</code></td><td><code>license</code></td></tr>
+<tr><td>4</td><td><code>terms</code></td><td><code>terms</code></td></tr>
+<tr><td>5</td><td><code>identity</code></td><td><code>identity</code></td></tr>
+<tr><td>6</td><td><code>os</code></td><td><code>os</code></td></tr>
+</tbody></table></div>
+<h3 id="enum-RefusalDecision"><code>RefusalDecision</code></h3>
+<p class="meta">a member this reader does not know is <code>refuse</code></p>
+<div class="wrap"><table>
+<thead><tr><th>id</th><th>member</th><th>wire</th></tr></thead>
+<tbody>
+<tr><td>1</td><td><code>denied</code></td><td><code>denied</code></td></tr>
+<tr><td>2</td><td><code>not_granted</code></td><td><code>not_granted</code></td></tr>
+<tr><td>3</td><td><code>person_only</code></td><td><code>person_only</code></td></tr>
+</tbody></table></div>
+<h3 id="enum-RefusalAsk"><code>RefusalAsk</code></h3>
+<p class="meta">a member this reader does not know is <code>refuse</code></p>
+<div class="wrap"><table>
+<thead><tr><th>id</th><th>member</th><th>wire</th></tr></thead>
+<tbody>
+<tr><td>1</td><td><code>available</code></td><td><code>available</code></td></tr>
+<tr><td>2</td><td><code>none</code></td><td><code>none</code></td></tr>
+</tbody></table></div>
 <h3 id="enum-PolicyPageOutcome"><code>PolicyPageOutcome</code></h3>
 <p class="meta">a member this reader does not know is <code>refuse</code></p>
 <div class="wrap"><table>
@@ -685,6 +757,25 @@
 <tr><td>3</td><td><code>invalid</code></td><td><code>invalid</code></td></tr>
 <tr><td>4</td><td><code>forbidden</code></td><td><code>forbidden</code></td></tr>
 <tr><td>5</td><td><code>unavailable</code></td><td><code>unavailable</code></td></tr>
+</tbody></table></div>
+<h3 id="enum-PolicyObservationOutcome"><code>PolicyObservationOutcome</code></h3>
+<p class="meta">a member this reader does not know is <code>refuse</code></p>
+<div class="wrap"><table>
+<thead><tr><th>id</th><th>member</th><th>wire</th></tr></thead>
+<tbody>
+<tr><td>1</td><td><code>changed</code></td><td><code>changed</code></td></tr>
+<tr><td>2</td><td><code>unchanged</code></td><td><code>unchanged</code></td></tr>
+<tr><td>3</td><td><code>gap</code></td><td><code>gap</code></td></tr>
+<tr><td>4</td><td><code>invalid</code></td><td><code>invalid</code></td></tr>
+<tr><td>5</td><td><code>forbidden</code></td><td><code>forbidden</code></td></tr>
+<tr><td>6</td><td><code>unavailable</code></td><td><code>unavailable</code></td></tr>
+</tbody></table></div>
+<h3 id="enum-PolicyObservationMechanism"><code>PolicyObservationMechanism</code></h3>
+<p class="meta">a member this reader does not know is <code>refuse</code></p>
+<div class="wrap"><table>
+<thead><tr><th>id</th><th>member</th><th>wire</th></tr></thead>
+<tbody>
+<tr><td>1</td><td><code>native</code></td><td><code>native</code></td></tr>
 </tbody></table></div>
 <h3 id="enum-PolicyEditOutcome"><code>PolicyEditOutcome</code></h3>
 <p class="meta">a member this reader does not know is <code>refuse</code></p>
@@ -785,7 +876,8 @@
 <tr><td>9</td><td><code>missing_field</code></td><td><code>structure</code></td></tr>
 <tr><td>10</td><td><code>bad_enum</code></td><td><code>structure</code></td></tr>
 <tr><td>11</td><td><code>bad_binary</code></td><td><code>structure</code></td></tr>
-<tr><td>12</td><td><code>trailing_bytes</code></td><td><code>document</code></td></tr>
+<tr><td>12</td><td><code>bad_value</code></td><td><code>structure</code></td></tr>
+<tr><td>13</td><td><code>trailing_bytes</code></td><td><code>document</code></td></tr>
 </tbody></table></div>
 
 <footer>

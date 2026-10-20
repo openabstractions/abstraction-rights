@@ -3,6 +3,7 @@ package rights
 import (
 	"context"
 	"slices"
+	"strings"
 
 	wire "github.com/openabstractions/abstraction-rights/go/abstraction/rights/api"
 )
@@ -39,21 +40,29 @@ type operatorAllowReceipt struct {
 // other allow.
 func (p *DecisionPolicy) ApplyFirstUseAllow(ctx context.Context, expected string, rules []wire.PolicyRule, edit RuleEdit, id string, retained []string, authorize func() error) (wire.PolicyEdit, error) {
 	meta := len(rules) == 1 && IsMetaRule(rules[0].Action, rules[0].Resource)
-	if !validAnswerID(id) || len(retained) > MaxAppliedOperatorAnswers || !slices.Contains(retained, id) || edit.Permit == nil || !*edit.Permit || edit.PreserveOtherSetter ||
+	receipt, ok := firstUseAllowReceipt(id, retained)
+	if !ok || edit.Permit == nil || !*edit.Permit || edit.PreserveOtherSetter ||
 		!(edit.TTL == 0 && !meta || meta && edit.TTL == MetaRuleLapse) || !edit.Deadline.IsZero() {
 		return wire.PolicyEdit{Outcome: wire.PolicyEditOutcomeInvalid}, nil
+	}
+	if !meta {
+		edit.QuestionID = id
+	}
+	return p.changeRules(ctx, expected, rules, edit, authorize, receipt)
+}
+
+func firstUseAllowReceipt(id string, retained []string) (*operatorAllowReceipt, bool) {
+	if !validAnswerID(id) || len(retained) > MaxAppliedOperatorAnswers || !slices.Contains(retained, id) {
+		return nil, false
 	}
 	retained = slices.Clone(retained)
 	slices.Sort(retained)
 	for i, value := range retained {
 		if !validAnswerID(value) || i > 0 && retained[i-1] == value {
-			return wire.PolicyEdit{Outcome: wire.PolicyEditOutcomeInvalid}, nil
+			return nil, false
 		}
 	}
-	if !meta {
-		edit.QuestionID = id
-	}
-	return p.changeRules(ctx, expected, rules, edit, authorize, &operatorAllowReceipt{id, retained})
+	return &operatorAllowReceipt{id, retained}, true
 }
 
 // AppliedFirstUseAllow reads durable completion, independently of whether its
@@ -61,4 +70,14 @@ func (p *DecisionPolicy) ApplyFirstUseAllow(ctx context.Context, expected string
 func (p *DecisionPolicy) AppliedFirstUseAllow(id string) (bool, error) {
 	f, _, err := p.readDecision()
 	return slices.Contains(f.AppliedOperatorAnswers, id), err
+}
+
+// Only the complete retained provider setup effect crosses two legacy
+// resources. Catalogue membership belongs to native occurrence admission.
+func providerFirstUseRules(rules []wire.PolicyRule) bool {
+	if len(rules) != 2 || rules[0].Action != "abstraction.credentials/apply" || rules[1].Action != "abstraction.inference/complete" {
+		return false
+	}
+	name, ok := strings.CutPrefix(rules[0].Resource, "credential:")
+	return ok && name != "" && rules[1].Resource == "host:"+name
 }

@@ -19,7 +19,7 @@ func descriptionText(s string, max int) bool {
 	return boundedDecisionString(s, max) && strings.TrimSpace(s) == s
 }
 func validStoredDescription(d wire.ActionDescription) bool {
-	return ValidActionName(d.Action) && validStoredSubject(d.FeatureApp) &&
+	return ValidActionName(d.Action) && validStoredActor(d.FeatureApp) &&
 		descriptionText(d.AppLabel, 128) && descriptionText(d.Description, 512) && descriptionText(d.DeclaredRisk, 32)
 }
 
@@ -27,7 +27,7 @@ func validStoredDescription(d wire.ActionDescription) bool {
 // the described feature's app, independent of every authorization target.
 func NormalizeActionDescription(d wire.ActionDescription) (wire.ActionDescription, error) {
 	var err error
-	d.FeatureApp, err = NormalizeDecisionSubject(d.FeatureApp)
+	d.FeatureApp, err = normalizeActor(d.FeatureApp)
 	d.AppLabel, d.Description, d.DeclaredRisk = strings.TrimSpace(d.AppLabel), strings.TrimSpace(d.Description), strings.TrimSpace(d.DeclaredRisk)
 	if err != nil || !validStoredDescription(d) {
 		return wire.ActionDescription{}, errors.New("rights: invalid action description")
@@ -68,7 +68,7 @@ func (p *DecisionPolicy) PublishAction(expected string, description wire.ActionD
 	if err != nil || !boundedDecisionString(expected, 128) {
 		return wire.DescriptionEdit{Outcome: wire.ActionEditOutcomeInvalid}, nil
 	}
-	by, err = NormalizeDecisionSubject(by)
+	by, err = normalizeActor(by)
 	if err != nil {
 		return wire.DescriptionEdit{Outcome: wire.ActionEditOutcomeInvalid}, nil
 	}

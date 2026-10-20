@@ -23,7 +23,8 @@ refusal {
  9: missing_field(stage="structure")
  10: bad_enum(stage="structure")
  11: bad_binary(stage="structure")
- 12: trailing_bytes(stage="document")
+ 12: bad_value(stage="structure")
+ 13: trailing_bytes(stage="document")
 }
 struct Request {
  1: required string op
@@ -35,7 +36,7 @@ struct Request {
  7: optional string why(omit="absent")
  8: optional string app(omit="absent")
  9: optional string admin(omit="absent")
-}(document="true",unknown_fields="refuse",doc="Existing rights request concepts. Secret/token/admin remain credential inputs checked by the service; request text never substitutes for native peer identity. This descriptor does not replace the existing handwritten line transport.")
+}(document="true",unknown_fields="refuse",doc="Deprecated native token-service request descriptor. Removal is scheduled for Train B (expected 0.9.0), W2-01a.1, under TD13/TD57's stored-state and declared outside-adopter retirement conditions. Secret/token/admin remain credential inputs checked by the service; request text never substitutes for native peer identity. This descriptor does not replace the existing handwritten line transport.")
 struct AppMetadata {
  1: required string id
  2: required string name
@@ -48,7 +49,7 @@ struct HoldMetadata {
  3: required string right
  4: required string why
  5: required string since
-}(unknown_fields="refuse",doc="Own held-right fields; since uses existing RFC3339 time representation. Native Hold also carries Seen. The live Lease is connection-owned and cannot be recreated from these fields.")
+}(unknown_fields="refuse",doc="Own held-right fields; since uses existing RFC3339 time representation. Native Hold also carries Seen. The live [Lease](https://openabstractions.github.io/reference.html#concept-rights.lease) is connection-owned and cannot be recreated from these fields.")
 struct ResponseMetadata {
  1: optional string code(omit="absent")
  2: optional string error(omit="absent")
@@ -59,7 +60,7 @@ struct ResponseMetadata {
  7: optional string right(omit="absent")
  8: optional list<AppMetadata> apps(omit="zero")
  9: optional list<HoldMetadata> holds(omit="zero")
-}(unknown_fields="refuse",doc="Own response fields projected without native Seen evidence. Any nonempty code/error is refusal, including unknown codes. This is a common descriptor, not a replacement legacy Response codec or generated service client.")
+}(unknown_fields="refuse",doc="Deprecated native token-service response descriptor. Removal is scheduled for Train B (expected 0.9.0), W2-01a.1, under TD13/TD57's stored-state and declared outside-adopter retirement conditions. Own response fields are projected without native Seen evidence. Any nonempty code/error is refusal, including unknown codes. This is a common descriptor, not a replacement legacy Response codec or generated service client.")
 const list<string> operations = ["register", "ask", "hold", "check", "apps", "grant", "revoke", "forget", "holds"]
 const list<string> known_rights = ["awake"]
 const list<string> refusal_codes = ["internal", "invalid_request", "caller_refused", "unknown_operation", "not_administrator", "pending", "denied", "denied_permanently", "unsupported_hold", "platform_refused", "unknown_app", "unknown_right", "not_granted", "bad_secret", "bad_token"]
@@ -67,7 +68,7 @@ const list<string> refusal_codes = ["internal", "invalid_request", "caller_refus
 struct Subject {
  1: required string account
  2: required string program
-}(unknown_fields="refuse",doc="Account identifier and normalized absolute executable path. This serialized subject is an assertion by an explicitly authorized enforcement point. It contains no proof or verified flag and cannot authorize its own use. Direct decisions derive their subject from native receiving Program evidence.")
+}(unknown_fields="refuse",doc="[Subject](https://openabstractions.github.io/reference.html#concept-rights.subject): Receiving policy account and program target. Native programs use the shared absolute-path/MSIX grammar; the distinct remote kind is remote:<64 lowercase hex leaf-SPKI-SHA256> from the shared live-pin mapping. Remote targets match exact account/token/action/resource only, with no defaults, wildcard selectors or native operator authority. This serialized subject is an assertion by an explicitly authorized native enforcement point, contains no proof and cannot authorize its own use. Direct decisions derive native receiving [Program](https://openabstractions.github.io/reference.html#concept-identity.listener-program-need) evidence. Authority setters and actors remain native.")
 enum DecisionOutcome {
  1: permitted
  2: denied
@@ -81,10 +82,41 @@ struct Decision {
  1: required DecisionOutcome outcome
  2: optional string policy_revision(omit="absent")
 }(unknown_fields="refuse",doc="A point-in-time policy decision. Only permitted allows an enforcement point to proceed. denied is an explicit exact deny; not_granted has no unexpired exact rule; unknown_action is outside the current catalogue. Evaluated permitted/denied/not_granted/unknown_action decisions carry an opaque revision observed with that decision. Errors carry none. No lease, token, cached permission lifetime or human consent is conveyed.")
+struct RevisionDecision {
+ 1: required Decision decision
+ 2: optional string observed_revision(omit="absent",length="..128",pattern="no_control")
+}(unknown_fields="refuse",doc="A decision and bounded opaque freshness observation from the same state read. Evaluated decisions carry observed_revision. Refusals carry none. This observation conveys no permission lifetime.")
+enum RefusalSource {
+ 1: rights
+ 2: credentials
+ 3: license
+ 4: terms
+ 5: identity
+ 6: os
+}(unknown="grant",reader="display")
+enum RefusalDecision {
+ 1: denied
+ 2: not_granted
+ 3: person_only
+}(unknown="refuse",reader="act")
+enum RefusalAsk {
+ 1: available
+ 2: none
+}(unknown="refuse",reader="act")
+struct RefusalDetail {
+ 1: required RefusalSource source
+ 2: required RefusalDecision decision
+ 3: required RefusalAsk ask
+ 4: optional string action(omit="absent",length="1..128")
+ 5: optional string question(omit="absent",length="1..128")
+ 6: optional string credential(omit="absent",length="1..64")
+ 7: optional i64 retry_after_ms(omit="zero",range="0..86400000")
+}(unknown_fields="grant",doc="The one refusal record every OA service carries beside a refusing outcome (RIGHTS-E3; conventions CONV-E4). source names the authority that refused: rights, credentials, license, terms, identity or os. decision is denied for an explicit refusal, not_granted where no rule permits, and person_only where only the person may answer the question. ask says whether asking can change the answer: available, or none. action is the exact registered <owner>/<name>; question the pending question's id; credential the credential's name; retry_after_ms the earliest useful retry in milliseconds, omitted when zero. Stop asking is denied with ask none. Current carriers include config@2, messages@1, registry@3, endpoint@2 and chat@3, declared in config.thrift, messages.thrift, registration.thrift and inference.thrift. Other services adopt it in their scheduled versions.")
 service Authorization {
- DescriptionPage ListActionDescriptions(1:string cursor,2:i64 limit)(doc="Read published descriptive metadata for the current catalogue under same-account receiving Program admission. No rules are exposed. Pages carry one durable revision; continuations bind subject, host epoch and revision and return gap after change/restart. Requested limit is 1..64 and encoded replies are at most 256 KiB. Recheck admission before returning. An earlier authorization@1 service returns unknown_method.")
- Decision Decide(1:string action,2:string resource)(doc="Evaluate the bound receiving account/program against an exact action/resource rule. This result is advisory to the caller; resource services query the decision point themselves.")
- Decision DecideFor(1:Subject subject,2:string action,3:string resource)(doc="Evaluate a subject assertion only when the receiving peer is explicitly authorized as an enforcement point for this action/resource. Same account alone grants no relay authority. The designated enforcer is trusted to supply its actual bound subject. Nil or refusing enforcer policy yields forbidden before policy lookup.")
+ RevisionDecision DecideForAtLeastRevision(1:Subject subject,2:string action(length="1..128",pattern="no_control"),3:string resource(length="1..1024",pattern="no_control"),4:string at_least_revision(length="..128",pattern="no_control"))(readonly="true",doc="Evaluate through the existing explicitly admitted enforcer boundary. Empty minimum requests an observation. A nonempty minimum is mandatory: an older or incomparable state refuses unavailable. Unknown method never permits fallback dropping the minimum. Both observations and minima are bounded opaque values, not permission leases.")
+ DescriptionPage ListActionDescriptions(1:string cursor,2:i64 limit)(readonly="true",doc="Read published descriptive metadata for the current catalogue under same-account receiving [Program](https://openabstractions.github.io/reference.html#concept-identity.listener-program-need) admission. No rules are exposed. Pages carry one durable revision; continuations bind subject, host epoch and revision and return gap after change/restart. Requested limit is 1..64 and encoded replies are at most 256 KiB. Recheck admission before returning. An earlier authorization@1 service returns unknown_method.")
+ Decision Decide(1:string action,2:string resource)(readonly="true",doc="Evaluate the bound receiving account/program against an exact action/resource rule. This result is advisory to the caller; resource services query the decision point themselves.")
+ Decision DecideFor(1:Subject subject,2:string action,3:string resource)(readonly="true",doc="Evaluate a subject assertion only when the receiving peer is explicitly authorized as an enforcement point for this action/resource. Same account alone grants no relay authority. The designated enforcer is trusted to supply its actual bound subject. Nil or refusing enforcer policy yields forbidden before policy lookup.")
 }(wire_name="abstraction.rights/authorization@1",doc="General exact-rule authorization decision point with a bounded, registrable catalogue and persistence. Unknown, absent, unspecified, expired, failed and refused decisions never permit. Explicitly authorized operator configuration registers actions and grants/revokes exact rules; no serialized awake lease is introduced.")
 // The OA seed of the action catalogue. A policy host starts from the seed it is
 // configured with; resource services register further <owner>/<name> actions
@@ -113,6 +145,23 @@ struct PolicyPage {
  5: required string next
  6: required bool complete
 }(unknown_fields="refuse",doc="Latest-policy enumeration: 1..64 requested rules and at most 256 KiB encoded reply, including catalogue, cursor and indentation. Catalogue is the configured seed plus registered actions, sorted, bounded to 64 actions of 128 bytes. Rules are every retained rule, including expired rules the next write removes; ReadRule reports expiry and provenance. Page carries the exact durable content revision. A noncomplete page has a nonempty next cursor. Refusals have empty revision/catalog/rules/next and complete=false. Cursors are at most 256 UTF-8 bytes, bind receiving account/program and host epoch/revision, and return gap after change/restart/scope mismatch. Restart from empty cursor. No immutable multipage snapshot or historical change replay is promised.")
+enum PolicyObservationOutcome {
+ 1: changed
+ 2: unchanged
+ 3: gap
+ 4: invalid
+ 5: forbidden
+ 6: unavailable
+}(unknown="refuse",reader="act")
+enum PolicyObservationMechanism {
+ 1: native
+}(unknown="refuse",reader="act")
+struct PolicyObservation {
+ 1: required PolicyObservationOutcome outcome
+ 2: required string next(length="0..256",pattern="no_control")
+ 3: required string revision(length="0..128",pattern="no_control")
+ 4: required PolicyObservationMechanism mechanism
+}(unknown_fields="refuse",doc="Read-only policy invalidation. changed carries a new nonempty opaque cursor and current durable revision; an empty after requests this snapshot. unchanged carries the confirmed after cursor and current revision. Expiry changes the observation cursor while durable revision stays unchanged; ReadRule confirms expiry. gap carries after and empty revision: restart from empty after. invalid/forbidden/unavailable carry empty next/revision. Cursors bind receiving Program, host epoch and expiry-sensitive state, never enumerate rules or grant a permission lease. native declares policy-owner commit callbacks plus expiry deadlines. At most 256 cursor bytes and 128 revision bytes; no rule contents, replay or second policy store.")
 enum PolicyEditOutcome {
  1: applied
  2: conflict
@@ -240,21 +289,22 @@ struct DecisionExplanation {
  4: optional string default_name(omit="absent")
 }(unknown_fields="refuse",doc="One exact decision for a subject with the step that decided it, from the same evaluation a decision makes. own_rule is the subject's own live exact rule, matched by program identity; typed_block a live typed Block that covers the target; account_default the named account-wide default that permits; default_excluded a named default switched on for the target that the configured exclusion, such as the script-host rule, keeps from this program; none no rule and no default. outcome and policy_revision are those the decision carries. Refusals (invalid, forbidden, unavailable) carry no revision, source or name.")
 service AuthorizationOperator {
- DescriptionEdit RegisterDescribedAction(1:string expected_revision,2:ActionDescription description)(doc="Under existing explicit operator authority, atomically register an action and publish/correct its descriptive metadata at the expected durable revision. The service records the receiving publisher and service time. Recheck context and authority after lock waiting. A metadata edit changes no rule, expiry or completed-answer receipt, including first publication on an action with existing rules. A stable action identifies its existing feature; actual changed semantics require a new action/version at the app owner. Metadata is no proof of behavior. An earlier operator@1 service returns unknown_method; never fall back to name-only registration while claiming published description.")
- PolicyEdit ApplyFirstUseAllow(1:string expected_revision,2:string question_id)(doc="Apply the complete exact permit or paired permits derived by trusted runtime composition from this retained operator Allow and its runtime admission. No caller supplies targets or rules. Authorization, question occurrence and revision are checked while the Book is pinned and the rights edit is locked. Commit complete permits and private durable success proof in the same rights replacement; a first receipt-only commit changes revision when permits already match. A previously completed ID conflicts without rewriting rights, including after revocation or expiry. Failed writes retain the answer for explicit Retry. Missing composition is unavailable; missing, pending, foreign, responder or non-Allow records are invalid. Both IDs and revision are bounded to 128 UTF-8 bytes. An earlier operator@1 service returns unknown_method; callers must not fall back to an untracked permit write.")
- PolicyPage ListPolicy(1:string cursor,2:i64 limit)(doc="Read bounded current rules and catalogue under explicit operator authorization. Every continuation rechecks authorization; no enumeration session is retained for disconnected/slow callers.")
- PolicyEdit SetRule(1:string expected_revision,2:PolicyRule rule)(doc="Atomically compare the expected durable revision and set one exact permit/deny rule with no expiry and an empty reason. Revision is bounded to 128 UTF-8 bytes. Operator context and authority are checked again inside the atomic edit after lock waiting. The rule records the operator's established subject and the edit time. An unexpired rule with the same permit is a no-op that keeps its record. Uncatalogued actions and malformed targets are invalid; no resource permission is inferred from the operator request itself.")
- PolicyEdit RevokeRule(1:string expected_revision,2:Subject subject,3:string action,4:string resource)(doc="Atomically remove one exact rule if the revision matches. The next fresh decision observes successful revocation. A failed/uncertain reply claims no successful revocation; inspect current state before another intent. It does not cancel an existing connection-owned awake lease.")
- PolicyEdit StopAnswerer(1:string expected_revision,2:Subject answerer,3:bool also_revoke_grants)(doc="Atomically remove an answerer's question.answer/apps enrollment if the revision matches. When also_revoke_grants is true, remove current permits set by that answerer in the same edit; denies and rules set by another program stay. With false, prior permits retain their stored expiry. Stop ends future answers and never exits the answerer's process. Authorization and revision are rechecked after lock waiting.")
- PolicyEdit RevokeAnswerPermits(1:string expected_revision,2:Subject answerer,3:Subject target,4:list<string> actions,5:string resource,6:string question_id)(doc="Atomically remove any still-current permit among one or two exact targets whose private question ID and setter match this retained first-use answer. Earlier or later grants, person edits, blocks and expired effects stay; zero matches or a revision change conflicts. The asks answer record stays; this method is the permission effect of the Panel's Undo. Authorization is rechecked after lock waiting.")
- PolicyEdit SetRuleFor(1:string expected_revision,2:PolicyRule rule,3:i64 ttl_ms,4:string why)(doc="As SetRule, recording why and an expiry ttl_ms after the service's edit time. ttl_ms 0 sets no expiry; otherwise it is 1..31536000000. why is 0..256 UTF-8 bytes without control characters. A retained rule with the same permit, reason and expiry is a no-op; any other difference writes, including a new expiry.")
- PolicyEdit SetRulesFor(1:string expected_revision,2:list<PolicyRule> rules,3:i64 ttl_ms,4:string why)(doc="Atomically set one or two exact rules with the same target subject, resource and permit, and distinct catalogued actions. The operator's authorized intent may replace a previous opposite rule. All members are validated before one revision and authority check under the rights edit lock; the batch writes all or none with one setter, time, reason and expiry. ttl_ms and why have SetRuleFor's bounds. A prior operator@1 service returns unknown_method.")
- RuleRead ReadRule(1:Subject subject,2:string action,3:string resource)(doc="Read one exact rule with its provenance and expiry under operator authorization, rechecked after the read.")
- ActionEdit RegisterAction(1:string expected_revision,2:string action)(doc="Add an action named <owner>/<name> to the catalogue. owner is 1..64 bytes and name 1..63 bytes of lowercase ASCII letters, digits, '.', '_' and '-', each beginning with a letter or digit. Registering an action already in the catalogue applies without writing. A registration records the operator's established subject and the service time. Registration grants nothing: decisions on the action read not_granted until a rule exists.")
- ActionEdit RetireAction(1:string expected_revision,2:string action)(doc="Remove a registered action and every rule naming it. Retiring a seeded action is invalid. Retiring an action outside the catalogue is unknown. Decisions on a retired action read unknown_action.")
- DecisionExplanation ExplainFor(1:Subject subject,2:string action,3:string resource)(doc="Under operator authorization, rechecked before returning, evaluate subject on one exact action/resource exactly as a decision does and report the step that decided it (RIGHTS-O14). It asks nobody, records nothing and changes no rule or cache. An earlier operator@1 service returns unknown_method.")
- DefaultPage ListDefaults()(doc="Read every configured account-wide default and its switch under operator authorization, rechecked before returning. An earlier operator@1 service returns unknown_method.")
- DefaultEdit SetDefault(1:string expected_revision,2:string name,3:bool on)(doc="Atomically compare the expected durable revision and turn one configured account-wide default on or off, recording the operator subject and service time. An unconfigured name is invalid. Authorization and revision are rechecked after lock waiting. The next fresh decision observes the switch. No rule is written or removed. An earlier operator@1 service returns unknown_method.")
+ PolicyObservation ObservePolicy(1:string after(length="0..256",pattern="no_control"),2:i64 wait_ms(range="0..30000"))(readonly="true",observe="after",doc="Under existing operator authority, wait 0..30000ms for policy invalidation through watch.Gate (RIGHTS-O16). Every read, wake and response rechecks receiving Program proof and explicit operator authority. The configured policy owner's OnChange callbacks and service expiry deadlines provide native invalidation. Invalid bounds are refused before data; stale/foreign epoch or receiving scope is gap. Cancellation ends only this read. A prior operator@1 service returns unknown_method; no listing-cursor or polling fallback.")
+ DescriptionEdit RegisterDescribedAction(1:string expected_revision,2:ActionDescription description)(idempotent="true",doc="Under existing explicit operator authority, atomically register an action and publish/correct its descriptive metadata at the expected durable revision. The service records the receiving publisher and service time. Recheck context and authority after lock waiting. A metadata edit changes no rule, expiry or completed-answer receipt, including first publication on an action with existing rules. A stable action identifies its existing feature; actual changed semantics require a new action/version at the app owner. Metadata is no proof of behavior. An earlier operator@1 service returns unknown_method; never fall back to name-only registration while claiming published description.")
+ PolicyEdit ApplyFirstUseAllow(1:string expected_revision,2:string question_id)(idempotent="true",doc="Apply the complete exact permit or paired permits derived by trusted runtime composition from this retained operator Allow and its runtime admission. No caller supplies targets or rules. Authorization, question occurrence and revision are checked while the [Book](https://openabstractions.github.io/reference.html#concept-asks.book) is pinned and the rights edit is locked. Commit complete permits and private durable success proof in the same rights replacement; a first receipt-only commit changes revision when permits already match. A previously completed ID conflicts without rewriting rights, including after revocation or expiry. Failed writes retain the answer for explicit Retry. Missing composition is unavailable; missing, pending, foreign, responder or non-Allow records are invalid. Both IDs and revision are bounded to 128 UTF-8 bytes. An earlier operator@1 service returns unknown_method; callers must not fall back to an untracked permit write.")
+ PolicyPage ListPolicy(1:string cursor,2:i64 limit)(readonly="true",doc="Read bounded current rules and catalogue under explicit operator authorization. Every continuation rechecks authorization; no enumeration session is retained for disconnected/slow callers.")
+ PolicyEdit SetRule(1:string expected_revision,2:PolicyRule rule)(idempotent="true",doc="Atomically compare the expected durable revision and set one exact permit/deny rule with no expiry and an empty reason. Revision is bounded to 128 UTF-8 bytes. Operator context and authority are checked again inside the atomic edit after lock waiting. The rule records the operator's established subject and the edit time. An unexpired rule with the same permit is a no-op that keeps its record. Uncatalogued actions and malformed targets are invalid; no resource permission is inferred from the operator request itself.")
+ PolicyEdit RevokeRule(1:string expected_revision,2:Subject subject,3:string action,4:string resource)(idempotent="true",doc="Atomically remove one exact rule if the revision matches. The next fresh decision observes successful revocation. A failed/uncertain reply claims no successful revocation; inspect current state before another intent. It does not cancel an existing connection-owned awake lease.")
+ PolicyEdit StopAnswerer(1:string expected_revision,2:Subject answerer,3:bool also_revoke_grants)(idempotent="true",doc="Atomically remove an answerer's question.answer/apps enrollment if the revision matches. When also_revoke_grants is true, remove current permits set by that answerer in the same edit; denies and rules set by another program stay. With false, prior permits retain their stored expiry. Stop ends future answers and never exits the answerer's process. Authorization and revision are rechecked after lock waiting.")
+ PolicyEdit RevokeAnswerPermits(1:string expected_revision,2:Subject answerer,3:Subject target,4:list<string> actions,5:string resource,6:string question_id)(idempotent="true",doc="Atomically remove any still-current permit among one or two exact targets whose private question ID and setter match this retained first-use answer. Earlier or later grants, person edits, blocks and expired effects stay; zero matches or a revision change conflicts. The asks answer record stays; this method is the permission effect of the Panel's Undo. Authorization is rechecked after lock waiting.")
+ PolicyEdit SetRuleFor(1:string expected_revision,2:PolicyRule rule,3:i64 ttl_ms,4:string why)(idempotent="true",doc="As SetRule, recording why and an expiry ttl_ms after the service's edit time. ttl_ms 0 sets no expiry; otherwise it is 1..31536000000. why is 0..256 UTF-8 bytes without control characters. A retained rule with the same permit, reason and expiry is a no-op; any other difference writes, including a new expiry.")
+ PolicyEdit SetRulesFor(1:string expected_revision,2:list<PolicyRule> rules,3:i64 ttl_ms,4:string why)(idempotent="true",doc="Atomically set one or two exact rules with the same target subject, resource and permit, and distinct catalogued actions. The operator's authorized intent may replace a previous opposite rule. All members are validated before one revision and authority check under the rights edit lock; the batch writes all or none with one setter, time, reason and expiry. ttl_ms and why have SetRuleFor's bounds. A prior operator@1 service returns unknown_method.")
+ RuleRead ReadRule(1:Subject subject,2:string action,3:string resource)(readonly="true",doc="Read one exact rule with its provenance and expiry under operator authorization, rechecked after the read.")
+ ActionEdit RegisterAction(1:string expected_revision,2:string action)(idempotent="true",doc="Add an action named <owner>/<name> to the catalogue. owner is 1..64 bytes and name 1..63 bytes of lowercase ASCII letters, digits, '.', '_' and '-', each beginning with a letter or digit. Registering an action already in the catalogue applies without writing. A registration records the operator's established subject and the service time. Registration grants nothing: decisions on the action read not_granted until a rule exists.")
+ ActionEdit RetireAction(1:string expected_revision,2:string action)(idempotent="true",doc="Remove a registered action and every rule naming it. Retiring a seeded action is invalid. Retiring an action outside the catalogue is unknown. Decisions on a retired action read unknown_action.")
+ DecisionExplanation ExplainFor(1:Subject subject,2:string action,3:string resource)(readonly="true",doc="Under operator authorization, rechecked before returning, evaluate subject on one exact action/resource exactly as a decision does and report the step that decided it (RIGHTS-O14). It asks nobody, records nothing and changes no rule or cache. An earlier operator@1 service returns unknown_method.")
+ DefaultPage ListDefaults()(readonly="true",doc="Read every configured account-wide default and its switch under operator authorization, rechecked before returning. An earlier operator@1 service returns unknown_method.")
+ DefaultEdit SetDefault(1:string expected_revision,2:string name,3:bool on)(idempotent="true",doc="Atomically compare the expected durable revision and turn one configured account-wide default on or off, recording the operator subject and service time. An unconfigured name is invalid. Authorization and revision are rechecked after lock waiting. The next fresh decision observes the switch. No rule is written or removed. An earlier operator@1 service returns unknown_method.")
 }(wire_name="abstraction.rights/operator@1",doc="Explicitly authorized administration of the configured decision policy: catalogue registration and retirement, exact rules with expiry and provenance. Receiving same-account Program proof plus a trusted typed-peer operator callback is required; nil refuses. Policy denial is forbidden; callback/storage failure is unavailable. No caller credential, verified flag or provider path is accepted. Resource services remain the receiving enforcement points. Legacy bearer and awake lease behavior is separate.")
 
 struct PermissionKey {
@@ -374,11 +424,11 @@ struct SelectorEdit {
 }(unknown_fields="refuse",doc="Applied/conflict carry the locked observed revision and complete bounded affected state. Stale expected revision always conflicts, including matching desired state. Other refusals carry empty revision/current. Atomic edits have no per-member success. Individual replacement removes that row's active bundle origin; remaining rows keep historical origin.")
 
 service SelectorAuthorization {
-  PermissionDefinitionPage ListPermissionDefinitions(1:string cursor,2:i64 limit)
-  PermissionBundlePage ListPermissionBundles(1:string cursor,2:i64 limit)
-  BatchDecision CheckBatch(1:CheckBatchRequest request)
-  BatchDecision CheckBatchFor(1:Subject subject,2:CheckBatchRequest request)
-  Decision CheckLegacyOperationFor(1:Subject subject,2:LegacyOperationRequest request)
+  PermissionDefinitionPage ListPermissionDefinitions(1:string cursor,2:i64 limit)(readonly="true")
+  PermissionBundlePage ListPermissionBundles(1:string cursor,2:i64 limit)(readonly="true")
+  BatchDecision CheckBatch(1:CheckBatchRequest request)(readonly="true")
+  BatchDecision CheckBatchFor(1:Subject subject,2:CheckBatchRequest request)(readonly="true")
+  Decision CheckLegacyOperationFor(1:Subject subject,2:LegacyOperationRequest request)(readonly="true")
 }(wire_name="abstraction.rights/authorization@2")
 struct LegacyOperationRequest {
   1: required string legacy_action
@@ -386,12 +436,12 @@ struct LegacyOperationRequest {
   3: optional ConcreteResource concrete_operation(omit="absent")
 }(unknown_fields="refuse",doc="Old exact authority plus an optional receiver-known concrete effect. Trusted compiled capability equivalence validates the supplied effect against this old operation and its fixed collection. Original legacy authority and live equivalent typed restrictions are evaluated at one snapshot. Missing concrete detail on a coarse view uses conservative collection intersection. This method imports explicit blocks only; it grants no typed permit.")
 service SelectorAuthorizationOperator {
-  SelectorRulePage ListSelectorRules(1:string cursor,2:i64 limit)
-  SelectorRuleRead ReadSelectorRule(1:Subject subject,2:PermissionSelection selection)
-  SelectorEdit SetSelectorRule(1:string expected_revision,2:SelectorRule rule,3:i64 ttl_ms,4:string why)
-  SelectorEdit RemoveSelectorRule(1:string expected_revision,2:Subject subject,3:PermissionSelection selection)
-  SelectorEdit ApplyBundle(1:string expected_revision,2:Subject subject,3:string bundle_ref,4:ResourceSelector selector,5:i64 ttl_ms,6:string why)
-  SelectorEdit RemoveBundle(1:string expected_revision,2:Subject subject,3:string origin_id)
-  SelectorEdit ApplyPermissionAllow(1:string expected_revision,2:string question_id)
-  SelectorEdit UndoPermissionEffect(1:string expected_revision,2:string question_id)
+  SelectorRulePage ListSelectorRules(1:string cursor,2:i64 limit)(readonly="true")
+  SelectorRuleRead ReadSelectorRule(1:Subject subject,2:PermissionSelection selection)(readonly="true")
+  SelectorEdit SetSelectorRule(1:string expected_revision,2:SelectorRule rule,3:i64 ttl_ms,4:string why)(idempotent="true")
+  SelectorEdit RemoveSelectorRule(1:string expected_revision,2:Subject subject,3:PermissionSelection selection)(idempotent="true")
+  SelectorEdit ApplyBundle(1:string expected_revision,2:Subject subject,3:string bundle_ref,4:ResourceSelector selector,5:i64 ttl_ms,6:string why)(idempotent="true")
+  SelectorEdit RemoveBundle(1:string expected_revision,2:Subject subject,3:string origin_id)(idempotent="true")
+  SelectorEdit ApplyPermissionAllow(1:string expected_revision,2:string question_id)(idempotent="true")
+  SelectorEdit UndoPermissionEffect(1:string expected_revision,2:string question_id)(idempotent="true")
 }(wire_name="abstraction.rights/operator@2",doc="Existing explicit operator admission, receiving provenance and in-lock authority recheck apply. First-use methods accept no caller-supplied targets: trusted composition resolves and pins the new typed Book occurrence. Existing operator@1 completion records are preserved with their original semantics.")

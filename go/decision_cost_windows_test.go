@@ -80,9 +80,10 @@ const costDecisions = 200
 // from the warm decision's decode to the last decision; it bounds how often
 // StoredKeyReuse let a stored identity or the state be read again.
 type decisionWork struct {
-	opens    map[string]int
-	redecode bool
-	span     time.Duration
+	opens           map[string]int
+	redecode        bool
+	span            time.Duration
+	canonicalCaller string
 }
 
 func countDecisionWork(t *testing.T, p *DecisionPolicy, caller wire.Subject, action, resource string) decisionWork {
@@ -92,10 +93,10 @@ func countDecisionWork(t *testing.T, p *DecisionPolicy, caller wire.Subject, act
 	decodedAt := p.decoded.read
 	p.decoded.mu.Unlock()
 	var mu sync.Mutex
-	work := decisionWork{opens: map[string]int{}}
+	work := decisionWork{opens: map[string]int{}, canonicalCaller: identity.NormalizeSubjectProgram(caller.Program)}
 	stop, ok := identity.ObserveOpens(func(path string) {
 		mu.Lock()
-		work.opens[strings.ToLower(filepath.Clean(path))]++
+		work.opens[path]++
 		mu.Unlock()
 	})
 	if !ok {
@@ -112,18 +113,25 @@ func countDecisionWork(t *testing.T, p *DecisionPolicy, caller wire.Subject, act
 	return work
 }
 
-// check fails t unless the decisions did only the work that keeps one under a
-// millisecond on this machine (BenchmarkDecideAmongHundredRules, 0.38 ms;
-// 21.9 ms before R3, when every decision opened every stored program): the
-// caller's identity read at most once per decision, each stored program's at
-// most once per StoredKeyReuse, and the state decoded again only past it.
+// check bounds caller identity reads to one per decision, each stored
+// program's to one per StoredKeyReuse, and decoding to that reuse interval.
+// An authored short path also needs at most one metadata normalization lookup
+// per decision; it is counted separately from the canonical identity read.
 func (w decisionWork) check(t *testing.T, caller string) {
 	t.Helper()
+	canonical := w.canonicalCaller
 	windows := 1 + int(w.span/StoredKeyReuse)
-	callerOpens := 0
+	callerOpens, normalizationLookups := 0, 0
 	for path, n := range w.opens {
-		if strings.EqualFold(path, filepath.Clean(caller)) {
+		// These exact spellings are observer event labels, established before
+		// observation. Identity reads use the canonical program; GetLongPathName
+		// reports the authored short spelling for its separate metadata lookup.
+		if path == canonical {
 			callerOpens += n
+			continue
+		}
+		if caller != canonical && path == filepath.Clean(caller) {
+			normalizationLookups += n
 			continue
 		}
 		if n > windows {
@@ -133,24 +141,39 @@ func (w decisionWork) check(t *testing.T, caller string) {
 	if callerOpens > costDecisions {
 		t.Errorf("the caller's identity was read %d times in %d decisions", callerOpens, costDecisions)
 	}
+	if normalizationLookups > costDecisions {
+		t.Errorf("the caller's short spelling was normalized %d times in %d decisions", normalizationLookups, costDecisions)
+	}
 	if w.redecode && w.span < StoredKeyReuse {
 		t.Errorf("the unchanged state was decoded again within %v", w.span)
 	}
-	t.Logf("%d decisions in %v: %d caller reads, %d paths read", costDecisions, w.span, callerOpens, len(w.opens))
+	t.Logf("%d decisions in %v: %d caller identity reads, %d short-name metadata lookups, %d path labels", costDecisions, w.span, callerOpens, normalizationLookups, len(w.opens))
 }
 
-// R3: a decision among costRules rules on its own action and resource stays
-// under a millisecond: names are compared first, the caller's file identity
-// is read once, stored programs' identities are reused within a revision, and
-// unchanged state is not decoded again. The test counts that work; the
-// benchmark above measures the time, which on a loaded machine measures the
-// load.
+// R3: names are compared first, the caller's file identity is read once,
+// stored identities are reused within a revision, and unchanged state is not
+// decoded again. Both canonical and authored short caller inputs keep these
+// bounds; short-name normalization is a separate metadata operation.
 func TestDecisionCostAmongHundredRules(t *testing.T) {
 	p, caller := costPolicy(t)
 	if d := p.Decide(caller, decisionAction, "content"); d.Outcome != wire.DecisionOutcomeNotGranted {
 		t.Fatalf("the caller matched a rule: %v", d.Outcome)
 	}
-	countDecisionWork(t, p, caller, decisionAction, "content").check(t, caller.Program)
+	canonical := identity.NormalizeSubjectProgram(caller.Program)
+	if !identity.SameSubjectProgram(caller.Program, canonical) {
+		t.Fatal("authored and canonical caller spellings do not name the same program")
+	}
+	for _, name := range []string{"canonical", "authored-short"} {
+		t.Run(name, func(t *testing.T) {
+			input := caller
+			if name == "canonical" {
+				input.Program = canonical
+			} else if caller.Program == canonical {
+				t.Skip("the TEMP parent has no distinct short spelling")
+			}
+			countDecisionWork(t, p, input, decisionAction, "content").check(t, input.Program)
+		})
+	}
 }
 
 // R3: a stored rule for a program on a share never slows a decision: no
@@ -224,6 +247,7 @@ func TestAStoredProgramInstalledLaterIsSeenByFileIdentity(t *testing.T) {
 	dir := t.TempDir()
 	folder := filepath.Join(dir, "later")
 	program := filepath.Join(folder, "app.exe")
+	expectedProgram := identity.NormalizeSubjectProgram(program)
 	junction := filepath.Join(dir, "alias")
 	deny := decisionRule{Subject: wire.Subject{Account: "test-account", Program: program}, Action: decisionAction,
 		Resource: "content", Permit: false, SetBy: wire.Subject{Account: "test-account", Program: program}, SetAt: stamp(time.Now())}
@@ -243,12 +267,12 @@ func TestAStoredProgramInstalledLaterIsSeenByFileIdentity(t *testing.T) {
 	}
 	// The absent reading is still within its reuse: age it past the bound.
 	p.stored.mu.Lock()
-	if k, ok := p.stored.keys[program]; !ok || k.key != "" {
+	if k, ok := p.stored.keys[expectedProgram]; !ok || k.key != "" {
 		p.stored.mu.Unlock()
 		t.Fatalf("the absent program's reading: %+v %v", k, ok)
 	} else {
 		k.read = k.read.Add(-StoredKeyReuse)
-		p.stored.keys[program] = k
+		p.stored.keys[expectedProgram] = k
 	}
 	p.stored.mu.Unlock()
 	if d := p.Decide(viaJunction, decisionAction, "content"); d.Outcome != wire.DecisionOutcomeDenied {

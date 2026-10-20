@@ -50,6 +50,75 @@ func liveOperator(t *testing.T, p *rights.DecisionPolicy, authorize AuthorizeOpe
 	})
 	return h, client.New(endpoint), client.NewOperator(endpoint), endpoint
 }
+
+func TestOperatorQuietMetaHolderRefusalAndAuthority(t *testing.T) {
+	p, _ := policy(t)
+	if err := p.RegisterAction(rights.MetaAnswerAction); err != nil {
+		t.Fatal(err)
+	}
+	target := nativeSubject(t)
+	target.Program = filepath.Join(t.TempDir(), "own-app.exe")
+	if err := os.WriteFile(target.Program, []byte("ordinary"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	var unavailable, denied atomic.Bool
+	p.MetaHolder = func(wire.Subject) error {
+		if unavailable.Load() {
+			return rights.ErrMetaHolderUnavailable
+		}
+		return rights.ErrMetaHolder
+	}
+	_, _, op, _ := liveOperator(t, p, func(context.Context, *identity.Peer) error {
+		if denied.Load() {
+			return ErrOperatorForbidden
+		}
+		return nil
+	})
+	for _, enrolled := range []bool{false, true} {
+		if enrolled {
+			p.MetaHolder = nil
+			snapshot, err := p.OperatorSnapshot()
+			if err != nil {
+				t.Fatal(err)
+			}
+			permit := true
+			got, err := p.ChangeRule(snapshot.Revision, target, rights.MetaAnswerAction, rights.MetaScopeApps, rights.RuleEdit{Permit: &permit, By: nativeSubject(t), TTL: rights.MetaRuleLapse}, func() error { return nil })
+			if err != nil || got.Outcome != wire.PolicyEditOutcomeApplied {
+				t.Fatal(got, err)
+			}
+			p.MetaHolder = func(wire.Subject) error {
+				if unavailable.Load() {
+					return rights.ErrMetaHolderUnavailable
+				}
+				return rights.ErrMetaHolder
+			}
+		}
+		for _, outage := range []bool{false, true} {
+			unavailable.Store(outage)
+			want := wire.DecisionOutcomeForbidden
+			if outage {
+				want = wire.DecisionOutcomeUnavailable
+			}
+			got, err := op.ExplainForContext(context.Background(), target, rights.MetaAnswerAction, rights.MetaScopeApps)
+			if err != nil || got.Outcome != want || got.PolicyRevision != "" || got.Source != nil {
+				t.Fatal(enrolled, outage, got, err)
+			}
+		}
+	}
+	p.RefreshMetaHolder = func(context.Context) error { return errors.New("declaration reload unavailable") }
+	if err := p.Set(target, rights.MetaAnswerAction, rights.MetaScopeApps, false); err != nil {
+		t.Fatal(err)
+	}
+	blocked, err := op.ExplainForContext(context.Background(), target, rights.MetaAnswerAction, rights.MetaScopeApps)
+	if err != nil || blocked.Outcome != wire.DecisionOutcomeDenied || blocked.Source == nil || *blocked.Source != wire.DecisionSourceOwnRule || blocked.PolicyRevision == "" {
+		t.Fatal("native refresh outage masked Block", blocked, err)
+	}
+	denied.Store(true)
+	got, err := op.ExplainForContext(context.Background(), target, rights.MetaAnswerAction, rights.MetaScopeApps)
+	if err != nil || got.Outcome != wire.DecisionOutcomeForbidden || got.Source != nil || got.PolicyRevision != "" {
+		t.Fatal("operator auth", got, err)
+	}
+}
 func TestOperatorGrantRevokeScopeHistoryAndRestart(t *testing.T) {
 	p, path := policy(t)
 	subject := nativeSubject(t)
@@ -167,6 +236,13 @@ func TestOperatorCallerProcess(t *testing.T) {
 		return
 	}
 	op := client.NewOperator(endpoint)
+	if after := os.Getenv("OA_RIGHTS_OBSERVE_AFTER"); after != "" {
+		page, err := op.ObservePolicyContext(context.Background(), after, 0)
+		if err != nil || page.Outcome.String() != os.Getenv("OA_RIGHTS_WANT") || page.Revision != "" {
+			os.Exit(5)
+		}
+		os.Exit(0)
+	}
 	page, err := op.ListPolicyContext(context.Background(), os.Getenv("OA_RIGHTS_CURSOR"), 1)
 	if err != nil || page.Outcome.String() != os.Getenv("OA_RIGHTS_WANT") {
 		os.Exit(3)
@@ -277,6 +353,107 @@ func TestOperatorUnconfiguredRefuses(t *testing.T) {
 	if err != nil || v.Outcome != wire.PolicyPageOutcomeForbidden || h.OperatorAvailable() {
 		t.Fatal(v, err)
 	}
+}
+
+func TestOperatorLegacyLockBudgetAndLongObservation(t *testing.T) {
+	p, path := policy(t)
+	entered := make(chan context.Context, 32)
+	h, _, _, endpoint := liveOperator(t, p, func(ctx context.Context, _ *identity.Peer) error {
+		select {
+		case entered <- ctx:
+		default:
+		}
+		return nil
+	})
+	op := client.NewOperatorWithTransport(listen.FrameClient{Endpoint: endpoint, Timeout: 35 * time.Second})
+	initial, err := op.ObservePolicyContext(context.Background(), "", 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for len(entered) > 0 {
+		<-entered
+	}
+	longCtx, cancelLong := context.WithCancel(context.Background())
+	defer cancelLong()
+	longDone := make(chan error, 1)
+	go func() { _, e := op.ObservePolicyContext(longCtx, initial.Next, 30000); longDone <- e }()
+	waitPolicyObservers(t, h, 1)
+	locked, release := make(chan struct{}), make(chan struct{})
+	lockDone := make(chan error, 1)
+	go func() {
+		lockDone <- cas.ChangeLimit(path, rights.MaxDecisionBytes, func(data []byte) ([]byte, error) { close(locked); <-release; return data, nil })
+	}()
+	<-locked
+	released := false
+	defer func() {
+		if !released {
+			close(release)
+			<-lockDone
+		}
+	}()
+	editDone := make(chan error, 1)
+	subject := nativeSubject(t)
+	go func() {
+		_, e := op.SetRuleContext(context.Background(), initial.Revision, wire.PolicyRule{Subject: subject, Action: action, Resource: "late", Permit: true})
+		editDone <- e
+	}()
+	var legacyCall context.Context
+	for legacyCall == nil {
+		select {
+		case call := <-entered:
+			deadline, ok := call.Deadline()
+			if !ok {
+				t.Fatal("missing call deadline")
+			}
+			if time.Until(deadline) <= 5*time.Second {
+				legacyCall = call
+			} else if time.Until(deadline) < 30*time.Second {
+				t.Fatal("observation lost its long context")
+			}
+		case <-time.After(3 * time.Second):
+			t.Fatal("legacy edit did not enter")
+		}
+	}
+	select {
+	case <-legacyCall.Done():
+	case <-time.After(6 * time.Second):
+		t.Fatal("legacy five-second budget extended")
+	}
+	select {
+	case e := <-longDone:
+		t.Fatal("long observation inherited legacy deadline", e)
+	case <-time.After(100 * time.Millisecond):
+	}
+	if h.observationGate.Waiting() != 1 {
+		t.Fatal("long observation ended at legacy deadline")
+	}
+	close(release)
+	released = true
+	if e := <-lockDone; e != nil {
+		t.Fatal(e)
+	}
+	select {
+	case e := <-editDone:
+		if e == nil {
+			t.Fatal("expired legacy edit returned success")
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("legacy edit did not settle")
+	}
+	snapshot, err := p.OperatorSnapshot()
+	if err != nil || snapshot.Revision != initial.Revision || len(snapshot.Rules) != 0 {
+		t.Fatal("expired edit committed", snapshot, err)
+	}
+	cancelLong()
+	select {
+	case e := <-longDone:
+		if !errors.Is(e, context.Canceled) {
+			t.Fatal(e)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("long observation did not cancel")
+	}
+	waitPolicyObservers(t, h, 0)
 }
 
 type measuredPolicyTransport struct {

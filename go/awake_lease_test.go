@@ -2,6 +2,7 @@ package rights
 
 import (
 	"context"
+	"github.com/openabstractions/abstraction-identity/go/privatedir/privatetest"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -53,7 +54,7 @@ func TestAwakeLeaseNeedsConnectionLifetime(t *testing.T) {
 		time.Sleep(10 * time.Millisecond)
 	}
 
-	at := endpoint(t, t.TempDir(), "framed-hold")
+	at := endpoint(t, privatetest.Dir(t), "framed-hold")
 	l, err := listen.Listen(at)
 	if err != nil {
 		t.Fatal(err)

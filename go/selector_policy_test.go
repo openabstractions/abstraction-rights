@@ -160,6 +160,54 @@ func testSelectorPolicy(t *testing.T) (*DecisionPolicy, wire.Subject) {
 	}
 	return p, subject(t)
 }
+
+func TestPolicyObservationStateTracksEachExpiryWithoutChangingRevision(t *testing.T) {
+	p, s := testSelectorPolicy(t)
+	now := time.Date(2030, 1, 1, 0, 0, 0, 0, time.UTC)
+	p.Clock = func() time.Time { return now }
+	permit := true
+	legacy, err := p.ChangeRule(selectorRevision(t, p), s, selectorUse, "name:legacy", RuleEdit{Permit: &permit, By: s, TTL: time.Second}, func() error { return nil })
+	if err != nil || legacy.Outcome != wire.PolicyEditOutcomeApplied {
+		t.Fatal(legacy, err)
+	}
+	typed, err := p.SetSelectorRuleContext(context.Background(), legacy.Revision, wire.SelectorRule{Subject: s, Selection: testSelection(selectorUse, "typed"), Permit: true}, RuleEdit{By: s, TTL: 2 * time.Second}, func() error { return nil })
+	if err != nil || typed.Outcome != wire.PolicyEditOutcomeApplied {
+		t.Fatal(typed, err)
+	}
+	read := func() PolicyObservationState {
+		t.Helper()
+		v, e := p.ObservePolicyStateContext(context.Background())
+		if e != nil {
+			t.Fatal(e)
+		}
+		return v
+	}
+	first := read()
+	if first.Revision != typed.Revision || time.Until(first.Deadline) <= 0 || time.Until(first.Deadline) > time.Second {
+		t.Fatal(first)
+	}
+	now = now.Add(500 * time.Millisecond)
+	if next := read(); next.Stamp != first.Stamp || time.Until(next.Deadline) <= 0 || !next.Deadline.Before(first.Deadline) {
+		t.Fatal("clock sample changed the stamp", next)
+	}
+	now = now.Add(500 * time.Millisecond)
+	second := read()
+	if second.Stamp == first.Stamp || second.Revision != first.Revision || time.Until(second.Deadline) <= 0 || time.Until(second.Deadline) > time.Second {
+		t.Fatal(second)
+	}
+	now = now.Add(time.Second)
+	third := read()
+	if third.Stamp == second.Stamp || third.Revision != first.Revision || !third.Deadline.IsZero() {
+		t.Fatal(third)
+	}
+	now = now.Add(time.Hour)
+	if next := read(); next.Stamp != third.Stamp || !next.Deadline.IsZero() {
+		t.Fatal("expired deadlines remained live", next)
+	}
+	if expired := p.ReadRule(s, selectorUse, "name:legacy"); expired.Outcome != wire.RuleReadOutcomeExpired || expired.Revision != typed.Revision {
+		t.Fatal(expired)
+	}
+}
 func selectorRevision(t *testing.T, p *DecisionPolicy) string {
 	t.Helper()
 	s, e := p.OperatorSnapshot()

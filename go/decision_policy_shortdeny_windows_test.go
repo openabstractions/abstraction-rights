@@ -105,7 +105,7 @@ func TestDenyStoredUnderAShortSpellingSurvivesItsFileAppearing(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	quotedLong, _ := json.Marshal(long)
+	quotedLong, _ := json.Marshal(normalizedFixtureSubject(t, owner).Program)
 	quotedShort, _ := json.Marshal(short)
 	if !strings.Contains(string(data), string(quotedLong)) || strings.Contains(string(data), string(quotedShort)) {
 		t.Fatalf("a restart left the short spelling in the state: %s", data)
@@ -163,7 +163,7 @@ func TestCanonicalSpellingCollisionKeepsTheDeny(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if len(snapshot.Rules) != 1 || snapshot.Rules[0].Permit || snapshot.Rules[0].Subject != owner {
+			if len(snapshot.Rules) != 1 || snapshot.Rules[0].Permit || snapshot.Rules[0].Subject != normalizedFixtureSubject(t, owner) {
 				t.Fatalf("after a load: %+v, want one deny for %q", snapshot.Rules, long)
 			}
 			if d := p.Decide(wire.Subject{Account: "test-account", Program: short}, decisionAction, "content"); d.Outcome != wire.DecisionOutcomeDenied {

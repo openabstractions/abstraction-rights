@@ -1,6 +1,7 @@
 package rights
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"slices"
@@ -14,7 +15,7 @@ import (
 // are untouched. The policy revision and operator authority are checked while
 // the state lock is held.
 func (p *DecisionPolicy) StopAnswerer(expected string, answerer wire.Subject, alsoRevokeGrants bool, authorize func() error) (wire.PolicyEdit, error) {
-	answerer, err := NormalizeDecisionSubject(answerer)
+	answerer, err := normalizeActor(answerer)
 	if err != nil || !boundedDecisionString(expected, 128) {
 		return wire.PolicyEdit{Outcome: wire.PolicyEditOutcomeInvalid}, nil
 	}
@@ -73,14 +74,25 @@ func (p *DecisionPolicy) StopAnswerer(expected string, answerer wire.Subject, al
 // older content-hash revision is recreated. Old grants without an ID cannot
 // be selected by this operation.
 func (p *DecisionPolicy) RevokeAnswerPermits(expected string, answerer, target wire.Subject, actions []string, resource, questionID string, authorize func() error) (wire.PolicyEdit, error) {
-	answerer, ae := NormalizeDecisionSubject(answerer)
+	targets := make([]answerTarget, 0, len(actions))
+	for _, action := range actions {
+		targets = append(targets, answerTarget{action, resource})
+	}
+	return p.revokeAnswerPermits(context.Background(), expected, answerer, target, targets, questionID, authorize, 2, false, nil)
+}
+
+// answerTarget is one exact rule an answer wrote: its action and resource.
+type answerTarget struct{ action, resource string }
+
+func (p *DecisionPolicy) revokeAnswerPermits(ctx context.Context, expected string, answerer, target wire.Subject, targets []answerTarget, questionID string, authorize func() error, limit int, anySetter bool, observe func(decisionFile, string)) (wire.PolicyEdit, error) {
+	answerer, ae := normalizeActor(answerer)
 	target, te := NormalizeDecisionSubject(target)
-	if ae != nil || te != nil || !boundedDecisionString(expected, 128) || !boundedDecisionString(questionID, 128) ||
-		len(actions) < 1 || len(actions) > 2 || !boundedDecisionString(resource, 1024) {
+	if !anySetter && ae != nil || te != nil || !boundedDecisionString(expected, 128) || !boundedDecisionString(questionID, 128) ||
+		len(targets) < 1 || len(targets) > limit {
 		return wire.PolicyEdit{Outcome: wire.PolicyEditOutcomeInvalid}, nil
 	}
-	for i, action := range actions {
-		if !ValidDecisionQuery(action, resource) || IsMetaRule(action, resource) || slices.Contains(actions[:i], action) {
+	for i, t := range targets {
+		if !boundedDecisionString(t.resource, 1024) || !ValidDecisionQuery(t.action, t.resource) || IsMetaRule(t.action, t.resource) || slices.Contains(targets[:i], t) {
 			return wire.PolicyEdit{Outcome: wire.PolicyEditOutcomeInvalid}, nil
 		}
 	}
@@ -92,7 +104,7 @@ func (p *DecisionPolicy) RevokeAnswerPermits(expected string, answerer, target w
 	}
 	result := wire.PolicyEdit{}
 	noWrite := errors.New("rights: answer revoke without write")
-	err := p.change(func(data []byte) ([]byte, error) {
+	err := p.changeContext(ctx, func(data []byte) ([]byte, error) {
 		result = wire.PolicyEdit{}
 		if err := authorize(); err != nil {
 			return nil, err
@@ -101,6 +113,11 @@ func (p *DecisionPolicy) RevokeAnswerPermits(expected string, answerer, target w
 		if err != nil {
 			return nil, err
 		}
+		defer func() {
+			if observe != nil && (result.Outcome == wire.PolicyEditOutcomeApplied || result.Outcome == wire.PolicyEditOutcomeConflict) {
+				observe(f, result.Revision)
+			}
+		}()
 		currentRevision := p.revision(f)
 		if currentRevision != expected {
 			result = wire.PolicyEdit{Outcome: wire.PolicyEditOutcomeConflict, Revision: currentRevision}
@@ -108,18 +125,18 @@ func (p *DecisionPolicy) RevokeAnswerPermits(expected string, answerer, target w
 		}
 		key := keyOnce()
 		now := p.now()
-		indices := make([]int, 0, len(actions))
-		for _, action := range actions {
+		indices := make([]int, 0, len(targets))
+		for _, t := range targets {
 			index := -1
 			seen := false
 			for i, r := range f.Rules {
-				if sameTarget(r, target, action, resource, key) {
+				if sameTarget(r, target, t.action, t.resource, key) {
 					if seen {
 						result = wire.PolicyEdit{Outcome: wire.PolicyEditOutcomeConflict, Revision: currentRevision}
 						return nil, noWrite
 					}
 					seen = true
-					if r.Permit && !expired(r, now) && r.QuestionID == questionID && setByHolder(r, answerer, key) {
+					if r.Permit && !expired(r, now) && r.QuestionID == questionID && (anySetter || setByHolder(r, answerer, key)) {
 						index = i
 					}
 				}

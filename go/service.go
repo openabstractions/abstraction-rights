@@ -17,7 +17,6 @@ import (
 	"sync"
 	"time"
 
-	identity "github.com/openabstractions/abstraction-identity"
 	"github.com/openabstractions/abstraction-identity/listen"
 )
 
@@ -50,16 +49,31 @@ type Service struct {
 	// holds back from the table (awake_leases.go); nil keeps the listing this
 	// service makes itself.
 	leases AwakeLeases
+	wake   WakeKeeper
 }
+
+// ErrNoStateRoot refuses a start whose state folder is empty or relative:
+// the policy and admin secret are kept in an absolute folder of this account
+// and nowhere else (storage STO-L3).
+var ErrNoStateRoot = errors.New("rights: no state root: policy.json and admin.secret need an absolute folder of this account")
 
 // Start listens on endpoint with the policy in stateDir. A registration this
 // service cannot decide goes to asker as a Question.
 func Start(endpoint, stateDir string, asker Asker) (*Service, error) {
-	if err := identity.CanEver(listen.Program); err != nil {
-		return nil, fmt.Errorf("rights: every answer here is to a program, and this machine cannot say which one is calling: %w", err)
+	return StartWithWake(endpoint, stateDir, asker, nil)
+}
+
+// StartWithWake composes the legacy protocol with a wake owner before accepting
+// callers. A nil factory preserves Start's standalone compatibility behavior.
+func StartWithWake(endpoint, stateDir string, asker Asker, factory WakeFactory) (*Service, error) {
+	if err := startGuard(endpoint); err != nil {
+		return nil, err
 	}
 	if asker == nil {
 		return nil, errors.New("rights: registrations need an Asker to put their question to")
+	}
+	if !filepath.IsAbs(stateDir) {
+		return nil, fmt.Errorf("%w (given %q)", ErrNoStateRoot, stateDir)
 	}
 	policy, err := LoadPolicy(filepath.Join(stateDir, "policy.json"))
 	if err != nil {
@@ -78,6 +92,16 @@ func Start(endpoint, stateDir string, asker Asker) (*Service, error) {
 	}
 	s := &Service{Endpoint: endpoint, policy: policy, admin: hashOf(admin), l: l,
 		asks: asker, live: map[listen.Conn]struct{}{}, holds: map[*holder]struct{}{}, awake: keepAwake}
+	if factory != nil {
+		s.wake, err = factory()
+		if err == nil && s.wake == nil {
+			err = errors.New("rights: wake factory supplied no owner")
+		}
+		if err != nil {
+			l.Close()
+			return nil, err
+		}
+	}
 	go s.loop()
 	return s, nil
 }
@@ -283,15 +307,23 @@ func (s *Service) hold(k *listen.Call, req Request) {
 		reply(k, Response{Code: CodeUnsupportedHold, Error: "rights: " + right + " is not a right that can be held"})
 		return
 	}
-	release, err := s.awake(app.Name, req.Why)
+	leaseID := ""
+	var release func()
+	if s.wake != nil {
+		leaseID, release, err = s.wake.KeepAwake(k.Caller.Path, k.Caller.User, req.Why)
+	} else {
+		// Published standalone Start retains its compatibility fallback. Hosts
+		// serving current resource leases inject their owner before listening.
+		release, err = s.awake(app.Name, req.Why)
+	}
 	if err != nil {
 		reply(k, Response{Code: CodePlatformRefused, Error: "rights: the platform refused: " + err.Error()})
 		return
 	}
-	h := &holder{Hold: Hold{App: app.ID, Name: app.Name, Right: right, Why: req.Why, Since: time.Now().UTC(), Seen: k.Caller}, c: k, release: release}
+	h := &holder{Hold: Hold{App: app.ID, Name: app.Name, Right: right, Why: req.Why, Since: time.Now().UTC(), Seen: k.Caller, Lease: leaseID}, c: k, release: release}
 	// The hold becomes a row of the resource table's awake resource, so one
 	// reader answers who holds the card and who holds the wake. The platform
-	// request stays on this connection: that is the half that did not move.
+	// request belongs to the resource book until this connection ends.
 	s.mu.Lock()
 	book := s.leases
 	s.holds[h] = struct{}{}
@@ -354,4 +386,14 @@ func (s *Service) listHolds() []Hold {
 		out = append(out, hold)
 	}
 	return out
+}
+
+// startGuard refuses an endpoint whose transport can never prove the calling
+// program: a macOS socket refuses, an xpc: endpoint passes, and each request
+// is still checked against its own peer evidence.
+func startGuard(endpoint string) error {
+	if err := listen.CanEver(endpoint, listen.Program); err != nil {
+		return fmt.Errorf("rights: every answer here is to a program, and this machine cannot say which one is calling: %w", err)
+	}
+	return nil
 }

@@ -1,0 +1,235 @@
+{
+  "methods": [
+    {
+      "class": "read",
+      "contract": "abstraction.rights/authorization@1",
+      "idempotency_key": "",
+      "method": "DecideForAtLeastRevision",
+      "trait": "readonly"
+    },
+    {
+      "class": "read",
+      "contract": "abstraction.rights/authorization@1",
+      "idempotency_key": "",
+      "method": "ListActionDescriptions",
+      "trait": "readonly"
+    },
+    {
+      "class": "read",
+      "contract": "abstraction.rights/authorization@1",
+      "idempotency_key": "",
+      "method": "Decide",
+      "trait": "readonly"
+    },
+    {
+      "class": "read",
+      "contract": "abstraction.rights/authorization@1",
+      "idempotency_key": "",
+      "method": "DecideFor",
+      "trait": "readonly"
+    },
+    {
+      "class": "read",
+      "contract": "abstraction.rights/operator@1",
+      "idempotency_key": "",
+      "method": "ObservePolicy",
+      "trait": "readonly"
+    },
+    {
+      "class": "effect",
+      "contract": "abstraction.rights/operator@1",
+      "idempotency_key": "",
+      "method": "RegisterDescribedAction",
+      "trait": "idempotent"
+    },
+    {
+      "class": "effect",
+      "contract": "abstraction.rights/operator@1",
+      "idempotency_key": "",
+      "method": "ApplyFirstUseAllow",
+      "trait": "idempotent"
+    },
+    {
+      "class": "read",
+      "contract": "abstraction.rights/operator@1",
+      "idempotency_key": "",
+      "method": "ListPolicy",
+      "trait": "readonly"
+    },
+    {
+      "class": "effect",
+      "contract": "abstraction.rights/operator@1",
+      "idempotency_key": "",
+      "method": "SetRule",
+      "trait": "idempotent"
+    },
+    {
+      "class": "effect",
+      "contract": "abstraction.rights/operator@1",
+      "idempotency_key": "",
+      "method": "RevokeRule",
+      "trait": "idempotent"
+    },
+    {
+      "class": "effect",
+      "contract": "abstraction.rights/operator@1",
+      "idempotency_key": "",
+      "method": "StopAnswerer",
+      "trait": "idempotent"
+    },
+    {
+      "class": "effect",
+      "contract": "abstraction.rights/operator@1",
+      "idempotency_key": "",
+      "method": "RevokeAnswerPermits",
+      "trait": "idempotent"
+    },
+    {
+      "class": "effect",
+      "contract": "abstraction.rights/operator@1",
+      "idempotency_key": "",
+      "method": "SetRuleFor",
+      "trait": "idempotent"
+    },
+    {
+      "class": "effect",
+      "contract": "abstraction.rights/operator@1",
+      "idempotency_key": "",
+      "method": "SetRulesFor",
+      "trait": "idempotent"
+    },
+    {
+      "class": "read",
+      "contract": "abstraction.rights/operator@1",
+      "idempotency_key": "",
+      "method": "ReadRule",
+      "trait": "readonly"
+    },
+    {
+      "class": "effect",
+      "contract": "abstraction.rights/operator@1",
+      "idempotency_key": "",
+      "method": "RegisterAction",
+      "trait": "idempotent"
+    },
+    {
+      "class": "effect",
+      "contract": "abstraction.rights/operator@1",
+      "idempotency_key": "",
+      "method": "RetireAction",
+      "trait": "idempotent"
+    },
+    {
+      "class": "read",
+      "contract": "abstraction.rights/operator@1",
+      "idempotency_key": "",
+      "method": "ExplainFor",
+      "trait": "readonly"
+    },
+    {
+      "class": "read",
+      "contract": "abstraction.rights/operator@1",
+      "idempotency_key": "",
+      "method": "ListDefaults",
+      "trait": "readonly"
+    },
+    {
+      "class": "effect",
+      "contract": "abstraction.rights/operator@1",
+      "idempotency_key": "",
+      "method": "SetDefault",
+      "trait": "idempotent"
+    },
+    {
+      "class": "read",
+      "contract": "abstraction.rights/authorization@2",
+      "idempotency_key": "",
+      "method": "ListPermissionDefinitions",
+      "trait": "readonly"
+    },
+    {
+      "class": "read",
+      "contract": "abstraction.rights/authorization@2",
+      "idempotency_key": "",
+      "method": "ListPermissionBundles",
+      "trait": "readonly"
+    },
+    {
+      "class": "read",
+      "contract": "abstraction.rights/authorization@2",
+      "idempotency_key": "",
+      "method": "CheckBatch",
+      "trait": "readonly"
+    },
+    {
+      "class": "read",
+      "contract": "abstraction.rights/authorization@2",
+      "idempotency_key": "",
+      "method": "CheckBatchFor",
+      "trait": "readonly"
+    },
+    {
+      "class": "read",
+      "contract": "abstraction.rights/authorization@2",
+      "idempotency_key": "",
+      "method": "CheckLegacyOperationFor",
+      "trait": "readonly"
+    },
+    {
+      "class": "read",
+      "contract": "abstraction.rights/operator@2",
+      "idempotency_key": "",
+      "method": "ListSelectorRules",
+      "trait": "readonly"
+    },
+    {
+      "class": "read",
+      "contract": "abstraction.rights/operator@2",
+      "idempotency_key": "",
+      "method": "ReadSelectorRule",
+      "trait": "readonly"
+    },
+    {
+      "class": "effect",
+      "contract": "abstraction.rights/operator@2",
+      "idempotency_key": "",
+      "method": "SetSelectorRule",
+      "trait": "idempotent"
+    },
+    {
+      "class": "effect",
+      "contract": "abstraction.rights/operator@2",
+      "idempotency_key": "",
+      "method": "RemoveSelectorRule",
+      "trait": "idempotent"
+    },
+    {
+      "class": "effect",
+      "contract": "abstraction.rights/operator@2",
+      "idempotency_key": "",
+      "method": "ApplyBundle",
+      "trait": "idempotent"
+    },
+    {
+      "class": "effect",
+      "contract": "abstraction.rights/operator@2",
+      "idempotency_key": "",
+      "method": "RemoveBundle",
+      "trait": "idempotent"
+    },
+    {
+      "class": "effect",
+      "contract": "abstraction.rights/operator@2",
+      "idempotency_key": "",
+      "method": "ApplyPermissionAllow",
+      "trait": "idempotent"
+    },
+    {
+      "class": "effect",
+      "contract": "abstraction.rights/operator@2",
+      "idempotency_key": "",
+      "method": "UndoPermissionEffect",
+      "trait": "idempotent"
+    }
+  ]
+}

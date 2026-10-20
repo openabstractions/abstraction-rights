@@ -18,7 +18,7 @@ retains shared cancellation.
 `TrustedEnforcerClient(Client)` exposes `decide_for(subject, action, resource)`
 for receiver-designated enforcement points. The receiver must authorize the
 immediate peer for every relayed action/resource. Construction and serialized
-Subject fields convey no authority. The enforcer must supply its actual bound
+[Subject](https://openabstractions.github.io/reference.html#concept-rights.subject) fields convey no authority. The enforcer must supply its actual bound
 subject. Ordinary applications use Decide. Resource services make their own
 policy queries; callers cannot submit a decision as proof of permission.
 

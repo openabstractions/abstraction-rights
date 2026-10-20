@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(abstraction_rights VERSION 0.1.0 LANGUAGES CXX)
+project(abstraction_rights VERSION 0.8.0 LANGUAGES CXX)
 include(GNUInstallDirs)
 include(CMakePackageConfigHelpers)
 if(NOT TARGET abstraction::ipc)

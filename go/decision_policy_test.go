@@ -3,6 +3,7 @@ package rights
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"slices"
@@ -14,6 +15,40 @@ import (
 )
 
 const decisionAction = "abstraction.storage/content.read"
+
+func TestCheckedChangeReportsSettlementFailureAfterCommitAndRunsAllCallbacks(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "decisions.json")
+	p, err := LoadDecisionPolicy(path, []string{decisionAction})
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := subject(t)
+	unavailable := errors.New("standing unavailable")
+	var calls []int
+	p.OnChange(func() { calls = append(calls, 1) }) // published callback remains compatible
+	remove := p.OnChangeChecked(func() error { calls = append(calls, 2); return unavailable })
+	p.OnChangeChecked(func() error { calls = append(calls, 3); return nil })
+	if err := p.Set(s, decisionAction, "content", false); !errors.Is(err, unavailable) {
+		t.Fatalf("edit: %v", err)
+	}
+	if !slices.Equal(calls, []int{1, 2, 3}) {
+		t.Fatalf("callbacks: %v", calls)
+	}
+	reopened, err := LoadDecisionPolicy(path, []string{decisionAction})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := reopened.Decide(s, decisionAction, "content"); got.Outcome != wire.DecisionOutcomeDenied {
+		t.Fatalf("saved edit lost: %v", got)
+	}
+	remove()
+	if err := p.Set(s, decisionAction, "content", true); err != nil {
+		t.Fatal(err)
+	}
+	if got := reopened.Decide(s, decisionAction, "content"); got.Outcome != wire.DecisionOutcomePermitted {
+		t.Fatalf("reconciliation lost: %v", got)
+	}
+}
 
 func subject(t *testing.T) wire.Subject {
 	t.Helper()

@@ -9,6 +9,7 @@ import (
 	identity "github.com/openabstractions/abstraction-identity"
 	rights "github.com/openabstractions/abstraction-rights/go"
 	wire "github.com/openabstractions/abstraction-rights/go/abstraction/rights/api"
+	cursorcodec "github.com/openabstractions/abstraction-watch/go/cursor"
 	"strconv"
 	"strings"
 	"time"
@@ -97,7 +98,10 @@ func (h *Host) OperatorAvailable() bool {
 	return h.operator != nil && h.ctx.Err() == nil
 }
 
-type operatorReceiver struct{ receiver }
+type operatorReceiver struct {
+	receiver
+	observationContext func() context.Context
+}
 
 func (r *operatorReceiver) ApplyFirstUseAllow(expected, id string) (wire.PolicyEdit, error) {
 	by, err := r.authorize()
@@ -150,10 +154,11 @@ func (r *operatorReceiver) ListPolicy(cursor string, limit int64) (wire.PolicyPa
 	}
 	scope, _ := json.Marshal(subject)
 	sum := sha256.Sum256(scope)
-	prefix := r.host.operatorEpoch + ":" + hex.EncodeToString(sum[:]) + ":" + snapshot.Revision + ":"
+	codec := cursorcodec.Codec{Separator: ":", Scoped: true}
+	binding := cursorcodec.Envelope{Epoch: r.host.operatorEpoch, Scope: hex.EncodeToString(sum[:]) + ":" + snapshot.Revision}
 	offset := 0
 	if cursor != "" {
-		word, ok := strings.CutPrefix(cursor, prefix)
+		word, ok := codec.Open(cursor, binding)
 		n, e := strconv.Atoi(word)
 		if !ok || e != nil || n < 0 || n > len(snapshot.Rules) || strconv.Itoa(n) != word {
 			return policyPageRefusal(wire.PolicyPageOutcomeGap), nil
@@ -185,7 +190,8 @@ func (r *operatorReceiver) ListPolicy(cursor string, limit int64) (wire.PolicyPa
 	}
 	page.Complete = offset == len(snapshot.Rules)
 	if !page.Complete {
-		page.Next = prefix + strconv.Itoa(offset)
+		binding.Payload = strconv.Itoa(offset)
+		page.Next = codec.Encode(binding)
 	}
 	if _, err = r.authorize(); err != nil {
 		return policyPageRefusal(operatorPageError(err)), nil
@@ -252,8 +258,11 @@ func (r *operatorReceiver) edit(expected string, subject wire.Subject, action, r
 	if err != nil {
 		return wire.PolicyEdit{Outcome: operatorPolicyError(err)}, nil
 	}
+	if rights.IsMetaRule(action, resource) && r.call.Recheck() != nil {
+		return wire.PolicyEdit{Outcome: wire.PolicyEditOutcomeForbidden}, nil
+	}
 	edit.By = by
-	result, err := r.host.policy.ChangeRule(expected, subject, action, resource, edit, func() error { _, err := r.authorize(); return err })
+	result, err := r.host.policy.ChangeRuleContext(r.ctx, expected, subject, action, resource, edit, func() error { _, err := r.authorize(); return err })
 	if err != nil {
 		return wire.PolicyEdit{Outcome: operatorPolicyError(err)}, nil
 	}
@@ -279,6 +288,9 @@ func (r *operatorReceiver) ExplainFor(subject wire.Subject, action, resource str
 	}
 	if _, err := r.authorize(); err != nil {
 		return refusal(err), nil
+	}
+	if rights.IsMetaRule(action, resource) && r.call.Recheck() != nil {
+		return refusal(ErrOperatorForbidden), nil
 	}
 	result := r.host.policy.ExplainForContext(r.ctx, subject, action, resource)
 	if _, err := r.authorize(); err != nil {
